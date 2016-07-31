@@ -1,0 +1,27 @@
+[package]
+name = "gdbmi"
+version = "0.1.0"
+authors = ["ftilde <ftilde@protonmail.com>"]
+
+
+[[bin]]
+doc = false
+name = "gdbmi"
+
+[dependencies]
+#gdbmi
+nom = "^1.2.3"
+#unsegen
+termion = "^1.0.0"
+ndarray = "0.6.0"
+#pty
+nix = "^0.4"
+libc = "^0.1"
+
+#[dependencies.termion]
+#git = "https://github.com/Ticki/termion"
+#features = ["nightly"]
+
+#[dependencies.termion]
+#path = "../termion/"
+#features = ["nightly"]

@@ -88,6 +88,7 @@ impl TextAttribute {
         }
     }
 
+    /*
     pub fn plain() -> TextAttribute {
         TextAttribute {
             fg_color: None,
@@ -95,6 +96,7 @@ impl TextAttribute {
             style: None,
         }
     }
+    */
 
     /*
     fn or(&self, other: &TextAttribute) -> TextAttribute {
@@ -216,16 +218,16 @@ impl<'a> Drop for Terminal<'a> {
     }
 }
 
-type CharMatrixView<'a> = ArrayViewMut<'a, FormattedChar, (Ix,Ix)>;
-pub struct Window<'a> {
+type CharMatrixView<'w> = ArrayViewMut<'w, FormattedChar, (Ix,Ix)>;
+pub struct Window<'w> {
     pos_x: u32,
     pos_y: u32,
-    values: CharMatrixView<'a>,
+    values: CharMatrixView<'w>,
     default_format: TextAttribute,
 }
 
-impl<'a> Window<'a> {
-    fn new(values: CharMatrixView<'a>, default_format: TextAttribute) -> Self {
+impl<'w> Window<'w> {
+    fn new(values: CharMatrixView<'w>, default_format: TextAttribute) -> Self {
         Window {
             pos_x: 0,
             pos_y: 0,
@@ -285,30 +287,137 @@ impl<'a> Window<'a> {
         for _ in 0..self.get_width() {
             line.push(c);
         }
-        for y in 0..self.get_height() {
-            let format = self.default_format;
-            self.write(0, y as i32, &line, &format);
-        }
-    }
-
-    pub fn write(&mut self, x: i32, y: i32, text: &str, format: &TextAttribute) {
-        if !(0 <= y && (y as u32) < self.get_height()) {
-            return;
-        }
-
-        for (i, character) in text.chars().enumerate() {
-            let x = x + (i as i32);
-            if 0 > x || x as u32 >= self.get_width() {
-                continue;
-            }
-            let pos = (x as Ix, y as Ix);
-            self.values[pos] = FormattedChar::new(character, format.clone());
+        let height = self.get_height();
+        let mut cursor = self.create_cursor();
+        for _ in 0..height {
+            cursor.writeln(&line);
         }
     }
 
     pub fn set_default_format(&mut self, format: TextAttribute) {
         self.default_format = format;
     }
+
+    pub fn create_cursor<'c>(&'c mut self) -> Cursor<'c, 'w>  {
+        Cursor::new(self)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum WrappingDirection {
+    Down,
+    Up,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum WrappingMode {
+    Wrap,
+    NoWrap,
+}
+
+
+pub struct Cursor<'c, 'w: 'c> {
+    window: &'c mut Window<'w>,
+    wrapping_direction: WrappingDirection,
+    wrapping_mode: WrappingMode,
+    text_attribute: Option<TextAttribute>,
+    x: i32,
+    y: i32,
+}
+
+impl<'c, 'w> Cursor<'c, 'w> {
+    fn new(window: &'c mut Window<'w>) -> Self {
+        Cursor {
+            window: window,
+            wrapping_direction: WrappingDirection::Down,
+            wrapping_mode: WrappingMode::NoWrap,
+            text_attribute: None,
+            x: 0,
+            y: 0,
+        }
+    }
+
+    pub fn set_position(&mut self, x: i32, y: i32) {
+        self.x = x;
+        self.y = y;
+    }
+
+    pub fn position(mut self, x: i32, y: i32) -> Self {
+        self.set_position(x, y);
+        self
+    }
+
+    pub fn set_wrapping_direction(&mut self, wrapping_direction: WrappingDirection) {
+        self.wrapping_direction = wrapping_direction;
+    }
+
+    pub fn wrapping_direction(mut self, wrapping_direction: WrappingDirection) -> Self {
+        self.set_wrapping_direction(wrapping_direction);
+        self
+    }
+
+    pub fn set_wrapping_mode(&mut self, wm: WrappingMode) {
+        self.wrapping_mode = wm;
+    }
+
+    pub fn wrapping_mode(mut self, wm: WrappingMode) -> Self {
+        self.set_wrapping_mode(wm);
+        self
+    }
+
+    /*
+    pub fn set_text_attribute(&mut self, ta: TextAttribute) {
+        self.text_attribute = Some(ta)
+    }
+
+    pub fn text_attribute(mut self, ta: TextAttribute) -> Self {
+        self.set_text_attribute(ta);
+        self
+    }
+    */
+
+    fn wrap_line(&mut self) {
+        match self.wrapping_direction {
+            WrappingDirection::Down => {
+                self.y += 1;
+            },
+            WrappingDirection::Up => {
+                self.y -= 1;
+            },
+        }
+        self.x = 0;
+    }
+
+    pub fn write(&mut self, text: &str) {
+
+        for character in text.chars() {
+            if self.wrapping_mode == WrappingMode::Wrap && (self.x as u32) >= self.window.get_width() {
+                self.wrap_line(); //TODO: properly handle for WrapDirection == Up
+            }
+            if character == '\n' {
+                self.wrap_line();
+            } else {
+                if     0 <= self.x && (self.x as u32) < self.window.get_width()
+                    && 0 <= self.y && (self.y as u32) < self.window.get_height() {
+
+                    let pos = (self.x as Ix, self.y as Ix);
+                    let text_attribute = if let Some(attr) = self.text_attribute {
+                        attr.clone()
+                    } else {
+                        self.window.default_format.clone()
+                    };
+                    *self.window.values.get_mut(pos).expect("in bounds") = FormattedChar::new(character, text_attribute);
+                }
+                self.x += 1;
+            }
+        }
+    }
+
+    pub fn writeln(&mut self, text: &str) {
+        self.write(text);
+        self.wrap_line();
+    }
+
 }
 
 #[derive(Eq, PartialEq, PartialOrd)]

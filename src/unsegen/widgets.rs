@@ -1,3 +1,8 @@
+use super::{
+    Window,
+    WrappingDirection,
+    WrappingMode,
+};
 
 // TextLine --------------------------------------------------------------------------------------
 
@@ -31,8 +36,8 @@ impl super::Widget for TextLine {
     fn space_demand(&self) -> (super::Demand, super::Demand) {
         (super::Demand::Const(self.text.len() as u32), super::Demand::Const(1)) //TODO?
     }
-    fn draw(&self, mut window: super::Window) {
-        window.write(0, 0, &self.text, &super::TextAttribute::plain());
+    fn draw(&self, mut window: Window) {
+        window.create_cursor().write(&self.text);
     }
     fn input(&mut self, event: super::Event) {
         if let super::Event::Key(key) = event {
@@ -82,7 +87,7 @@ impl super::Widget for PromptLine {
         let widgets: Vec<&super::Widget> = vec![&self.prompt, &self.line];
         self.layout.space_demand(widgets.into_iter())
     }
-    fn draw(&self, window: super::Window) {
+    fn draw(&self, window: Window) {
         let widgets: Vec<&super::Widget> = vec![&self.prompt, &self.line];
         self.layout.draw(window, widgets.into_iter());
     }
@@ -104,12 +109,13 @@ impl super::Widget for TextArea {
         return (super::Demand::MaxPossible /*TODO?*/, super::Demand::MaxPossible);
     }
     fn draw(&self, mut window: super::Window) {
-        for (i, ref line) in self.lines.iter().rev().enumerate() {
-            let y = (window.get_height() as i32) - 1 - (i as i32);
-            if y < 0 {
-                break;
-            }
-            window.write(0, y, &line, &super::TextAttribute::plain());
+        let y_start = window.get_height() - 1;
+        let mut cursor = window.create_cursor()
+            .position(0, y_start as i32)
+            .wrapping_direction(WrappingDirection::Up)
+            .wrapping_mode(WrappingMode::Wrap);
+        for line in self.lines.iter().rev() {
+            cursor.writeln(&line);
         }
     }
     fn input(&mut self, _: super::Event) {

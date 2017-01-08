@@ -34,6 +34,9 @@ impl MiCommand {
         Self::interpreter_exec("console".to_owned(), format!("\"{}\"", command))
     }
 
+    // Be aware: This does not seem to always interrupt execution.
+    // Use gdb.interrupt_execution instead.
+    #[allow(dead_code)]
     pub fn exec_interrupt(/*TODO incorporate all & threadgroup? */) -> MiCommand {
         MiCommand {
             operation: "exec-interrupt".to_owned(),

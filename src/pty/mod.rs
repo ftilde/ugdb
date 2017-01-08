@@ -1,8 +1,7 @@
 // Adapted and modified from https://github.com/hibariya/pty-rs
 // TODO: Licensing?
 
-#![deny(trivial_casts, trivial_numeric_casts,
-        unstable_features,
+#![deny(unstable_features,
         unused_import_braces, unused_qualifications)]
 #![cfg_attr(feature = "dev", allow(unstable_features))]
 #![cfg_attr(feature = "dev", feature(plugin))]
@@ -176,7 +175,7 @@ fn read(fd: libc::c_int, buf: &mut [u8]) -> io::Result<usize> {
     let nread = unsafe {
         libc::read(fd,
                    buf.as_mut_ptr() as *mut libc::c_void,
-                   buf.len() as u64)
+                   buf.len() as usize)
     };
 
     if nread < 0 {
@@ -192,7 +191,7 @@ fn write(fd: libc::c_int, buf: &[u8]) -> io::Result<usize> {
     let ret = unsafe {
         libc::write(fd,
                     buf.as_ptr() as *const libc::c_void,
-                    buf.len() as u64)
+                    buf.len() as usize)
     };
 
     if ret < 0 {

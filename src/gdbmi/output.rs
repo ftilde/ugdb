@@ -83,8 +83,10 @@ enum Output {
 use ::nom::{IResult};
 use ::std::io::{Read, BufRead, BufReader};
 use ::std::sync::mpsc::Sender;
+use ::std::sync::Arc;
+use ::std::sync::atomic::{AtomicBool, Ordering};
 
-pub fn process_output<T: Read>(output: T, result_pipe: Sender<ResultRecord>, out_of_band_pipe: Sender<OutOfBandRecord>) {
+pub fn process_output<T: Read>(output: T, result_pipe: Sender<ResultRecord>, out_of_band_pipe: Sender<OutOfBandRecord>, is_running: Arc<AtomicBool>) {
     let mut reader = BufReader::new(output);
     loop {
         let mut buffer = String::new();
@@ -93,8 +95,18 @@ pub fn process_output<T: Read>(output: T, result_pipe: Sender<ResultRecord>, out
             Ok(_) => { /* TODO */
                 //println!("::::: {:?}", buffer);
                 match Output::parse(&buffer) {
-                    Output::Result(record) => { result_pipe.send(record).unwrap(); },
-                    Output::OutOfBand(record) => { out_of_band_pipe.send(record).unwrap(); },
+                    Output::Result(record) => {
+                        if let ResultRecord{token: _, class: ResultClass::Running, results: _} = record {
+                            is_running.store(true, Ordering::Relaxed /*TODO: maybe something else? */);
+                        }
+                        result_pipe.send(record).unwrap();
+                    },
+                    Output::OutOfBand(record) => {
+                        if let OutOfBandRecord::AsyncRecord{token: _, kind: _, class: AsyncClass::Stopped, results: _} = record {
+                            is_running.store(false, Ordering::Relaxed /*TODO: maybe something else? */);
+                        }
+                        out_of_band_pipe.send(record).unwrap();
+                    },
                     Output::GDBLine => { },
                     //Output::SomethingElse(_) => { /*println!("SOMETHING ELSE: {}", str);*/ }
                     Output::SomethingElse(text) => { out_of_band_pipe.send(OutOfBandRecord::StreamRecord{ kind: StreamKind::Target, data: text}).unwrap(); }

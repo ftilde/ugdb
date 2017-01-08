@@ -7,12 +7,13 @@ extern crate ndarray;
 
 // For pty
 extern crate libc;
-extern crate nix;
 
 // For gdbmi
 #[macro_use]
 extern crate nom;
 
+//For gdbmi AND pty
+extern crate nix;
 
 mod unsegen;
 mod gdbmi;
@@ -35,7 +36,7 @@ fn pty_output_loop(sink: mpsc::Sender<u8>, reader: pty::PTYOutput) {
 
 fn main() {
     let process_pty = pty::PTY::open().expect("Could not create pty.");
-    let executable_path = "/home/dominik/test2";
+    let executable_path = "/home/dominik/gdbmi-test/test";
 
     //println!("PTY: {}", process_pty.name());
     let ptyname = process_pty.name().to_owned();

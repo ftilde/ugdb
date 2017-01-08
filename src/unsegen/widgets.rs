@@ -16,9 +16,11 @@ impl TextLine {
         &self.text
     }
 
+    /*
     pub fn set(&mut self, text: String) {
         self.text = text
     }
+    */
 
     pub fn clear(&mut self) {
         self.text.clear()
@@ -54,9 +56,11 @@ pub struct PromptLine {
 }
 
 impl PromptLine {
+    /*
     pub fn new() -> Self {
         PromptLine::with_prompt(" > ".into())
     }
+    */
 
     pub fn with_prompt(prompt: String) -> Self {
         PromptLine {
@@ -108,7 +112,7 @@ impl super::Widget for TextArea {
             window.write(0, y, &line, &super::TextAttribute::plain());
         }
     }
-    fn input(&mut self, event: super::Event) {
+    fn input(&mut self, _: super::Event) {
         unimplemented!();
     }
 }

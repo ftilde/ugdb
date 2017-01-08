@@ -6,12 +6,14 @@ pub mod widgets;
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Style {
     Standard,
+    /*
     Bold,
     Faint,
     Italic,
     Underlined,
     Blink,
     Invert,
+    */
 }
 
 impl Default for Style {
@@ -35,6 +37,7 @@ impl Color {
             b: b,
         }
     }
+    /*
     pub fn black() -> Self {
         Color::new(0,0,0)
     }
@@ -44,6 +47,7 @@ impl Color {
     pub fn red() -> Self {
         Color::new(255,0,0)
     }
+    */
     pub fn green() -> Self {
         Color::new(0,255,0)
     }
@@ -92,6 +96,7 @@ impl TextAttribute {
         }
     }
 
+    /*
     fn or(&self, other: &TextAttribute) -> TextAttribute {
         TextAttribute {
             fg_color: self.fg_color.or(other.fg_color),
@@ -99,6 +104,7 @@ impl TextAttribute {
             style: self.style.or(other.style),
         }
     }
+    */
 
     fn set_terminal_attributes(&self, terminal: &mut RawTerminal<::std::io::StdoutLock>) {
         use std::io::Write;
@@ -346,14 +352,14 @@ impl Demand {
 
 pub trait Widget {
     fn space_demand(&self) -> (Demand, Demand);
-    fn draw(&self, mut window: Window);
+    fn draw(&self, window: Window);
     fn input(&mut self, Event); // -> bool?
 }
 
 #[derive(Clone, Copy)]
 pub enum SeparatingStyle {
     None,
-    AlternateStyle(TextAttribute),
+    //AlternateStyle(TextAttribute),
     Draw(char)
 }
 

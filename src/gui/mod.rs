@@ -25,13 +25,26 @@ impl Console {
         use unsegen::{Event,Key,Widget};
         if event == Event::Key(Key::Char('\n')) {
             let line = self.prompt_line.finish_line().to_owned();
-            self.add_message(format!("(gdb) {}", line));
-            match gdb.execute(&gdbmi::input::MiCommand::cli_exec(line)) {
-                Ok(result) => {
-                    self.add_message(format!("Result: {:?}", result));
+            match line.as_ref() {
+                "!stop" => {
+                    gdb.interrupt_execution().expect("Interrupted");
+
+                    // This does not always seem to unblock gdb, but only hang it
+                    //use gdbmi::input::MiCommand;
+                    //gdb.execute(&MiCommand::exec_interrupt()).unwrap(); TH
                 },
-                Err(gdbmi::ExecuteError::Quit) => { self.add_message(format!("quit")); },
-                //Err(err) => { panic!("Unknown error {:?}", err) },
+                // Gdb commands
+                _ => {
+                    self.add_message(format!("(gdb) {}", line));
+                    match gdb.execute(&gdbmi::input::MiCommand::cli_exec(line)) {
+                        Ok(result) => {
+                            self.add_message(format!("Result: {:?}", result));
+                        },
+                        Err(gdbmi::ExecuteError::Quit) => { self.add_message(format!("quit")); },
+                        Err(gdbmi::ExecuteError::Busy) => { self.add_message(format!("GDB is running!")); },
+                        //Err(err) => { panic!("Unknown error {:?}", err) },
+                    }
+                },
             }
         } else {
             self.prompt_line.input(event);
@@ -48,7 +61,7 @@ impl unsegen::Widget for Console {
         let widgets: Vec<&unsegen::Widget> = vec![&self.text_area, &self.prompt_line];
         self.layout.draw(window, &widgets)
     }
-    fn input(&mut self, event: unsegen::Event) {
+    fn input(&mut self, _: unsegen::Event) {
         unimplemented!(); //TODO remove input from Widget into separate trait
     }
 }

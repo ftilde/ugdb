@@ -2,7 +2,7 @@
 
 use std::sync::mpsc;
 
-#[derive(Eq, PartialEq, Clone, Copy)]
+#[derive(Eq, PartialEq, Clone)]
 pub enum InputEvent {
     ConsoleEvent(::unsegen::Event),
     PseudoTerminalEvent(::unsegen::Event),
@@ -22,7 +22,7 @@ enum Mode {
 }
 
 pub struct ViKeyboardInput {
-    thread: ::std::thread::JoinHandle<()>,
+    _thread: ::std::thread::JoinHandle<()>,
 }
 
 impl ViKeyboardInput {
@@ -60,7 +60,7 @@ impl InputSource for ViKeyboardInput {
             Self::input_loop(event_sink);
         });
         ViKeyboardInput {
-            thread: input_thread,
+            _thread: input_thread,
         }
     }
 }

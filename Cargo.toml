@@ -9,14 +9,15 @@ doc = false
 name = "gdbmi"
 
 [dependencies]
+#pty and gdbmi
+nix = "^0.7"
 #gdbmi
-nom = "^1.2.3"
+nom = "^1.2"
 #unsegen
-termion = "^1.0.0"
-ndarray = "0.6.0"
+termion = "^1.1"
+ndarray = "0.6"
 #pty
-nix = "^0.4"
-libc = "^0.1"
+libc = "^0.2"
 
 #[dependencies.termion]
 #git = "https://github.com/Ticki/termion"

@@ -19,6 +19,7 @@ impl MiCommand {
                 try!{write!(formatter, " {}", parameter)};
             }
         }
+        try!{write!(formatter, "\n")};
         Ok(())
     }
     pub fn interpreter_exec(interpreter: String, command: String) -> MiCommand {

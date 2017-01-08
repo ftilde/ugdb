@@ -128,7 +128,7 @@ impl TextArea {
         if self.lines.is_empty() {
             self.lines.push(String::new());
         }
-        return self.lines.last_mut().unwrap();
+        return self.lines.last_mut().expect("last line");
     }
 }
 

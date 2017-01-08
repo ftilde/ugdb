@@ -18,7 +18,7 @@ impl Console {
 
     pub fn add_message(&mut self, msg: String) {
         use std::fmt::Write;
-        write!(self.text_area, "{}\n", msg).unwrap();
+        write!(self.text_area, "{}\n", msg).expect("Write message");
     }
 
     pub fn event(&mut self, event: unsegen::Event, gdb: &mut gdbmi::GDB) { //TODO more console events
@@ -27,11 +27,11 @@ impl Console {
             let line = self.prompt_line.finish_line().to_owned();
             match line.as_ref() {
                 "!stop" => {
-                    gdb.interrupt_execution().expect("Interrupted");
+                    gdb.interrupt_execution().expect("interrupted gdb");
 
                     // This does not always seem to unblock gdb, but only hang it
                     //use gdbmi::input::MiCommand;
-                    //gdb.execute(&MiCommand::exec_interrupt()).unwrap(); TH
+                    //gdb.execute(&MiCommand::exec_interrupt()).expect("Interrupt ");
                 },
                 // Gdb commands
                 _ => {
@@ -97,7 +97,7 @@ impl PseudoTerminal {
         //TODO: handle control sequences?
         if let Ok(string) = String::from_utf8(self.input_buffer.clone()) {
             use std::fmt::Write;
-            self.display.write_str(&string).unwrap();
+            self.display.write_str(&string).expect("Write byte to terminal");
             self.input_buffer.clear();
         }
     }
@@ -128,7 +128,7 @@ impl unsegen::Widget for PseudoTerminal {
         */
         if let Event::Key(Key::Char(c)) = event {
             //write!(self.display, "{}", c);
-            write!(self.pty, "{}", c).unwrap();
+            write!(self.pty, "{}", c).expect("Write key to terminal");
         }
     }
 }

@@ -30,7 +30,7 @@ fn pty_output_loop(sink: mpsc::Sender<u8>, reader: pty::PTYOutput) {
     let reader = reader;
 
     for b in reader.bytes() {
-        sink.send(b.unwrap()).unwrap();
+        sink.send(b.expect("byte from reader")).expect("send byte");
     }
 }
 
@@ -41,7 +41,7 @@ fn main() {
     //println!("PTY: {}", process_pty.name());
     let ptyname = process_pty.name().to_owned();
 
-    let (mut gdb, out_of_band_pipe)  = gdbmi::GDB::spawn(executable_path, process_pty.name()).unwrap();
+    let (mut gdb, out_of_band_pipe)  = gdbmi::GDB::spawn(executable_path, process_pty.name()).expect("spawn gdb");
 
     let (pty_input, pty_output) = process_pty.split_io();
 
@@ -74,14 +74,14 @@ fn main() {
                     }
                 },
                 keyboard_evt = keyboard_source.recv() => {
-                    let evt = keyboard_evt.unwrap();
+                    let evt = keyboard_evt.expect("get keyboard event");
                     match evt {
                         input::InputEvent::Quit => break,
                         event => { gui.event(event, &mut gdb); },
                     }
                 },
                 pty_output = pty_output_source.recv() => {
-                    gui.add_pty_input(pty_output.unwrap());
+                    gui.add_pty_input(pty_output.expect("get pty input"));
                 }
             }
             gui.draw(terminal.create_root_window(unsegen::TextAttribute::default()));
@@ -91,6 +91,6 @@ fn main() {
 
     //keyboard_input.stop_loop(); //TODO make sure all loops stop?
 
-    let child_exit_status = gdb.process.wait().unwrap();
+    let child_exit_status = gdb.process.wait().expect("gdb exited");
     println!("GDB exited with status {}.", child_exit_status);
 }

@@ -3,7 +3,6 @@ pub mod input;
 pub mod output;
 
 use std::process::{Command,Child,ChildStdin,Stdio};
-use std::io::{Write};
 use std::thread;
 use std::sync::mpsc;
 use std::sync::Arc;
@@ -32,8 +31,8 @@ impl GDB {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()};
-        let stdin = child.stdin.take().unwrap();
-        let stdout = child.stdout.take().unwrap();
+        let stdin = child.stdin.take().expect("take stdin");
+        let stdout = child.stdout.take().expect("take stdout");
         let is_running = Arc::new(AtomicBool::new(false));
         let is_running_for_thread = is_running.clone();
         let (result_input, result_output) = mpsc::channel();
@@ -67,8 +66,7 @@ impl GDB {
             return Err(ExecuteError::Busy)
         }
 
-        command.write_interpreter_string(&mut self.stdin).unwrap();
-        write!(&mut self.stdin, "\n").unwrap();
+        command.write_interpreter_string(&mut self.stdin).expect("write interpreter command");
         match self.result_output.recv() {
             Ok(record) => Ok(record),
             Err(e) => {

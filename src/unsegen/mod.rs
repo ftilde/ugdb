@@ -110,14 +110,14 @@ impl TextAttribute {
         use std::io::Write;
 
         if let Some(color) = self.fg_color {
-            write!(terminal, "{}", termion::color::Fg(color.to_termion_color())).unwrap(); //TODO try instead of unwrap?
+            write!(terminal, "{}", termion::color::Fg(color.to_termion_color())).expect("write fgcolor");
         } else {
-            write!(terminal, "{}", termion::color::Fg(termion::color::Reset)).unwrap();
+            write!(terminal, "{}", termion::color::Fg(termion::color::Reset)).expect("write fg reset");
         }
         if let Some(color) = self.bg_color {
-            write!(terminal, "{}", termion::color::Bg(color.to_termion_color())).unwrap();
+            write!(terminal, "{}", termion::color::Bg(color.to_termion_color())).expect("write bgcolor");
         } else {
-            write!(terminal, "{}", termion::color::Bg(termion::color::Reset)).unwrap();
+            write!(terminal, "{}", termion::color::Bg(termion::color::Reset)).expect("write bg reset");
         }
         //TODO style
     }
@@ -156,8 +156,8 @@ pub struct Terminal<'a> {
 impl<'a> Terminal<'a> {
     pub fn new(stdout: ::std::io::StdoutLock<'a>) -> Self {
         use std::io::Write;
-        let mut terminal = stdout.into_raw_mode().unwrap();
-        write!(terminal, "{}", termion::cursor::Hide).unwrap();
+        let mut terminal = stdout.into_raw_mode().expect("raw terminal");
+        write!(terminal, "{}", termion::cursor::Hide).expect("write: hide cursor");
         Terminal {
             values: CharMatrix::default((0,0)),
             terminal: terminal
@@ -165,7 +165,7 @@ impl<'a> Terminal<'a> {
     }
 
     pub fn create_root_window(&mut self, default_format: TextAttribute) -> Window {
-        let (x, y) = termion::terminal_size().unwrap();
+        let (x, y) = termion::terminal_size().expect("get terminal size");
         let dim = (x as Ix, y as Ix);
         //if dim != self.values.dim() {
         self.values = CharMatrix::default(dim);
@@ -178,18 +178,18 @@ impl<'a> Terminal<'a> {
         //self.values = CharMatrix::default((5, 10));
         //self.values[(1,1)] = FormattedChar::new('a', TextAttribute::default());
         use std::io::Write;
-        //write!(self.terminal, "{}", termion::clear::All).unwrap(); //Causes flickering
+        //write!(self.terminal, "{}", termion::clear::All).expect("clear screen"); //Causes flickering and is unnecessary
 
         let mut current_format = TextAttribute::default();
 
         for (y, line) in self.values.axis_iter(Axis(1)).enumerate() {
-            write!(self.terminal, "{}", termion::cursor::Goto(1, (y+1) as u16)).unwrap();
+            write!(self.terminal, "{}", termion::cursor::Goto(1, (y+1) as u16)).expect("move cursor");
             let mut buffer = String::with_capacity(line.len());
             for c in line.iter() {
                 //TODO style
                 if c.format != current_format {
                     current_format.set_terminal_attributes(&mut self.terminal);
-                    write!(self.terminal, "{}", buffer).unwrap();
+                    write!(self.terminal, "{}", buffer).expect("write buffer");
                     buffer.clear();
                     current_format = c.format;
                 }
@@ -203,16 +203,16 @@ impl<'a> Terminal<'a> {
                 buffer.push(character);
             }
             current_format.set_terminal_attributes(&mut self.terminal);
-            write!(self.terminal, "{}", buffer).unwrap();
+            write!(self.terminal, "{}", buffer).expect("write leftover buffer contents");
         }
-        self.terminal.flush().unwrap();
+        self.terminal.flush().expect("flush terminal");
     }
 }
 
 impl<'a> Drop for Terminal<'a> {
     fn drop(&mut self) {
         use std::io::Write;
-        write!(self.terminal, "{}", termion::cursor::Show).unwrap();
+        write!(self.terminal, "{}", termion::cursor::Show).expect("show cursor");
     }
 }
 

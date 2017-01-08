@@ -99,17 +99,17 @@ pub fn process_output<T: Read>(output: T, result_pipe: Sender<ResultRecord>, out
                         if let ResultRecord{token: _, class: ResultClass::Running, results: _} = record {
                             is_running.store(true, Ordering::Relaxed /*TODO: maybe something else? */);
                         }
-                        result_pipe.send(record).unwrap();
+                        result_pipe.send(record).expect("send result to pipe");
                     },
                     Output::OutOfBand(record) => {
                         if let OutOfBandRecord::AsyncRecord{token: _, kind: _, class: AsyncClass::Stopped, results: _} = record {
                             is_running.store(false, Ordering::Relaxed /*TODO: maybe something else? */);
                         }
-                        out_of_band_pipe.send(record).unwrap();
+                        out_of_band_pipe.send(record).expect("send out of band record to pipe");
                     },
                     Output::GDBLine => { },
                     //Output::SomethingElse(_) => { /*println!("SOMETHING ELSE: {}", str);*/ }
-                    Output::SomethingElse(text) => { out_of_band_pipe.send(OutOfBandRecord::StreamRecord{ kind: StreamKind::Target, data: text}).unwrap(); }
+                    Output::SomethingElse(text) => { out_of_band_pipe.send(OutOfBandRecord::StreamRecord{ kind: StreamKind::Target, data: text}).expect("send something else to pipe"); }
                 }
             },
             Err(e) => { panic!("{}", e); },

@@ -145,7 +145,7 @@ impl Write for PTY {
 impl Read for PTYOutput {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         //Panics while reading/writing should not happen
-        let fd = self.pty.lock().unwrap().fd;
+        let fd = self.pty.lock().expect("lock pty for read").fd;
         read(fd, buf)
     }
 }
@@ -153,7 +153,7 @@ impl Read for PTYOutput {
 impl Write for PTYInput {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         //Panics while reading/writing should not happen
-        let fd = self.pty.lock().unwrap().fd;
+        let fd = self.pty.lock().expect("lock pty for write").fd;
         write(fd, buf)
     }
 

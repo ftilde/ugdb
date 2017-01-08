@@ -13,8 +13,6 @@ pub trait InputSource {
     fn start_loop(event_sink: mpsc::Sender<InputEvent>) -> Self;
 }
 
-//TODO move to own file
-
 #[derive(Clone, Copy)]
 enum Mode {
     Console,
@@ -33,7 +31,7 @@ impl ViKeyboardInput {
         let stdin = ::std::io::stdin(); //TODO lock outside of thread
         let stdin = stdin.lock();
         for c in stdin.keys() {
-            let c = c.unwrap();
+            let c = c.expect("key");
             match c {
                 ::termion::event::Key::F(1) => {
                     mode = match mode {
@@ -46,11 +44,11 @@ impl ViKeyboardInput {
                         Mode::Console => { InputEvent::ConsoleEvent(::unsegen::Event::Key(c)) },
                         Mode::PTY => { InputEvent::PseudoTerminalEvent(::unsegen::Event::Key(c)) },
                     };
-                    output.send(event).unwrap();
+                    output.send(event).expect("send event");
                 },
             }
         }
-        output.send(InputEvent::Quit).unwrap();
+        output.send(InputEvent::Quit).expect("send quit");
     }
 }
 

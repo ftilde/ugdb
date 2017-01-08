@@ -15,62 +15,32 @@ extern crate nom;
 
 
 mod unsegen;
-mod gui;
 mod gdbmi;
 mod pty;
 
-use gdbmi::*;
+mod gui;
+mod input;
+
 use std::sync::mpsc;
 use std::thread;
 
-#[derive(Eq, PartialEq, Clone, Copy)]
-enum Input {
-    Event(termion::event::Event),
-    Quit,
-}
-
-macro_rules! nc_printw_attr{
-    ($att:expr, $fmt:expr, $($arg:tt)*) => {{
-        //ncurses::attron($att);
-        ncurses::printw(format!($fmt $(, $arg)*).as_ref());
-        //ncurses::attroff($att);
-    }}
-}
-macro_rules! nc_printw{
-    ($fmt:expr, $($arg:tt)*) => {{
-        ncurses::printw(format!($fmt $(, $arg)*).as_ref());
-    }}
-}
-
-fn keyboard_input_loop(output: mpsc::Sender<Input>) {
-    use termion::input::TermRead;
-
-    let stdin = std::io::stdin();
-    let mut stdin = stdin.lock();
-    for c in stdin.keys() {
-        output.send(Input::Event(termion::event::Event::Key(c.unwrap()))).unwrap();
-    }
-    output.send(Input::Quit).unwrap();
-}
-
-fn pty_output_loop(sink: mpsc::Sender<String>, reader: pty::PTYOutput) {
+fn pty_output_loop(sink: mpsc::Sender<u8>, reader: pty::PTYOutput) {
     use ::std::io::Read;
-    let mut reader = std::io::BufReader::new(reader);
-    loop { //TODO how to stop that loop?
-        let mut buf = String::new();
-        reader.read_to_string(&mut buf);
-        sink.send(buf);
+    let reader = reader;
+
+    for b in reader.bytes() {
+        sink.send(b.unwrap()).unwrap();
     }
 }
 
 fn main() {
-    use unsegen::Widget;
     let process_pty = pty::PTY::open().expect("Could not create pty.");
     let executable_path = "/home/dominik/test2";
 
     //println!("PTY: {}", process_pty.name());
+    let ptyname = process_pty.name().to_owned();
 
-    let (mut gdb, out_of_band_pipe)  = GDB::spawn(executable_path, process_pty.name()).unwrap();
+    let (mut gdb, out_of_band_pipe)  = gdbmi::GDB::spawn(executable_path, process_pty.name()).unwrap();
 
     let (pty_input, pty_output) = process_pty.split_io();
 
@@ -80,14 +50,15 @@ fn main() {
     });
 
     let (keyboard_sink, keyboard_source) = mpsc::channel();
-    /*let inputThread = */ thread::spawn(move || {
-        keyboard_input_loop(keyboard_sink);
-    });
+
+    use input::InputSource;
+    /* let keyboard_input = */ input::ViKeyboardInput::start_loop(keyboard_sink);
 
     let stdout = std::io::stdout();
     {
         let mut terminal = unsegen::Terminal::new(stdout.lock());
         let mut gui = gui::Gui::new(pty_input);
+        gui.add_debug_message(&ptyname);
 
         gui.draw(terminal.create_root_window(unsegen::TextAttribute::default()));
         terminal.present();
@@ -98,24 +69,26 @@ fn main() {
                     if let Ok(record) = oob_evt {
                         gui.add_out_of_band_record(record);
                     } else {
-                        break;
+                        break; // TODO why silent fail/break?
                     }
                 },
                 keyboard_evt = keyboard_source.recv() => {
                     let evt = keyboard_evt.unwrap();
                     match evt {
-                        Input::Quit => break,
-                        Input::Event(event) => { gui.event(event, &mut gdb); },
+                        input::InputEvent::Quit => break,
+                        event => { gui.event(event, &mut gdb); },
                     }
                 },
                 pty_output = pty_output_source.recv() => {
-                    gui.add_pty_output(pty_output.unwrap());
+                    gui.add_pty_input(pty_output.unwrap());
                 }
             }
             gui.draw(terminal.create_root_window(unsegen::TextAttribute::default()));
             terminal.present();
         }
     }
+
+    //keyboard_input.stop_loop(); //TODO make sure all loops stop?
 
     let child_exit_status = gdb.process.wait().unwrap();
     println!("GDB exited with status {}.", child_exit_status);

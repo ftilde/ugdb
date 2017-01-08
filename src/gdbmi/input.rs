@@ -25,13 +25,21 @@ impl MiCommand {
         MiCommand {
             operation: "interpreter-exec".to_owned(),
             options: vec![interpreter, command],
-            parameters: Vec::new()
+            parameters: Vec::new(),
         }
     }
 
     pub fn cli_exec(command: String) -> MiCommand {
         //TODO need quotes everywhere?
         Self::interpreter_exec("console".to_owned(), format!("\"{}\"", command))
+    }
+
+    pub fn exec_interrupt(/*TODO incorporate all & threadgroup? */) -> MiCommand {
+        MiCommand {
+            operation: "exec-interrupt".to_owned(),
+            options: Vec::new(),
+            parameters: Vec::new(),
+        }
     }
 }
 

@@ -104,14 +104,14 @@ impl TextAttribute {
         use std::io::Write;
 
         if let Some(color) = self.fg_color {
-            write!(terminal, "{}", termion::color::Fg(color.to_termion_color()));
+            write!(terminal, "{}", termion::color::Fg(color.to_termion_color())).unwrap(); //TODO try instead of unwrap?
         } else {
-            write!(terminal, "{}", termion::color::Fg(termion::color::Reset));
+            write!(terminal, "{}", termion::color::Fg(termion::color::Reset)).unwrap();
         }
         if let Some(color) = self.bg_color {
-            write!(terminal, "{}", termion::color::Bg(color.to_termion_color()));
+            write!(terminal, "{}", termion::color::Bg(color.to_termion_color())).unwrap();
         } else {
-            write!(terminal, "{}", termion::color::Bg(termion::color::Reset));
+            write!(terminal, "{}", termion::color::Bg(termion::color::Reset)).unwrap();
         }
         //TODO style
     }
@@ -174,29 +174,30 @@ impl<'a> Terminal<'a> {
         use std::io::Write;
         //write!(self.terminal, "{}", termion::clear::All).unwrap(); //Causes flickering
 
-        let mut currentFormat = TextAttribute::default();
+        let mut current_format = TextAttribute::default();
 
         for (y, line) in self.values.axis_iter(Axis(1)).enumerate() {
             write!(self.terminal, "{}", termion::cursor::Goto(1, (y+1) as u16)).unwrap();
             let mut buffer = String::with_capacity(line.len());
             for c in line.iter() {
                 //TODO style
-                if c.format != currentFormat {
-                    currentFormat.set_terminal_attributes(&mut self.terminal);
-                    write!(self.terminal, "{}", buffer);
+                if c.format != current_format {
+                    current_format.set_terminal_attributes(&mut self.terminal);
+                    write!(self.terminal, "{}", buffer).unwrap();
                     buffer.clear();
-                    currentFormat = c.format;
+                    current_format = c.format;
                 }
                 let character = match c.character {
                     '\n' => ' ',
+                    '\r' => ' ',
                     '\0' => ' ',
                     '\t' => ' ', //TODO?
                     x => x,
                 };
                 buffer.push(character);
             }
-            currentFormat.set_terminal_attributes(&mut self.terminal);
-            write!(self.terminal, "{}", buffer);
+            current_format.set_terminal_attributes(&mut self.terminal);
+            write!(self.terminal, "{}", buffer).unwrap();
         }
         self.terminal.flush().unwrap();
     }
@@ -285,7 +286,7 @@ impl<'a> Window<'a> {
     }
 
     pub fn write(&mut self, x: i32, y: i32, text: &str, format: &TextAttribute) {
-        if 0 > y || y as u32 >= self.get_height() {
+        if !(0 <= y && (y as u32) < self.get_height()) {
             return;
         }
 
@@ -386,7 +387,7 @@ impl HorizontalLayout {
     pub fn draw<'a, T: Iterator<Item=&'a Widget> + 'a>(&'a self, window: Window, widgets: T) {
         let mut widgets = widgets.peekable();
         let mut rest_window = window;
-        let mut pos = 0;
+        let mut pos;
         while let Some(w) = widgets.next() {
             let (x, _) = w.space_demand();
             pos = match x {
@@ -454,7 +455,7 @@ impl VerticalLayout {
 
         let mut widgets = widgets.into_iter().peekable();
         let mut rest_window = window;
-        let mut pos = 0;
+        let mut pos;
 
         while let Some(w) = widgets.next() {
             let (_, y) = w.space_demand();

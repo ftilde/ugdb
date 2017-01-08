@@ -80,7 +80,7 @@ impl super::Widget for PromptLine {
     }
     fn draw(&self, window: super::Window) {
         let widgets: Vec<&super::Widget> = vec![&self.prompt, &self.line];
-        let windows = self.layout.draw(window, widgets.into_iter());
+        self.layout.draw(window, widgets.into_iter());
     }
     fn input(&mut self, event: super::Event) {
         self.line.input(event);
@@ -120,7 +120,25 @@ impl TextArea {
         }
     }
 
-    pub fn add_line(&mut self, line: String) {
-        self.lines.push(line);
+    pub fn active_line_mut(&mut self) -> &mut String {
+        if self.lines.is_empty() {
+            self.lines.push(String::new());
+        }
+        return self.lines.last_mut().unwrap();
+    }
+}
+
+impl ::std::fmt::Write for TextArea {
+    fn write_str(&mut self, s: &str) -> ::std::fmt::Result {
+        let mut s = s.to_owned();
+
+        while let Some(newline_offset) = s.find('\n') {
+            let line: String = s.drain(..newline_offset).collect();
+            s.pop(); //Remove the \n
+            self.active_line_mut().push_str(&line);
+            self.lines.push(String::new());
+        }
+        self.active_line_mut().push_str(&s);
+        Ok(())
     }
 }

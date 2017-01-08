@@ -180,7 +180,9 @@ fn read(fd: libc::c_int, buf: &mut [u8]) -> io::Result<usize> {
     };
 
     if nread < 0 {
-        Ok(0)
+        //Ok(0)
+        //panic!("read: {:?}", io::Error::last_os_error());
+        Err(io::Error::last_os_error())
     } else {
         Ok(nread as usize)
     }

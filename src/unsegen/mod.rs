@@ -390,13 +390,22 @@ impl<'c, 'w> Cursor<'c, 'w> {
 
     pub fn write(&mut self, text: &str) {
 
-        for character in text.chars() {
-            if self.wrapping_mode == WrappingMode::Wrap && (self.x as u32) >= self.window.get_width() {
-                self.wrap_line(); //TODO: properly handle for WrapDirection == Up
-            }
-            if character == '\n' {
-                self.wrap_line();
+        let mut line_it = text.lines().peekable();
+        while let Some(line) = line_it.next() {
+            let num_auto_wraps = if self.wrapping_mode == WrappingMode::Wrap {
+                let num_chars = line.chars().count();
+                ::std::cmp::max(0, (num_chars as i32 + self.x) / (self.window.get_width() as i32))
             } else {
+                0
+            };
+            if self.wrapping_direction == WrappingDirection::Up {
+                self.y -= num_auto_wraps; // reserve space for auto wraps
+            }
+            for character in line.chars() {
+                if self.wrapping_mode == WrappingMode::Wrap && (self.x as u32) >= self.window.get_width() {
+                    self.y += 1;
+                    self.x = 0;
+                }
                 if     0 <= self.x && (self.x as u32) < self.window.get_width()
                     && 0 <= self.y && (self.y as u32) < self.window.get_height() {
 
@@ -409,6 +418,12 @@ impl<'c, 'w> Cursor<'c, 'w> {
                     *self.window.values.get_mut(pos).expect("in bounds") = FormattedChar::new(character, text_attribute);
                 }
                 self.x += 1;
+            }
+            if self.wrapping_direction == WrappingDirection::Up {
+                self.y -= num_auto_wraps; // Jump back to first line
+            }
+            if line_it.peek().is_some() {
+                self.wrap_line();
             }
         }
     }

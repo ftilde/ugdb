@@ -27,7 +27,6 @@ use std::thread;
 
 fn pty_output_loop(sink: mpsc::Sender<u8>, reader: pty::PTYOutput) {
     use ::std::io::Read;
-    let reader = reader;
 
     for b in reader.bytes() {
         sink.send(b.expect("byte from reader")).expect("send byte");
@@ -40,6 +39,13 @@ fn main() {
 
     //println!("PTY: {}", process_pty.name());
     let ptyname = process_pty.name().to_owned();
+
+    // Hack:
+    // Open slave terminal, so that it does not get destroyed when a gdb process opens it and
+    // closes it afterwards.
+    let mut pts = std::fs::OpenOptions::new().write(true).read(true).open(&ptyname).expect("pts file");
+    use std::io::Write;
+    write!(pts, "").expect("initial write to pts");
 
     let (mut gdb, out_of_band_pipe)  = gdbmi::GDB::spawn(executable_path, process_pty.name()).expect("spawn gdb");
 

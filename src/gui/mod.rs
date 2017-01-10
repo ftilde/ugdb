@@ -18,7 +18,7 @@ impl Console {
 
     pub fn add_message(&mut self, msg: String) {
         use std::fmt::Write;
-        write!(self.text_area, "{}\n", msg).expect("Write message");
+        write!(self.text_area, " -=- {}\n", msg).expect("Write message");
     }
 
     pub fn event(&mut self, event: unsegen::Event, gdb: &mut gdbmi::GDB) { //TODO more console events

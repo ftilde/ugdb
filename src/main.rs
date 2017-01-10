@@ -1,9 +1,11 @@
 #![feature(mpsc_select)]
+// For main
+#[macro_use]
+extern crate lazy_static;
 
 // For unsegen
 extern crate termion;
 extern crate ndarray;
-//extern crate pty;
 
 // For pty
 extern crate libc;
@@ -21,6 +23,8 @@ mod pty;
 
 mod gui;
 mod input;
+
+mod signalchannel;
 
 use std::sync::mpsc;
 use std::thread;
@@ -47,19 +51,23 @@ fn main() {
     use std::io::Write;
     write!(pts, "").expect("initial write to pts");
 
+    // Start gdb and setup output event piping
     let (mut gdb, out_of_band_pipe)  = gdbmi::GDB::spawn(executable_path, process_pty.name()).expect("spawn gdb");
 
+    // Setup pty piping
     let (pty_input, pty_output) = process_pty.split_io();
-
     let (pty_output_sink, pty_output_source) = mpsc::channel();
     /*let ptyThread = */ thread::spawn(move || {
         pty_output_loop(pty_output_sink, pty_output);
     });
 
+    // Setup input piping
     let (keyboard_sink, keyboard_source) = mpsc::channel();
-
     use input::InputSource;
     /* let keyboard_input = */ input::ViKeyboardInput::start_loop(keyboard_sink);
+
+    // Setup signal piping
+    let signal_event_source = signalchannel::setup_signal_receiver().expect("took signal_event_source");
 
     let stdout = std::io::stdout();
     {
@@ -88,6 +96,12 @@ fn main() {
                 },
                 pty_output = pty_output_source.recv() => {
                     gui.add_pty_input(pty_output.expect("get pty input"));
+                },
+                signal_event = signal_event_source.recv() => {
+                    match signal_event.expect("get signal event") {
+                        nix::sys::signal::Signal::SIGWINCH => { /* Ignore, we just want to redraw */ },
+                        sig => { panic!(format!("unexpected {:?}", sig)) },
+                    }
                 }
             }
             gui.draw(terminal.create_root_window(unsegen::TextAttribute::default()));

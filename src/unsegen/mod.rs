@@ -125,24 +125,36 @@ impl TextAttribute {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct FormattedChar {
-    character: char,
+    // Invariant: the contents of graphemeCluster is always valid utf8!
+    grapheme_cluster: ::smallvec::SmallVec<[u8; 16]>,
     format: TextAttribute,
 }
 
 impl FormattedChar {
-    fn new(character: char, format: TextAttribute) -> Self {
+    fn new(grapheme_cluster: &str, format: TextAttribute) -> Self {
+        let mut vec = ::smallvec::SmallVec::<[u8; 16]>::new();
+        for byte in grapheme_cluster.bytes() {
+            vec.push(byte);
+        }
         FormattedChar {
-            character: character,
+            grapheme_cluster: vec,
             format: format,
+        }
+    }
+
+    fn grapheme_cluster_as_str<'a>(&'a self) -> &'a str {
+        // This is actually safe because graphemeCluster is always valid utf8.
+        unsafe {
+            ::std::str::from_utf8_unchecked(&self.grapheme_cluster)
         }
     }
 }
 
 impl Default for FormattedChar {
     fn default() -> Self {
-        Self::new(' ', TextAttribute::default())
+        Self::new(" ", TextAttribute::default())
     }
 }
 
@@ -177,8 +189,6 @@ impl<'a> Terminal<'a> {
     }
 
     pub fn present(&mut self) {
-        //self.values = CharMatrix::default((5, 10));
-        //self.values[(1,1)] = FormattedChar::new('a', TextAttribute::default());
         use std::io::Write;
         //write!(self.terminal, "{}", termion::clear::All).expect("clear screen"); //Causes flickering and is unnecessary
 
@@ -195,14 +205,11 @@ impl<'a> Terminal<'a> {
                     buffer.clear();
                     current_format = c.format;
                 }
-                let character = match c.character {
-                    '\n' => ' ',
-                    '\r' => ' ',
-                    '\0' => ' ',
-                    '\t' => ' ', //TODO?
+                let grapheme_cluster = match c.grapheme_cluster_as_str() {
+                    "\n" | "\r" | "\0" | "\t" => " ",
                     x => x,
                 };
-                buffer.push(character);
+                buffer.push_str(grapheme_cluster);
             }
             current_format.set_terminal_attributes(&mut self.terminal);
             write!(self.terminal, "{}", buffer).expect("write leftover buffer contents");
@@ -388,6 +395,18 @@ impl<'c, 'w> Cursor<'c, 'w> {
         self.x = 0;
     }
 
+    fn write_grapheme_cluster_unchecked(&mut self, cluster: FormattedChar) {
+        *self.window.values.get_mut((self.x as Ix, self.y as Ix)).expect("in bounds") = cluster;
+    }
+
+    fn active_text_attribute(&self) -> TextAttribute {
+        if let Some(attr) = self.text_attribute {
+            attr.clone()
+        } else {
+            self.window.default_format.clone()
+        }
+    }
+
     pub fn write(&mut self, text: &str) {
 
         let mut line_it = text.lines().peekable();
@@ -401,7 +420,7 @@ impl<'c, 'w> Cursor<'c, 'w> {
             if self.wrapping_direction == WrappingDirection::Up {
                 self.y -= num_auto_wraps; // reserve space for auto wraps
             }
-            for character in line.chars() {
+            for grapheme_cluster in ::unicode_segmentation::UnicodeSegmentation::graphemes(line, true) {
                 if self.wrapping_mode == WrappingMode::Wrap && (self.x as u32) >= self.window.get_width() {
                     self.y += 1;
                     self.x = 0;
@@ -409,15 +428,21 @@ impl<'c, 'w> Cursor<'c, 'w> {
                 if     0 <= self.x && (self.x as u32) < self.window.get_width()
                     && 0 <= self.y && (self.y as u32) < self.window.get_height() {
 
-                    let pos = (self.x as Ix, self.y as Ix);
-                    let text_attribute = if let Some(attr) = self.text_attribute {
-                        attr.clone()
-                    } else {
-                        self.window.default_format.clone()
-                    };
-                    *self.window.values.get_mut(pos).expect("in bounds") = FormattedChar::new(character, text_attribute);
+                    let text_attribute = self.active_text_attribute();
+                    self.write_grapheme_cluster_unchecked(FormattedChar::new(grapheme_cluster, text_attribute));
                 }
                 self.x += 1;
+                let cluster_width = ::unicode_width::UnicodeWidthStr::width(grapheme_cluster);
+                if cluster_width > 1 {
+                    let text_attribute = self.active_text_attribute();
+                    for _ in 1..cluster_width {
+                        if self.x >= self.window.get_width() as i32 {
+                            break;
+                        }
+                        self.write_grapheme_cluster_unchecked(FormattedChar::new(grapheme_cluster, text_attribute.clone()));
+                        self.x += 1;
+                    }
+                }
             }
             if self.wrapping_direction == WrappingDirection::Up {
                 self.y -= num_auto_wraps; // Jump back to first line

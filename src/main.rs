@@ -6,6 +6,9 @@ extern crate lazy_static;
 // For unsegen
 extern crate termion;
 extern crate ndarray;
+extern crate smallvec;
+extern crate unicode_segmentation;
+extern crate unicode_width;
 
 // For pty
 extern crate libc;

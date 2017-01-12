@@ -98,7 +98,6 @@ impl TextAttribute {
     }
     */
 
-    /*
     fn or(&self, other: &TextAttribute) -> TextAttribute {
         TextAttribute {
             fg_color: self.fg_color.or(other.fg_color),
@@ -106,7 +105,7 @@ impl TextAttribute {
             style: self.style.or(other.style),
         }
     }
-    */
+
 
     fn set_terminal_attributes(&self, terminal: &mut RawTerminal<::std::io::StdoutLock>) {
         use std::io::Write;
@@ -295,7 +294,7 @@ impl<'w> Window<'w> {
             line.push(c);
         }
         let height = self.get_height();
-        let mut cursor = self.create_cursor();
+        let mut cursor = Cursor::new(self);
         for _ in 0..height {
             cursor.writeln(&line);
         }
@@ -303,10 +302,6 @@ impl<'w> Window<'w> {
 
     pub fn set_default_format(&mut self, format: TextAttribute) {
         self.default_format = format;
-    }
-
-    pub fn create_cursor<'c>(&'c mut self) -> Cursor<'c, 'w>  {
-        Cursor::new(self)
     }
 }
 
@@ -333,7 +328,7 @@ pub struct Cursor<'c, 'w: 'c> {
 }
 
 impl<'c, 'w> Cursor<'c, 'w> {
-    fn new(window: &'c mut Window<'w>) -> Self {
+    pub fn new(window: &'c mut Window<'w>) -> Self {
         Cursor {
             window: window,
             wrapping_direction: WrappingDirection::Down,
@@ -372,11 +367,11 @@ impl<'c, 'w> Cursor<'c, 'w> {
         self
     }
 
-    /*
     pub fn set_text_attribute(&mut self, ta: TextAttribute) {
         self.text_attribute = Some(ta)
     }
 
+    /*
     pub fn text_attribute(mut self, ta: TextAttribute) -> Self {
         self.set_text_attribute(ta);
         self

@@ -2,18 +2,23 @@ use super::{
     Window,
     WrappingDirection,
     WrappingMode,
+    Cursor,
+    TextAttribute,
+    Color,
 };
 
 // TextLine --------------------------------------------------------------------------------------
 
 pub struct TextLine {
-    text: String
+    text: String,
+    cursor_pos: u32,
 }
 
 impl TextLine {
     pub fn new(text: String) -> Self {
         TextLine {
             text: text,
+            cursor_pos: 0,
         }
     }
 
@@ -28,23 +33,77 @@ impl TextLine {
     */
 
     pub fn clear(&mut self) {
-        self.text.clear()
+        self.text.clear();
+        self.cursor_pos = 0;
+    }
+
+    pub fn move_cursor_right(&mut self) {
+        self.cursor_pos += 1; //TODO bounds check
+    }
+
+    pub fn move_cursor_left(&mut self) {
+        self.cursor_pos = ::std::cmp::max(0, self.cursor_pos - 1);
     }
 }
 
 impl super::Widget for TextLine {
     fn space_demand(&self) -> (super::Demand, super::Demand) {
-        (super::Demand::Const(self.text.len() as u32), super::Demand::Const(1)) //TODO?
+        (super::Demand::Const((self.text.len() + 1) as u32), super::Demand::Const(1)) //TODO this is not really universal
     }
     fn draw(&self, mut window: Window) {
-        window.create_cursor().write(&self.text);
+        let (maybe_cursor_pos_offset, maybe_after_cursor_offset) = {
+            use ::unicode_segmentation::UnicodeSegmentation;
+            let mut grapheme_indices = self.text.grapheme_indices(true);
+            let cursor_cluster = grapheme_indices.nth(self.cursor_pos as usize);
+            let next_cluster = grapheme_indices.next();
+            (cursor_cluster.map(|c: (usize, &str)| c.0), next_cluster.map(|c: (usize, &str)| c.0))
+        };
+        let text_style = TextAttribute::new(None, None, None);
+        let cursor_style = TextAttribute::new(None, Some(Color::green()), None).or(&text_style);
+        let mut cursor = Cursor::new(&mut window);
+        if let Some(cursor_pos_offset) = maybe_cursor_pos_offset {
+            let (until_cursor, from_cursor) = self.text.split_at(cursor_pos_offset);
+            cursor.set_text_attribute(text_style);
+            cursor.write(until_cursor);
+            if let Some(after_cursor_offset) = maybe_after_cursor_offset {
+                let (cursor_str, after_cursor) = from_cursor.split_at(after_cursor_offset - cursor_pos_offset);
+                cursor.set_text_attribute(cursor_style);
+                cursor.write(cursor_str);
+                cursor.set_text_attribute(text_style);
+                cursor.write(after_cursor);
+            } else {
+                cursor.set_text_attribute(cursor_style);
+                cursor.write(from_cursor);
+            }
+        } else {
+            cursor.set_text_attribute(text_style);
+            cursor.write(&self.text);
+            cursor.set_text_attribute(cursor_style);
+            cursor.write(" ");
+        }
     }
     fn input(&mut self, event: super::Event) {
         if let super::Event::Key(key) = event {
             match key {
-                super::Key::Char(c) => { self.text.push(c); },
-                super::Key::Backspace => { self.text.pop(); },
-                super::Key::Ctrl('c') => { self.text.clear(); },
+                super::Key::Char(c) => {
+                    self.text.insert(self.cursor_pos as usize, c); //TODO: this might not be in char boundary, use grapheme indices
+                    self.move_cursor_right();
+                },
+                super::Key::Backspace => {
+                    if self.cursor_pos > 0 {
+                        self.text.remove((self.cursor_pos - 1) as usize);
+                        self.move_cursor_left();
+                    }
+                },
+                super::Key::Ctrl('c') => {
+                    self.clear();
+                },
+                super::Key::Left => {
+                    self.move_cursor_left();
+                },
+                super::Key::Right => {
+                    self.move_cursor_right();
+                },
                 _ => {},
             }
         }
@@ -61,11 +120,6 @@ pub struct PromptLine {
 }
 
 impl PromptLine {
-    /*
-    pub fn new() -> Self {
-        PromptLine::with_prompt(" > ".into())
-    }
-    */
 
     pub fn with_prompt(prompt: String) -> Self {
         PromptLine {
@@ -106,11 +160,11 @@ pub struct TextArea {
 impl super::Widget for TextArea {
     fn space_demand(&self) -> (super::Demand, super::Demand) {
         //return (super::Demand::MaxPossible /*TODO?*/, super::Demand::Const(self.lines.len() as u32));
-        return (super::Demand::MaxPossible /*TODO?*/, super::Demand::MaxPossible);
+        (super::Demand::MaxPossible /*TODO?*/, super::Demand::MaxPossible)
     }
     fn draw(&self, mut window: super::Window) {
         let y_start = window.get_height() - 1;
-        let mut cursor = window.create_cursor()
+        let mut cursor = Cursor::new(&mut window)
             .position(0, y_start as i32)
             .wrapping_direction(WrappingDirection::Up)
             .wrapping_mode(WrappingMode::Wrap);

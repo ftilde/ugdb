@@ -179,7 +179,7 @@ impl<'a> Terminal<'a> {
 
     pub fn create_root_window(&mut self, default_format: TextAttribute) -> Window {
         let (x, y) = termion::terminal_size().expect("get terminal size");
-        let dim = (x as Ix, y as Ix);
+        let dim = (y as Ix, x as Ix);
         //if dim != self.values.dim() {
         self.values = CharMatrix::default(dim);
         //}
@@ -193,7 +193,7 @@ impl<'a> Terminal<'a> {
 
         let mut current_format = TextAttribute::default();
 
-        for (y, line) in self.values.axis_iter(Axis(1)).enumerate() {
+        for (y, line) in self.values.axis_iter(Axis(0)).enumerate() {
             write!(self.terminal, "{}", termion::cursor::Goto(1, (y+1) as u16)).expect("move cursor");
             let mut buffer = String::with_capacity(line.len());
             for c in line.iter() {
@@ -243,17 +243,17 @@ impl<'w> Window<'w> {
     }
 
     pub fn get_width(&self) -> u32 {
-        self.values.dim().0 as u32
+        self.values.dim().1 as u32
     }
 
     pub fn get_height(&self) -> u32 {
-        self.values.dim().1 as u32
+        self.values.dim().0 as u32
     }
 
     pub fn split_v(self, split_pos: u32) -> (Self, Self) {
         assert!(split_pos < self.get_height(), "Invalid split_pos");
         //let split_pos = ::std::cmp::min(split_pos, self.get_height());
-        let (first_mat, second_mat) = self.values.split_at(Axis(1), split_pos as Ix);
+        let (first_mat, second_mat) = self.values.split_at(Axis(0), split_pos as Ix);
         let w_u = Window {
             pos_x: self.pos_x,
             pos_y: self.pos_y,
@@ -272,7 +272,7 @@ impl<'w> Window<'w> {
     pub fn split_h(self, split_pos: u32) -> (Self, Self) {
         assert!(split_pos < self.get_width(), "Invalid split_pos");
         //let split_pos = ::std::cmp::min(split_pos, self.get_height());
-        let (first_mat, second_mat) = self.values.split_at(Axis(0), split_pos as Ix);
+        let (first_mat, second_mat) = self.values.split_at(Axis(1), split_pos as Ix);
         let w_l = Window {
             pos_x: self.pos_x,
             pos_y: self.pos_y,
@@ -391,7 +391,7 @@ impl<'c, 'w> Cursor<'c, 'w> {
     }
 
     fn write_grapheme_cluster_unchecked(&mut self, cluster: FormattedChar) {
-        *self.window.values.get_mut((self.x as Ix, self.y as Ix)).expect("in bounds") = cluster;
+        *self.window.values.get_mut((self.y as Ix, self.x as Ix)).expect("in bounds") = cluster;
     }
 
     fn active_text_attribute(&self) -> TextAttribute {

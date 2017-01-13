@@ -45,13 +45,15 @@ impl super::Widget for LineLabel {
 pub struct LineEdit {
     text: String,
     cursor_pos: u32,
+    cursor_style: Style,
 }
 
 impl LineEdit {
-    pub fn new(text: String) -> Self {
+    pub fn new() -> Self {
         LineEdit {
-            text: text,
+            text: String::new(),
             cursor_pos: 0,
+            cursor_style: Style::new().invert(),
         }
     }
 
@@ -92,7 +94,7 @@ impl super::Widget for LineEdit {
             (cursor_cluster.map(|c: (usize, &str)| c.0), next_cluster.map(|c: (usize, &str)| c.0))
         };
         let text_style = TextAttribute::default();
-        let cursor_style = TextAttribute::new(None, None, Style::new().invert()).or(&text_style);
+        let cursor_style = TextAttribute::new(None, None, self.cursor_style);
         let mut cursor = Cursor::new(&mut window);
         if let Some(cursor_pos_offset) = maybe_cursor_pos_offset {
             let (until_cursor, from_cursor) = self.text.split_at(cursor_pos_offset);
@@ -157,7 +159,7 @@ impl PromptLine {
     pub fn with_prompt(prompt: String) -> Self {
         PromptLine {
             prompt: LineLabel::new(prompt),
-            line: LineEdit::new("".into()),
+            line: LineEdit::new(),
             history: Vec::new(),
             layout: super::HorizontalLayout::new(super::SeparatingStyle::None),
         }

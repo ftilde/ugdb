@@ -454,7 +454,7 @@ impl<'c, 'w> Cursor<'c, 'w> {
 
     fn active_text_attribute(&self) -> TextAttribute {
         if let Some(attr) = self.text_attribute {
-            attr.clone()
+            attr.or(&self.window.default_format)
         } else {
             self.window.default_format.clone()
         }

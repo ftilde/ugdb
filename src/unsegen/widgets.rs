@@ -4,7 +4,7 @@ use super::{
     WrappingMode,
     Cursor,
     TextAttribute,
-    Color,
+    Style,
 };
 
 // TextLine --------------------------------------------------------------------------------------
@@ -58,8 +58,8 @@ impl super::Widget for TextLine {
             let next_cluster = grapheme_indices.next();
             (cursor_cluster.map(|c: (usize, &str)| c.0), next_cluster.map(|c: (usize, &str)| c.0))
         };
-        let text_style = TextAttribute::new(None, None, None);
-        let cursor_style = TextAttribute::new(None, Some(Color::green()), None).or(&text_style);
+        let text_style = TextAttribute::default();
+        let cursor_style = TextAttribute::new(None, None, Style::new().invert()).or(&text_style);
         let mut cursor = Cursor::new(&mut window);
         if let Some(cursor_pos_offset) = maybe_cursor_pos_offset {
             let (until_cursor, from_cursor) = self.text.split_at(cursor_pos_offset);

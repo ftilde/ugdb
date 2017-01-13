@@ -166,13 +166,13 @@ impl Gui {
     }
 
     pub fn draw(&self, window: unsegen::Window) {
-        use unsegen::{TextAttribute, Color};
+        use unsegen::{TextAttribute, Color, Style};
         let split_pos = window.get_width()/2-1;
         let (window_l, rest) = window.split_h(split_pos);
 
         let (mut separator, window_r) = rest.split_h(2);
 
-        separator.set_default_format(TextAttribute::new(Some(Color::green()), Some(Color::blue()), None));
+        separator.set_default_format(TextAttribute::new(Color::green(), Color::blue(), Style::new().bold().italic().underline()));
         separator.fill('|');
 
         let left_widgets: Vec<&unsegen::Widget> = vec![&self.console];

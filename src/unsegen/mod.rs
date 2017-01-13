@@ -4,21 +4,78 @@ use termion;
 pub mod widgets;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Style {
-    Standard,
-    /*
-    Bold,
-    Faint,
-    Italic,
-    Underlined,
-    Blink,
-    Invert,
-    */
+pub struct Style {
+    bold: bool,
+    italic: bool,
+    invert: bool,
+    underline: bool,
+}
+
+impl Style {
+    pub fn new() -> Self {
+        Style {
+            bold: false,
+            italic: false,
+            invert: false,
+            underline: false,
+        }
+    }
+    pub fn bold(mut self) -> Self {
+        self.bold = true;
+        self
+    }
+    pub fn italic(mut self) -> Self {
+        self.italic = true;
+        self
+    }
+    pub fn invert(mut self) -> Self {
+        self.invert = true;
+        self
+    }
+    pub fn underline(mut self) -> Self {
+        self.underline = true;
+        self
+    }
+    pub fn or(&self, other: &Self) -> Self {
+        Style {
+            bold: self.bold || other.bold,
+            italic: self.italic || other.italic,
+            invert: self.invert || other.invert,
+            underline: self.underline || other.underline,
+        }
+    }
+    fn set_terminal_attributes(&self, terminal: &mut RawTerminal<::std::io::StdoutLock>) {
+        use std::io::Write;
+
+        if self.bold {
+            write!(terminal, "{}", termion::style::Bold).expect("set bold style");
+        } else {
+            write!(terminal, "{}", termion::style::NoBold).expect("set no bold style");
+        }
+
+        if self.italic {
+            write!(terminal, "{}", termion::style::Italic).expect("set italic style");
+        } else {
+            write!(terminal, "{}", termion::style::NoItalic).expect("set no italic style");
+        }
+
+        if self.invert {
+            write!(terminal, "{}", termion::style::Invert).expect("set invert style");
+        } else {
+            write!(terminal, "{}", termion::style::NoInvert).expect("set no invert style");
+        }
+
+        if self.underline {
+            write!(terminal, "{}", termion::style::Underline).expect("set underline style");
+        } else {
+            write!(terminal, "{}", termion::style::NoUnderline).expect("set no underline style");
+        }
+    }
 }
 
 impl Default for Style {
     fn default() -> Self {
-        Style::Standard
+        Style::new()
     }
 }
 
@@ -64,7 +121,7 @@ impl Color {
 pub struct TextAttribute {
     fg_color: Option<Color>,
     bg_color: Option<Color>,
-    style: Option<Style>,
+    style: Style,
     // for all members: None :<=> Don't care
 }
 
@@ -73,18 +130,18 @@ impl Default for TextAttribute {
         TextAttribute {
             fg_color: None,
             bg_color: None,
-            style: None,
+            style: Style::default(),
         }
     }
 }
 
 impl TextAttribute {
 
-    pub fn new(fg: Option<Color>, bg: Option<Color>, style: Option<Style>) -> TextAttribute {
+    pub fn new<T: Into<Option<Style>>, C1: Into<Option<Color>>, C2: Into<Option<Color>>>(fg: C1, bg: C2, style: T) -> TextAttribute {
         TextAttribute {
-            fg_color: fg,
-            bg_color: bg,
-            style: style,
+            fg_color: fg.into(),
+            bg_color: bg.into(),
+            style: style.into().unwrap_or(Style::default()),
         }
     }
 
@@ -102,7 +159,7 @@ impl TextAttribute {
         TextAttribute {
             fg_color: self.fg_color.or(other.fg_color),
             bg_color: self.bg_color.or(other.bg_color),
-            style: self.style.or(other.style),
+            style: self.style.or(&other.style),
         }
     }
 
@@ -120,7 +177,8 @@ impl TextAttribute {
         } else {
             write!(terminal, "{}", termion::color::Bg(termion::color::Reset)).expect("write bg reset");
         }
-        //TODO style
+
+        self.style.set_terminal_attributes(terminal);
     }
 }
 

@@ -7,16 +7,49 @@ use super::{
     Style,
 };
 
-// TextLine --------------------------------------------------------------------------------------
+// LineEdit --------------------------------------------------------------------------------------
 
-pub struct TextLine {
+fn count_grapheme_clusters(text: &str) -> u32 {
+    use ::unicode_segmentation::UnicodeSegmentation;
+    text.grapheme_indices(true).count() as u32
+}
+pub struct LineLabel {
+    text: String,
+}
+impl LineLabel {
+    pub fn new(text: String) -> Self {
+        LineLabel {
+            text: text,
+        }
+    }
+
+    /*
+    pub fn set(&mut self, text: String) {
+        self.text = text
+    }
+    */
+}
+
+impl super::Widget for LineLabel {
+    fn space_demand(&self) -> (super::Demand, super::Demand) {
+        (super::Demand::Const(count_grapheme_clusters(&self.text)), super::Demand::Const(1)) //TODO this is not really universal
+    }
+    fn draw(&self, mut window: Window) {
+        let mut cursor = Cursor::new(&mut window);
+        cursor.write(&self.text);
+    }
+    fn input(&mut self, _: super::Event) {
+        unimplemented!();
+    }
+}
+pub struct LineEdit {
     text: String,
     cursor_pos: u32,
 }
 
-impl TextLine {
+impl LineEdit {
     pub fn new(text: String) -> Self {
-        TextLine {
+        LineEdit {
             text: text,
             cursor_pos: 0,
         }
@@ -46,9 +79,9 @@ impl TextLine {
     }
 }
 
-impl super::Widget for TextLine {
+impl super::Widget for LineEdit {
     fn space_demand(&self) -> (super::Demand, super::Demand) {
-        (super::Demand::Const((self.text.len() + 1) as u32), super::Demand::Const(1)) //TODO this is not really universal
+        (super::Demand::Const((count_grapheme_clusters(&self.text) + 1) as u32), super::Demand::Const(1)) //TODO this is not really universal
     }
     fn draw(&self, mut window: Window) {
         let (maybe_cursor_pos_offset, maybe_after_cursor_offset) = {
@@ -113,8 +146,8 @@ impl super::Widget for TextLine {
 // PromptLine --------------------------------------------------------------------------------------
 
 pub struct PromptLine {
-    prompt: TextLine,
-    line: TextLine,
+    prompt: LineLabel,
+    line: LineEdit,
     history: Vec<String>,
     layout: super::HorizontalLayout,
 }
@@ -123,8 +156,8 @@ impl PromptLine {
 
     pub fn with_prompt(prompt: String) -> Self {
         PromptLine {
-            prompt: TextLine::new(prompt),
-            line: TextLine::new("".into()),
+            prompt: LineLabel::new(prompt),
+            line: LineEdit::new("".into()),
             history: Vec::new(),
             layout: super::HorizontalLayout::new(super::SeparatingStyle::None),
         }

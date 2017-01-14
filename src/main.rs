@@ -32,11 +32,14 @@ mod signalchannel;
 use std::sync::mpsc;
 use std::thread;
 
-fn pty_output_loop(sink: mpsc::Sender<u8>, reader: pty::PTYOutput) {
+fn pty_output_loop(sink: mpsc::Sender<Vec<u8>>, mut reader: pty::PTYOutput) {
     use ::std::io::Read;
 
-    for b in reader.bytes() {
-        sink.send(b.expect("byte from reader")).expect("send byte");
+    let mut buffer = [0; 1024];
+    while let Ok(n) = reader.read(&mut buffer) {
+        let mut bytes = vec![0; n];
+        bytes.copy_from_slice(&mut buffer[..n]);
+        sink.send(bytes).expect("send bytes");
     }
 }
 

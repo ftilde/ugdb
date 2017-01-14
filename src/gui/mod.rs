@@ -91,8 +91,8 @@ impl PseudoTerminal {
         }
     }
 
-    fn add_byte_input(&mut self, byte: u8) {
-        self.input_buffer.push(byte);
+    fn add_byte_input(&mut self, mut bytes: Vec<u8>) {
+        self.input_buffer.append(&mut bytes);
 
         //TODO: handle control sequences?
         if let Ok(string) = String::from_utf8(self.input_buffer.clone()) {
@@ -157,7 +157,7 @@ impl Gui {
         self.console.add_message(format!("oob: {:?}", record));
     }
 
-    pub fn add_pty_input(&mut self, input: u8) {
+    pub fn add_pty_input(&mut self, input: Vec<u8>) {
         self.process_pty.add_byte_input(input);
     }
 

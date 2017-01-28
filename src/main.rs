@@ -9,6 +9,7 @@ extern crate ndarray;
 extern crate smallvec;
 extern crate unicode_segmentation;
 extern crate unicode_width;
+extern crate syntect;
 
 // For pty
 extern crate libc;
@@ -78,7 +79,8 @@ fn main() {
     let stdout = std::io::stdout();
     {
         let mut terminal = unsegen::Terminal::new(stdout.lock());
-        let mut gui = gui::Gui::new(pty_input);
+        let theme_set = syntect::highlighting::ThemeSet::load_defaults();
+        let mut gui = gui::Gui::new(pty_input, &theme_set);
         gui.add_debug_message(&ptyname);
 
         gui.draw(terminal.create_root_window(unsegen::TextAttribute::default()));

@@ -20,6 +20,7 @@ ndarray = "0.6"
 smallvec = "0.3"
 unicode-segmentation = "1.0"
 unicode-width = "0.1"
+syntect = "1.0"
 #pty
 libc = "^0.2"
 

@@ -5,6 +5,7 @@ use super::{
     Cursor,
     TextAttribute,
     Style,
+    Color,
 };
 
 // LineEdit --------------------------------------------------------------------------------------
@@ -34,7 +35,7 @@ impl super::Widget for LineLabel {
     fn space_demand(&self) -> (super::Demand, super::Demand) {
         (super::Demand::Const(count_grapheme_clusters(&self.text)), super::Demand::Const(1)) //TODO this is not really universal
     }
-    fn draw(&self, mut window: Window) {
+    fn draw(&mut self, mut window: Window) {
         let mut cursor = Cursor::new(&mut window);
         cursor.write(&self.text);
     }
@@ -85,7 +86,7 @@ impl super::Widget for LineEdit {
     fn space_demand(&self) -> (super::Demand, super::Demand) {
         (super::Demand::Const((count_grapheme_clusters(&self.text) + 1) as u32), super::Demand::Const(1)) //TODO this is not really universal
     }
-    fn draw(&self, mut window: Window) {
+    fn draw(&mut self, mut window: Window) {
         let (maybe_cursor_pos_offset, maybe_after_cursor_offset) = {
             use ::unicode_segmentation::UnicodeSegmentation;
             let mut grapheme_indices = self.text.grapheme_indices(true);
@@ -176,8 +177,8 @@ impl super::Widget for PromptLine {
         let widgets: Vec<&super::Widget> = vec![&self.prompt, &self.line];
         self.layout.space_demand(widgets.into_iter())
     }
-    fn draw(&self, window: Window) {
-        let widgets: Vec<&super::Widget> = vec![&self.prompt, &self.line];
+    fn draw(&mut self, window: Window) {
+        let widgets: Vec<&mut super::Widget> = vec![&mut self.prompt, &mut self.line];
         self.layout.draw(window, widgets.into_iter());
     }
     fn input(&mut self, event: super::Event) {
@@ -197,7 +198,7 @@ impl super::Widget for TextArea {
         //return (super::Demand::MaxPossible /*TODO?*/, super::Demand::Const(self.lines.len() as u32));
         (super::Demand::MaxPossible /*TODO?*/, super::Demand::MaxPossible)
     }
-    fn draw(&self, mut window: super::Window) {
+    fn draw(&mut self, mut window: super::Window) {
         let y_start = window.get_height() - 1;
         let mut cursor = Cursor::new(&mut window)
             .position(0, y_start as i32)
@@ -239,5 +240,69 @@ impl ::std::fmt::Write for TextArea {
         }
         self.active_line_mut().push_str(&s);
         Ok(())
+    }
+}
+
+// FileViewer
+use syntect::parsing::SyntaxSet;
+use syntect::highlighting;
+use syntect::easy::HighlightFile;
+
+pub struct FileViewer<'a> {
+    file: HighlightFile<'a>,
+    _syntax_set: SyntaxSet,
+}
+
+impl<'a> FileViewer<'a> {
+    pub fn new(file_path: &str, theme: &'a highlighting::Theme) -> Self {
+        let syntax_set = SyntaxSet::load_defaults_newlines();
+        FileViewer {
+            file: HighlightFile::new(file_path, &syntax_set, theme).expect("create highlighter"),
+            _syntax_set: syntax_set,
+        }
+    }
+}
+
+fn to_unsegen_color(color: &highlighting::Color) -> Color {
+    Color::new(color.r, color.g, color.b)
+}
+fn to_unsegen_style(style: &highlighting::FontStyle) -> Style {
+    Style {
+        bold: style.contains(highlighting::FONT_STYLE_BOLD),
+        italic: style.contains(highlighting::FONT_STYLE_ITALIC),
+        invert: false,
+        underline: style.contains(highlighting::FONT_STYLE_UNDERLINE),
+    }
+}
+fn to_text_attribute(style: &highlighting::Style) -> TextAttribute {
+    TextAttribute::new(to_unsegen_color(&style.foreground), to_unsegen_color(&style.background), to_unsegen_style(&style.font_style))
+}
+
+impl<'a> super::Widget for FileViewer<'a> {
+    fn space_demand(&self) -> (super::Demand, super::Demand) {
+        (super::Demand::MaxPossible /*TODO?*/, super::Demand::MaxPossible)
+    }
+    fn draw(&mut self, mut window: super::Window) {
+        let mut cursor = Cursor::new(&mut window)
+            .position(0, 0)
+            .wrapping_direction(WrappingDirection::Down)
+            .wrapping_mode(WrappingMode::Wrap);
+        cursor.set_text_attribute(TextAttribute::new(None, Color::green(), None));
+        let mut line = String::new();
+        use std::io::{BufRead, Seek};
+        self.file.reader.seek(::std::io::SeekFrom::Start(0)).expect("seek to start of file");
+        while self.file.reader.read_line(&mut line).expect("read line") > 0 {
+
+            for (style, region) in  self.file.highlight_lines.highlight(&line) {
+                cursor.set_text_attribute(to_text_attribute(&style));
+                cursor.write(&region);
+            }
+
+            cursor.wrap_line();
+            line.clear();
+        }
+    }
+    fn input(&mut self, _: super::Event) {
+        unimplemented!();
     }
 }

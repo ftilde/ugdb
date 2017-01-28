@@ -554,7 +554,7 @@ impl Demand {
 
 pub trait Widget {
     fn space_demand(&self) -> (Demand, Demand);
-    fn draw(&self, window: Window);
+    fn draw(&mut self, window: Window);
     fn input(&mut self, Event); // -> bool?
 }
 
@@ -592,7 +592,7 @@ impl HorizontalLayout {
         (total_x, total_y)
     }
 
-    pub fn draw<'a, T: Iterator<Item=&'a Widget> + 'a>(&'a self, window: Window, widgets: T) {
+    pub fn draw<'a, T: Iterator<Item=&'a mut Widget> + 'a>(&'a self, window: Window, widgets: T) {
         let mut widgets = widgets.peekable();
         let mut rest_window = window;
         let mut pos;
@@ -641,12 +641,12 @@ impl VerticalLayout {
         (total_x, total_y)
     }
 
-    pub fn draw(&self, window: Window, widgets: &[&Widget]) {
+    pub fn draw(&self, window: Window, widgets: &mut [&mut Widget]) {
         //TODO fix horizontal layout
 
         let mut space_claimed = 0;
         let mut num_max_possible = 0;
-        for w in widgets {
+        for w in widgets.iter() {
             let (_, y) = w.space_demand();
             if let Demand::Const(claimed) = y {
                 space_claimed += claimed;
@@ -661,11 +661,11 @@ impl VerticalLayout {
         let free_space = ::std::cmp::max(0, window.get_height()-space_claimed);
         let space_for_max_possible = free_space / ::std::cmp::max(1, num_max_possible);
 
-        let mut widgets = widgets.into_iter().peekable();
+        let mut widgets = widgets.iter_mut().peekable();
         let mut rest_window = window;
         let mut pos;
 
-        while let Some(w) = widgets.next() {
+        while let Some(&mut ref mut w) = widgets.next() {
             let (_, y) = w.space_demand();
             pos = match y {
                 Demand::Const(i) => i,

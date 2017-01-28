@@ -1,18 +1,32 @@
 use unsegen;
 use gdbmi;
 
+use unsegen::{
+    VerticalLayout,
+    Widget,
+    Demand,
+    Window,
+    Event,
+    SeparatingStyle,
+};
+use unsegen::widgets::{
+    TextArea,
+    PromptLine,
+    FileViewer,
+};
+
 struct Console {
-    text_area: unsegen::widgets::TextArea,
-    prompt_line: unsegen::widgets::PromptLine,
-    layout: unsegen::VerticalLayout,
+    text_area: TextArea,
+    prompt_line: PromptLine,
+    layout: VerticalLayout,
 }
 
 impl Console {
     pub fn new() -> Self {
         Console {
-            text_area: unsegen::widgets::TextArea::new(),
-            prompt_line: unsegen::widgets::PromptLine::with_prompt("(gdb) ".into()),
-            layout: unsegen::VerticalLayout::new(unsegen::SeparatingStyle::Draw('=')),
+            text_area: TextArea::new(),
+            prompt_line: PromptLine::with_prompt("(gdb) ".into()),
+            layout: VerticalLayout::new(unsegen::SeparatingStyle::Draw('=')),
         }
     }
 
@@ -52,14 +66,14 @@ impl Console {
     }
 }
 
-impl unsegen::Widget for Console {
-    fn space_demand(&self) -> (unsegen::Demand, unsegen::Demand) {
-        let widgets: Vec<&unsegen::Widget> = vec![&self.text_area, &self.prompt_line];
+impl Widget for Console {
+    fn space_demand(&self) -> (Demand, Demand) {
+        let widgets: Vec<&Widget> = vec![&self.text_area, &self.prompt_line];
         self.layout.space_demand(widgets.into_iter())
     }
-    fn draw(&self, window: unsegen::Window) {
-        let widgets: Vec<&unsegen::Widget> = vec![&self.text_area, &self.prompt_line];
-        self.layout.draw(window, &widgets)
+    fn draw(&mut self, window: Window) {
+        let mut widgets: Vec<&mut Widget> = vec![&mut self.text_area, &mut self.prompt_line];
+        self.layout.draw(window, &mut widgets)
     }
     fn input(&mut self, _: unsegen::Event) {
         unimplemented!(); //TODO remove input from Widget into separate trait
@@ -103,18 +117,18 @@ impl PseudoTerminal {
     }
 }
 
-impl unsegen::Widget for PseudoTerminal {
-    fn space_demand(&self) -> (unsegen::Demand, unsegen::Demand) {
+impl Widget for PseudoTerminal {
+    fn space_demand(&self) -> (Demand, Demand) {
         //let widgets: Vec<&unsegen::Widget> = vec![&self.display, &self.prompt_line];
         //self.layout.space_demand(widgets.into_iter())
         return self.display.space_demand();
     }
-    fn draw(&self, window: unsegen::Window) {
+    fn draw(&mut self, window: Window) {
         //let widgets: Vec<&unsegen::Widget> = vec![&self.display, &self.prompt_line];
         //self.layout.draw(window, &widgets)
         self.display.draw(window);
     }
-    fn input(&mut self, event: unsegen::Event) {
+    fn input(&mut self, event: Event) {
         use std::io::Write;
         //use std::fmt::Write as WriteFmt;
         use unsegen::{Event,Key};
@@ -134,22 +148,23 @@ impl unsegen::Widget for PseudoTerminal {
 }
 
 // Gui --------------------------------------------------------------------------------
-
-pub struct Gui {
+pub struct Gui<'a> {
     console: Console,
     process_pty: PseudoTerminal,
+    file_viewer: FileViewer<'a>,
 
-    left_layout: unsegen::VerticalLayout,
-    right_layout: unsegen::VerticalLayout,
+    left_layout: VerticalLayout,
+    right_layout: VerticalLayout,
 }
 
-impl Gui {
-    pub fn new(process_pty: ::pty::PTYInput) -> Self {
+impl<'a> Gui<'a> {
+    pub fn new(process_pty: ::pty::PTYInput, theme_set: &'a ::syntect::highlighting::ThemeSet) -> Self {
         Gui {
             console: Console::new(),
             process_pty: PseudoTerminal::new(process_pty),
-            left_layout: unsegen::VerticalLayout::new(unsegen::SeparatingStyle::Draw('=')),
-            right_layout: unsegen::VerticalLayout::new(unsegen::SeparatingStyle::Draw('=')),
+            file_viewer: FileViewer::new("/home/dominik/test.rs", &theme_set.themes["base16-ocean.dark"]),
+            left_layout: VerticalLayout::new(SeparatingStyle::Draw('=')),
+            right_layout: VerticalLayout::new(SeparatingStyle::Draw('=')),
         }
     }
 
@@ -165,7 +180,7 @@ impl Gui {
         self.console.add_message(format!("Debug: {}", msg));
     }
 
-    pub fn draw(&self, window: unsegen::Window) {
+    pub fn draw(&mut self, window: Window) {
         use unsegen::{TextAttribute, Color, Style};
         let split_pos = window.get_width()/2-1;
         let (window_l, rest) = window.split_h(split_pos);
@@ -175,15 +190,14 @@ impl Gui {
         separator.set_default_format(TextAttribute::new(Color::green(), Color::blue(), Style::new().bold().italic().underline()));
         separator.fill('|');
 
-        let left_widgets: Vec<&unsegen::Widget> = vec![&self.console];
-        self.left_layout.draw(window_l, &left_widgets);
+        let mut left_widgets: Vec<&mut Widget> = vec![&mut self.console];
+        self.left_layout.draw(window_l, &mut left_widgets);
 
-        let right_widgets: Vec<&unsegen::Widget> = vec![&self.process_pty];
-        self.right_layout.draw(window_r, &right_widgets);
+        let mut right_widgets: Vec<&mut Widget> = vec![&mut self.file_viewer, &mut self.process_pty];
+        self.right_layout.draw(window_r, &mut right_widgets);
     }
 
     pub fn event(&mut self, event: ::input::InputEvent, gdb: &mut gdbmi::GDB) { //TODO more console events
-        use unsegen::Widget;
         match event {
             ::input::InputEvent::ConsoleEvent(event) => { self.console.event(event, gdb); },
             ::input::InputEvent::PseudoTerminalEvent(event) => { self.process_pty.input(event); },

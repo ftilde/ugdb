@@ -13,6 +13,8 @@ use unsegen::widgets::{
     TextArea,
     PromptLine,
     FileViewer,
+    FileLineStorage,
+    NoHighLighter,
 };
 
 struct Console {
@@ -148,21 +150,24 @@ impl Widget for PseudoTerminal {
 }
 
 // Gui --------------------------------------------------------------------------------
-pub struct Gui<'a> {
+pub struct Gui {
     console: Console,
     process_pty: PseudoTerminal,
-    file_viewer: FileViewer<'a>,
+    file_viewer: FileViewer<FileLineStorage, NoHighLighter>,
 
     left_layout: VerticalLayout,
     right_layout: VerticalLayout,
 }
 
-impl<'a> Gui<'a> {
-    pub fn new(process_pty: ::pty::PTYInput, theme_set: &'a ::syntect::highlighting::ThemeSet) -> Self {
+impl Gui {
+    //pub fn new(process_pty: ::pty::PTYInput, theme_set: &'a ::syntect::highlighting::ThemeSet) -> Self {
+            //file_viewer: FileViewer::new("/home/dominik/test.rs", &theme_set.themes["base16-ocean.dark"]),
+
+    pub fn new(process_pty: ::pty::PTYInput) -> Self {
         Gui {
             console: Console::new(),
             process_pty: PseudoTerminal::new(process_pty),
-            file_viewer: FileViewer::new("/home/dominik/test.rs", &theme_set.themes["base16-ocean.dark"]),
+            file_viewer: FileViewer::new(FileLineStorage::new("/home/dominik/test.rs").expect("open file"), NoHighLighter),
             left_layout: VerticalLayout::new(SeparatingStyle::Draw('=')),
             right_layout: VerticalLayout::new(SeparatingStyle::Draw('=')),
         }

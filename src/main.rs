@@ -79,8 +79,8 @@ fn main() {
     let stdout = std::io::stdout();
     {
         let mut terminal = unsegen::Terminal::new(stdout.lock());
-        let theme_set = syntect::highlighting::ThemeSet::load_defaults();
-        let mut gui = gui::Gui::new(pty_input, &theme_set);
+        //let theme_set = syntect::highlighting::ThemeSet::load_defaults();
+        let mut gui = gui::Gui::new(pty_input);
         gui.add_debug_message(&ptyname);
 
         gui.draw(terminal.create_root_window(unsegen::TextAttribute::default()));

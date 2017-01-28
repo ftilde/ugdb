@@ -145,15 +145,14 @@ impl TextAttribute {
         }
     }
 
-    /*
+
     pub fn plain() -> TextAttribute {
         TextAttribute {
             fg_color: None,
             bg_color: None,
-            style: None,
+            style: Style::default(),
         }
     }
-    */
 
     fn or(&self, other: &TextAttribute) -> TextAttribute {
         TextAttribute {

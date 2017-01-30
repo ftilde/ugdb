@@ -43,9 +43,12 @@ impl super::Widget for LineLabel {
         unimplemented!();
     }
 }
+
+use ::unicode_segmentation::UnicodeSegmentation;
+
 pub struct LineEdit {
     text: String,
-    cursor_pos: u32,
+    cursor_pos: usize,
     cursor_style: Style,
 }
 
@@ -78,7 +81,43 @@ impl LineEdit {
     }
 
     pub fn move_cursor_left(&mut self) {
-        self.cursor_pos = ::std::cmp::max(0, self.cursor_pos - 1);
+        if self.cursor_pos > 0 {
+            self.cursor_pos -= 1;
+        }
+    }
+
+    pub fn insert(&mut self, text: &str) {
+        self.text = {
+            let grapheme_iter = self.text.graphemes(true);
+            grapheme_iter.clone().take(self.cursor_pos)
+                .chain(Some(text))
+                .chain(grapheme_iter.skip(self.cursor_pos))
+                .collect()
+        };
+        self.move_cursor_right();
+    }
+
+    fn erase_symbol_at(&mut self, pos: usize) {
+        self.text = self.text.graphemes(true).enumerate().filter_map(
+                |(i, s)|  if i != pos {
+                    Some(s)
+                } else {
+                    None
+                }
+            ).collect();
+    }
+
+    pub fn remove_symbol(&mut self) { //i.e., "backspace"
+        if self.cursor_pos > 0 {
+            let to_erase = self.cursor_pos - 1;
+            self.erase_symbol_at(to_erase);
+            self.move_cursor_left();
+        }
+    }
+
+    pub fn delete_symbol(&mut self) { //i.e., "del" key
+        let to_erase = self.cursor_pos;
+        self.erase_symbol_at(to_erase);
     }
 }
 
@@ -88,7 +127,6 @@ impl super::Widget for LineEdit {
     }
     fn draw(&mut self, mut window: Window) {
         let (maybe_cursor_pos_offset, maybe_after_cursor_offset) = {
-            use ::unicode_segmentation::UnicodeSegmentation;
             let mut grapheme_indices = self.text.grapheme_indices(true);
             let cursor_cluster = grapheme_indices.nth(self.cursor_pos as usize);
             let next_cluster = grapheme_indices.next();
@@ -122,14 +160,13 @@ impl super::Widget for LineEdit {
         if let super::Event::Key(key) = event {
             match key {
                 super::Key::Char(c) => {
-                    self.text.insert(self.cursor_pos as usize, c); //TODO: this might not be in char boundary, use grapheme indices
-                    self.move_cursor_right();
+                    self.insert(&c.to_string());
                 },
                 super::Key::Backspace => {
-                    if self.cursor_pos > 0 {
-                        self.text.remove((self.cursor_pos - 1) as usize);
-                        self.move_cursor_left();
-                    }
+                    self.remove_symbol();
+                },
+                super::Key::Delete => {
+                    self.delete_symbol();
                 },
                 super::Key::Ctrl('c') => {
                     self.clear();
@@ -271,7 +308,7 @@ impl FileLineStorage {
     fn skip_to_newline(&mut self) -> io::Result<u64> {
         let mut buffer = vec![0];
         let mut num_bytes = 0;
-        while buffer[0] != 0xA {
+        while buffer[0] != b'\n' {
             try!{self.reader.read_exact(&mut buffer)};
             num_bytes += 1;
         }
@@ -314,7 +351,7 @@ impl FileLineStorage {
         self.get_line_seek_pos(index).map(|p| {
             self.reader.seek(p).expect("seek to line pos");
             let mut buffer = Vec::new();
-            self.reader.read_until(0xA, &mut buffer).expect("read from buffer");
+            self.reader.read_until(b'\n', &mut buffer).expect("read from buffer");
             String::from_utf8_lossy(&buffer).into_owned()
         })
     }

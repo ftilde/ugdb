@@ -464,7 +464,7 @@ impl<'c, 'w> Cursor<'c, 'w> {
         let mut line_it = text.lines().peekable();
         while let Some(line) = line_it.next() {
             let num_auto_wraps = if self.wrapping_mode == WrappingMode::Wrap {
-                let num_chars = line.chars().count();
+                let num_chars = line.chars().count(); //TODO: we do not really want chars, but the real width of the line
                 ::std::cmp::max(0, (num_chars as i32 + self.x) / (self.window.get_width() as i32))
             } else {
                 0
@@ -601,10 +601,17 @@ impl HorizontalLayout {
                 Demand::Const(i) => i,
                 Demand::MaxPossible => rest_window.get_width(),
             };
+            if rest_window.get_width() <= pos {
+                w.draw(rest_window);
+                break;
+            }
             let (window, r) = rest_window.split_h(pos);
             rest_window = r;
             w.draw(window);
             if let (Some(_), SeparatingStyle::Draw(c)) = (widgets.peek(), self.separating_style) {
+                if rest_window.get_width() == 0 {
+                    break;
+                }
                 let (mut window, r) = rest_window.split_h(1);
                 rest_window = r;
                 window.fill(c);

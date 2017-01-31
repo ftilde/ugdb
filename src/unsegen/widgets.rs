@@ -77,7 +77,7 @@ impl LineEdit {
     }
 
     pub fn move_cursor_right(&mut self) {
-        self.cursor_pos += 1; //TODO bounds check
+        self.cursor_pos = ::std::cmp::min(self.cursor_pos + 1, count_grapheme_clusters(&self.text) as usize);
     }
 
     pub fn move_cursor_left(&mut self) {
@@ -123,7 +123,8 @@ impl LineEdit {
 
 impl super::Widget for LineEdit {
     fn space_demand(&self) -> (super::Demand, super::Demand) {
-        (super::Demand::Const((count_grapheme_clusters(&self.text) + 1) as u32), super::Demand::Const(1)) //TODO this is not really universal
+        //(super::Demand::Const((count_grapheme_clusters(&self.text) + 1) as u32), super::Demand::Const(1)) //TODO this is not really universal
+        (super::Demand::MaxPossible, super::Demand::Const(1)) //TODO this is not really universal
     }
     fn draw(&mut self, mut window: Window) {
         let (maybe_cursor_pos_offset, maybe_after_cursor_offset) = {
@@ -132,9 +133,13 @@ impl super::Widget for LineEdit {
             let next_cluster = grapheme_indices.next();
             (cursor_cluster.map(|c: (usize, &str)| c.0), next_cluster.map(|c: (usize, &str)| c.0))
         };
+        let num_graphemes = count_grapheme_clusters(&self.text);
+        let right_padding = 2;
+        let cursor_start_pos = ::std::cmp::min(0, window.get_width() as i32 - num_graphemes as i32 - right_padding);
+
         let text_style = TextAttribute::default();
         let cursor_style = TextAttribute::new(None, None, self.cursor_style);
-        let mut cursor = Cursor::new(&mut window);
+        let mut cursor = Cursor::new(&mut window).position(cursor_start_pos, 0);
         if let Some(cursor_pos_offset) = maybe_cursor_pos_offset {
             let (until_cursor, from_cursor) = self.text.split_at(cursor_pos_offset);
             cursor.set_text_attribute(text_style);

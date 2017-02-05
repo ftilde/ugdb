@@ -33,7 +33,7 @@ impl LineLabel {
 
 impl super::Widget for LineLabel {
     fn space_demand(&self) -> (super::Demand, super::Demand) {
-        (super::Demand::Const(count_grapheme_clusters(&self.text)), super::Demand::Const(1)) //TODO this is not really universal
+        (super::Demand::exact(count_grapheme_clusters(&self.text)), super::Demand::exact(1))
     }
     fn draw(&mut self, mut window: Window) {
         let mut cursor = Cursor::new(&mut window);
@@ -123,8 +123,7 @@ impl LineEdit {
 
 impl super::Widget for LineEdit {
     fn space_demand(&self) -> (super::Demand, super::Demand) {
-        //(super::Demand::Const((count_grapheme_clusters(&self.text) + 1) as u32), super::Demand::Const(1)) //TODO this is not really universal
-        (super::Demand::MaxPossible, super::Demand::Const(1)) //TODO this is not really universal
+        (super::Demand::at_least((count_grapheme_clusters(&self.text) + 1) as u32), super::Demand::exact(1)) //TODO this is not really universal
     }
     fn draw(&mut self, mut window: Window) {
         let (maybe_cursor_pos_offset, maybe_after_cursor_offset) = {
@@ -217,11 +216,11 @@ impl PromptLine {
 impl super::Widget for PromptLine {
     fn space_demand(&self) -> (super::Demand, super::Demand) {
         let widgets: Vec<&super::Widget> = vec![&self.prompt, &self.line];
-        self.layout.space_demand(widgets.into_iter())
+        self.layout.space_demand(widgets.as_slice())
     }
     fn draw(&mut self, window: Window) {
-        let widgets: Vec<&mut super::Widget> = vec![&mut self.prompt, &mut self.line];
-        self.layout.draw(window, widgets.into_iter());
+        let mut widgets: Vec<&mut super::Widget> = vec![&mut self.prompt, &mut self.line];
+        self.layout.draw(window, widgets.as_mut_slice());
     }
     fn input(&mut self, event: super::Event) {
         self.line.input(event);
@@ -237,8 +236,7 @@ pub struct TextArea {
 
 impl super::Widget for TextArea {
     fn space_demand(&self) -> (super::Demand, super::Demand) {
-        //return (super::Demand::MaxPossible /*TODO?*/, super::Demand::Const(self.lines.len() as u32));
-        (super::Demand::MaxPossible /*TODO?*/, super::Demand::MaxPossible)
+        return (super::Demand::at_least(1) /*TODO?*/, super::Demand::at_least(self.lines.len() as u32));
     }
     fn draw(&mut self, mut window: super::Window) {
         let y_start = window.get_height() - 1;
@@ -472,7 +470,7 @@ fn to_text_attribute(style: &highlighting::Style) -> TextAttribute {
 
 impl<S: LineStorage, H: HighLighter> super::Widget for FileViewer<S, H> {
     fn space_demand(&self) -> (super::Demand, super::Demand) {
-        (super::Demand::MaxPossible /*TODO?*/, super::Demand::MaxPossible)
+        (super::Demand::at_least(1), super::Demand::at_least(1))
     }
     fn draw(&mut self, mut window: super::Window) {
         let height = window.get_height() as usize;

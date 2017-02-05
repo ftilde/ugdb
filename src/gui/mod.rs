@@ -71,7 +71,7 @@ impl Console {
 impl Widget for Console {
     fn space_demand(&self) -> (Demand, Demand) {
         let widgets: Vec<&Widget> = vec![&self.text_area, &self.prompt_line];
-        self.layout.space_demand(widgets.into_iter())
+        self.layout.space_demand(widgets.as_slice())
     }
     fn draw(&mut self, window: Window) {
         let mut widgets: Vec<&mut Widget> = vec![&mut self.text_area, &mut self.prompt_line];

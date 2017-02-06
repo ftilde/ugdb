@@ -10,15 +10,15 @@ use unsegen::{
     SeparatingStyle,
 };
 use unsegen::widgets::{
-    TextArea,
+    LogViewer,
     PromptLine,
-    FileViewer,
+    Pager,
     FileLineStorage,
     NoHighLighter,
 };
 
 struct Console {
-    text_area: TextArea,
+    text_area: LogViewer,
     prompt_line: PromptLine,
     layout: VerticalLayout,
 }
@@ -26,7 +26,7 @@ struct Console {
 impl Console {
     pub fn new() -> Self {
         Console {
-            text_area: TextArea::new(),
+            text_area: LogViewer::new(),
             prompt_line: PromptLine::with_prompt("(gdb) ".into()),
             layout: VerticalLayout::new(unsegen::SeparatingStyle::Draw('=')),
         }
@@ -89,7 +89,7 @@ pub struct PseudoTerminal {
     //width: u32,
     //height: u32,
     pty: pty::PTYInput,
-    display: unsegen::widgets::TextArea,
+    display: unsegen::widgets::LogViewer,
     //prompt_line: unsegen::widgets::PromptLine,
     //layout: unsegen::VerticalLayout,
 
@@ -100,7 +100,7 @@ impl PseudoTerminal {
     pub fn new(pty: pty::PTYInput) -> Self {
         PseudoTerminal {
             pty: pty,
-            display: unsegen::widgets::TextArea::new(),
+            display: unsegen::widgets::LogViewer::new(),
             //prompt_line: unsegen::widgets::PromptLine::with_prompt("".into()),
             //layout: unsegen::VerticalLayout::new(unsegen::SeparatingStyle::Draw('=')),
             input_buffer: Vec::new(),
@@ -153,7 +153,7 @@ impl Widget for PseudoTerminal {
 pub struct Gui {
     console: Console,
     process_pty: PseudoTerminal,
-    file_viewer: FileViewer<FileLineStorage, NoHighLighter>,
+    file_viewer: Pager<FileLineStorage, NoHighLighter>,
 
     left_layout: VerticalLayout,
     right_layout: VerticalLayout,
@@ -161,13 +161,13 @@ pub struct Gui {
 
 impl Gui {
     //pub fn new(process_pty: ::pty::PTYInput, theme_set: &'a ::syntect::highlighting::ThemeSet) -> Self {
-            //file_viewer: FileViewer::new("/home/dominik/test.rs", &theme_set.themes["base16-ocean.dark"]),
+            //file_viewer: Pager::new("/home/dominik/test.rs", &theme_set.themes["base16-ocean.dark"]),
 
     pub fn new(process_pty: ::pty::PTYInput) -> Self {
         Gui {
             console: Console::new(),
             process_pty: PseudoTerminal::new(process_pty),
-            file_viewer: FileViewer::new(FileLineStorage::new("/home/dominik/test.rs").expect("open file"), NoHighLighter),
+            file_viewer: Pager::new(FileLineStorage::new("/home/dominik/test.rs").expect("open file"), NoHighLighter),
             left_layout: VerticalLayout::new(SeparatingStyle::Draw('=')),
             right_layout: VerticalLayout::new(SeparatingStyle::Draw('=')),
         }

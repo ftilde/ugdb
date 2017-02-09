@@ -34,7 +34,4 @@ impl Widget for LineLabel {
         let mut cursor = Cursor::new(&mut window);
         cursor.write(&self.text);
     }
-    fn input(&mut self, _: Event) {
-        unimplemented!();
-    }
 }

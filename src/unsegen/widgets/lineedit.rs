@@ -11,6 +11,11 @@ use super::super::{
 use super::{
     count_grapheme_clusters,
 };
+use super::super::input::{
+    Editable,
+    Navigatable,
+    Writable,
+};
 use unicode_segmentation::UnicodeSegmentation;
 
 pub struct LineEdit {
@@ -37,11 +42,6 @@ impl LineEdit {
         self.text = text
     }
     */
-
-    pub fn clear(&mut self) {
-        self.text.clear();
-        self.cursor_pos = 0;
-    }
 
     pub fn move_cursor_right(&mut self) {
         self.cursor_pos = ::std::cmp::min(self.cursor_pos + 1, count_grapheme_clusters(&self.text) as usize);
@@ -74,18 +74,7 @@ impl LineEdit {
             ).collect();
     }
 
-    pub fn remove_symbol(&mut self) { //i.e., "backspace"
-        if self.cursor_pos > 0 {
-            let to_erase = self.cursor_pos - 1;
-            self.erase_symbol_at(to_erase);
-            self.move_cursor_left();
-        }
-    }
 
-    pub fn delete_symbol(&mut self) { //i.e., "del" key
-        let to_erase = self.cursor_pos;
-        self.erase_symbol_at(to_erase);
-    }
 }
 
 impl Widget for LineEdit {
@@ -127,29 +116,41 @@ impl Widget for LineEdit {
             cursor.write(" ");
         }
     }
-    fn input(&mut self, event: Event) {
-        if let Event::Key(key) = event {
-            match key {
-                Key::Char(c) => {
-                    self.insert(&c.to_string());
-                },
-                Key::Backspace => {
-                    self.remove_symbol();
-                },
-                Key::Delete => {
-                    self.delete_symbol();
-                },
-                Key::Ctrl('c') => {
-                    self.clear();
-                },
-                Key::Left => {
-                    self.move_cursor_left();
-                },
-                Key::Right => {
-                    self.move_cursor_right();
-                },
-                _ => {},
-            }
+}
+
+impl Navigatable for LineEdit {
+    fn move_up(&mut self) {
+    }
+    fn move_down(&mut self) {
+    }
+    fn move_left(&mut self) {
+        self.move_cursor_left();
+    }
+    fn move_right(&mut self) {
+        self.move_cursor_right();
+    }
+}
+
+impl Writable for LineEdit {
+    fn write(&mut self, c: char) {
+        self.insert(&c.to_string());
+    }
+}
+
+impl Editable for LineEdit {
+    fn delete_symbol(&mut self) { //i.e., "del" key
+        let to_erase = self.cursor_pos;
+        self.erase_symbol_at(to_erase);
+    }
+    fn remove_symbol(&mut self) { //i.e., "backspace"
+        if self.cursor_pos > 0 {
+            let to_erase = self.cursor_pos - 1;
+            self.erase_symbol_at(to_erase);
+            self.move_cursor_left();
         }
+    }
+    fn clear(&mut self) {
+        self.text.clear();
+        self.cursor_pos = 0;
     }
 }

@@ -7,6 +7,8 @@ use unsegen::{
     Demand,
     Window,
     Event,
+    Input,
+    Key,
     SeparatingStyle,
 };
 use unsegen::widgets::{
@@ -15,6 +17,14 @@ use unsegen::widgets::{
     Pager,
     FileLineStorage,
     NoHighLighter,
+};
+use unsegen::input::{
+    Writable,
+    WriteBehavior,
+    Editable,
+    EditBehavior,
+    Scrollable,
+    ScrollBehavior,
 };
 
 struct Console {
@@ -37,9 +47,8 @@ impl Console {
         write!(self.text_area, " -=- {}\n", msg).expect("Write message");
     }
 
-    pub fn event(&mut self, event: unsegen::Event, gdb: &mut gdbmi::GDB) { //TODO more console events
-        use unsegen::{Event,Key,Widget};
-        if event == Event::Key(Key::Char('\n')) {
+    pub fn event(&mut self, input: unsegen::Input, gdb: &mut gdbmi::GDB) { //TODO more console events
+        if input.event == Event::Key(Key::Char('\n')) {
             let line = self.prompt_line.finish_line().to_owned();
             match line.as_ref() {
                 "!stop" => {
@@ -63,7 +72,29 @@ impl Console {
                 },
             }
         } else {
-            self.prompt_line.input(event);
+            let _ = input.chain(
+                    |i: Input| if let (&Event::Key(Key::Ctrl('c')), true) = (&i.event, self.prompt_line.line.get().is_empty()) {
+                        gdb.interrupt_execution().expect("interrupted gdb");
+                        None
+                    } else {
+                        Some(i)
+                    }
+                    )
+                .chain(
+                    EditBehavior::new(&mut self.prompt_line)
+                        .left_on(Key::Left)
+                        .right_on(Key::Right)
+                        .up_on(Key::Up)
+                        .down_on(Key::Down)
+                        .delete_symbol_on(Key::Delete)
+                        .remove_symbol_on(Key::Backspace)
+                        .clear_on(Key::Ctrl('c'))
+                    )
+                .chain(
+                    ScrollBehavior::new(&mut self.text_area)
+                        .forwards_on(Key::PageDown)
+                        .backwards_on(Key::PageUp)
+                    );
         }
     }
 }
@@ -76,9 +107,6 @@ impl Widget for Console {
     fn draw(&mut self, window: Window) {
         let mut widgets: Vec<&mut Widget> = vec![&mut self.text_area, &mut self.prompt_line];
         self.layout.draw(window, &mut widgets)
-    }
-    fn input(&mut self, _: unsegen::Event) {
-        unimplemented!(); //TODO remove input from Widget into separate trait
     }
 }
 
@@ -130,22 +158,12 @@ impl Widget for PseudoTerminal {
         //self.layout.draw(window, &widgets)
         self.display.draw(window);
     }
-    fn input(&mut self, event: Event) {
+}
+
+impl Writable for PseudoTerminal {
+    fn write(&mut self, c: char) {
         use std::io::Write;
-        //use std::fmt::Write as WriteFmt;
-        use unsegen::{Event,Key};
-        /*
-        if event == Event::Key(Key::Char('\n')) {
-            let line = self.prompt_line.finish_line().to_owned();
-            write!(self.pty, "{}\n", line);
-        } else {
-            self.prompt_line.input(event);
-        }
-        */
-        if let Event::Key(Key::Char(c)) = event {
-            //write!(self.display, "{}", c);
-            write!(self.pty, "{}", c).expect("Write key to terminal");
-        }
+        write!(self.pty, "{}", c).expect("Write key to terminal");
     }
 }
 
@@ -205,7 +223,7 @@ impl Gui {
     pub fn event(&mut self, event: ::input::InputEvent, gdb: &mut gdbmi::GDB) { //TODO more console events
         match event {
             ::input::InputEvent::ConsoleEvent(event) => { self.console.event(event, gdb); },
-            ::input::InputEvent::PseudoTerminalEvent(event) => { self.process_pty.input(event); },
+            ::input::InputEvent::PseudoTerminalEvent(event) => { event.chain(WriteBehavior::new(&mut self.process_pty)); },
             ::input::InputEvent::Quit => { unreachable!("quit should have been caught in main" ) }, //TODO this is ugly
         }
     }

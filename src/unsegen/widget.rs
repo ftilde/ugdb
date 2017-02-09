@@ -7,7 +7,6 @@ use std::cmp::max;
 pub trait Widget {
     fn space_demand(&self) -> (Demand, Demand);
     fn draw(&mut self, window: Window);
-    fn input(&mut self, Event); // -> bool?
 }
 
 #[derive(Eq, PartialEq, PartialOrd, Clone, Copy, Debug)]

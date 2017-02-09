@@ -7,6 +7,9 @@ use super::super::{
     WrappingDirection,
     WrappingMode,
 };
+use super::super::input::{
+    Scrollable,
+};
 
 pub struct LogViewer {
     lines: Vec<String>,
@@ -14,7 +17,7 @@ pub struct LogViewer {
 
 impl Widget for LogViewer {
     fn space_demand(&self) -> (Demand, Demand) {
-        return (Demand::at_least(1) /*TODO?*/, Demand::at_least(self.lines.len() as u32));
+        return (Demand::at_least(1), Demand::at_least(1));
     }
     fn draw(&mut self, mut window: Window) {
         let y_start = window.get_height() - 1;
@@ -25,9 +28,6 @@ impl Widget for LogViewer {
         for line in self.lines.iter().rev() {
             cursor.writeln(&line);
         }
-    }
-    fn input(&mut self, _: Event) {
-        unimplemented!();
     }
 }
 
@@ -58,5 +58,13 @@ impl ::std::fmt::Write for LogViewer {
         }
         self.active_line_mut().push_str(&s);
         Ok(())
+    }
+}
+impl Scrollable for LogViewer {
+    fn scroll_forwards(&mut self) {
+        unimplemented!();
+    }
+    fn scroll_backwards(&mut self) {
+        unimplemented!();
     }
 }

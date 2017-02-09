@@ -4,8 +4,8 @@ use std::sync::mpsc;
 
 #[derive(Eq, PartialEq, Clone)]
 pub enum InputEvent {
-    ConsoleEvent(::unsegen::Event),
-    PseudoTerminalEvent(::unsegen::Event),
+    ConsoleEvent(::unsegen::Input),
+    PseudoTerminalEvent(::unsegen::Input),
     Quit,
 }
 
@@ -30,19 +30,19 @@ impl ViKeyboardInput {
         let mut mode = Mode::Console;
         let stdin = ::std::io::stdin(); //TODO lock outside of thread
         let stdin = stdin.lock();
-        for c in stdin.keys() {
-            let c = c.expect("key");
-            match c {
-                ::termion::event::Key::F(1) => {
+        for e in stdin.events() {
+            let e = e.expect("key");
+            match e {
+                ::termion::event::Event::Key(::termion::event::Key::F(1)) => {
                     mode = match mode {
                         Mode::Console => Mode::PTY,
                         Mode::PTY => Mode::Console,
                     }
                 },
-                c => {
+                e => {
                     let event = match mode {
-                        Mode::Console => { InputEvent::ConsoleEvent(::unsegen::Event::Key(c)) },
-                        Mode::PTY => { InputEvent::PseudoTerminalEvent(::unsegen::Event::Key(c)) },
+                        Mode::Console => { InputEvent::ConsoleEvent(::unsegen::input::Input::new(e)) },
+                        Mode::PTY => { InputEvent::PseudoTerminalEvent(::unsegen::input::Input::new(e)) },
                     };
                     output.send(event).expect("send event");
                 },

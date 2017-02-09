@@ -212,7 +212,4 @@ impl<S: LineStorage, H: HighLighter> Widget for Pager<S, H> {
             cursor.wrap_line();
         }
     }
-    fn input(&mut self, _: Event) {
-        unimplemented!();
-    }
 }

@@ -1,6 +1,5 @@
 use super::super::{
     Demand,
-    Event,
     HorizontalLayout,
     Scrollable,
     SeparatingStyle,
@@ -21,8 +20,22 @@ pub struct PromptLine {
     prompt: LineLabel,
     pub line: LineEdit,
     history: Vec<String>,
-    history_scroll_position: Option<usize>,
+    history_scroll_position: Option<ScrollBackState>,
     layout: HorizontalLayout,
+}
+
+struct ScrollBackState {
+    active_line: String,
+    pos: usize,
+}
+
+impl ScrollBackState {
+    fn new(active_line: String, pos: usize) -> Self {
+        ScrollBackState {
+            active_line: active_line,
+            pos: pos,
+        }
+    }
 }
 
 impl PromptLine {
@@ -31,14 +44,23 @@ impl PromptLine {
             prompt: LineLabel::new(prompt),
             line: LineEdit::new(),
             history: Vec::new(),
-            history_scroll_position: None,
+            history_scroll_position: None, //invariant: let Some(pos) = history_scroll_pos => pos < history.len()
             layout: HorizontalLayout::new(SeparatingStyle::None),
         }
     }
     pub fn finish_line(&mut self) -> &str {
-        self.history.push(self.line.get().to_owned());
+        if self.history.is_empty() || self.line.get() != self.history.last().expect("history is not empty").as_str() {
+            self.history.push(self.line.get().to_owned());
+        }
         self.line.clear();
         &self.history[self.history.len()-1]
+    }
+
+    fn sync_line_to_history_scroll_position(&mut self) {
+        if let Some(ref state) = self.history_scroll_position {
+            // history[pos] is always valid because of the invariant on history_scroll_pos
+            self.line.set(&self.history[state.pos]);
+        }
     }
 }
 
@@ -55,26 +77,33 @@ impl Widget for PromptLine {
 
 impl Scrollable for PromptLine {
     fn scroll_forwards(&mut self) {
-        self.history_scroll_position = if let Some(pos) = self.history_scroll_position {
-            if pos+1 < self.history.len() {
-                Some(pos + 1)
+        self.history_scroll_position = if let Some(mut state) = self.history_scroll_position.take() {
+            if state.pos+1 < self.history.len() {
+                state.pos += 1;
+                Some(state)
             } else {
-                Some(pos)
+                self.line.set(&state.active_line);
+                None
             }
         } else {
-            self.history_scroll_position
+            None
         };
+        self.sync_line_to_history_scroll_position();
     }
     fn scroll_backwards(&mut self) {
-        self.history_scroll_position = if let Some(pos) = self.history_scroll_position {
-            if pos > 0 {
-                Some(pos - 1)
-            } else {
-                Some(pos)
+        self.history_scroll_position = if let Some(mut state) = self.history_scroll_position.take() {
+            if state.pos > 0 {
+                state.pos -= 1;
             }
+            Some(state)
         } else {
-            Some(self.history.len() - 1)
+            if self.history.len() > 0 {
+                Some(ScrollBackState::new(self.line.get().to_owned(), self.history.len() - 1))
+            } else {
+                None
+            }
         };
+        self.sync_line_to_history_scroll_position();
     }
 }
 impl Navigatable for PromptLine {
@@ -102,11 +131,14 @@ impl Writable for PromptLine {
 impl Editable for PromptLine {
     fn delete_symbol(&mut self) {
         self.line.delete_symbol();
+        self.history_scroll_position = None;
     }
     fn remove_symbol(&mut self) {
         self.line.remove_symbol();
+        self.history_scroll_position = None;
     }
     fn clear(&mut self) {
         self.line.clear();
+        self.history_scroll_position = None;
     }
 }

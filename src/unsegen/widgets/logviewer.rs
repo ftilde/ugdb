@@ -1,7 +1,6 @@
 use super::super::{
     Cursor,
     Demand,
-    Event,
     Widget,
     Window,
     WrappingDirection,

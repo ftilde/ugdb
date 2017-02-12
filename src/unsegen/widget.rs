@@ -1,6 +1,5 @@
 use super::{
     Window,
-    Event,
 };
 use std::cmp::max;
 

@@ -2,7 +2,6 @@ use super::super::{
     Cursor,
     Color,
     Demand,
-    Event,
     Style,
     TextAttribute,
     Widget,

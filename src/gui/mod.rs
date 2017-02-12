@@ -21,9 +21,7 @@ use unsegen::widgets::{
 use unsegen::input::{
     Writable,
     WriteBehavior,
-    Editable,
     EditBehavior,
-    Scrollable,
     ScrollBehavior,
 };
 

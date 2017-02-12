@@ -1,8 +1,6 @@
 use super::super::{
     Cursor,
     Demand,
-    Event,
-    Key,
     Widget,
     Window,
     Style,
@@ -37,11 +35,21 @@ impl LineEdit {
         &self.text
     }
 
+    pub fn set(&mut self, text: &str) {
+        self.text = text.to_owned();
+        self.move_cursor_to_end_of_line();
+    }
+
+    pub fn move_cursor_to_end_of_line(&mut self) {
+        self.cursor_pos = count_grapheme_clusters(&self.text) as usize;
+    }
+
     /*
-    pub fn set(&mut self, text: String) {
-        self.text = text
+    pub fn move_cursor_to_beginning_of_line(&mut self) {
+        self.cursor_pos = 0;
     }
     */
+
 
     pub fn move_cursor_right(&mut self) {
         self.cursor_pos = ::std::cmp::min(self.cursor_pos + 1, count_grapheme_clusters(&self.text) as usize);

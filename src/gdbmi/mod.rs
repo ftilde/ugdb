@@ -75,4 +75,9 @@ impl GDB {
             },
         }
     }
+
+    pub fn execute_later(&mut self, command: &input::MiCommand) {
+        command.write_interpreter_string(&mut self.stdin).expect("write interpreter command");
+        let _ = self.result_output.recv();
+    }
 }

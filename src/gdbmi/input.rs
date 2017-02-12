@@ -45,5 +45,12 @@ impl MiCommand {
             parameters: Vec::new(),
         }
     }
+    pub fn exit() -> MiCommand {
+        MiCommand {
+            operation: "gdb-exit".to_owned(),
+            options: Vec::new(),
+            parameters: Vec::new(),
+        }
+    }
 }
 

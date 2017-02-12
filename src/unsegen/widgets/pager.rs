@@ -9,6 +9,9 @@ use super::super::{
     WrappingDirection,
     WrappingMode,
 };
+use super::super::input::{
+    Scrollable,
+};
 
 use std::ops::Range;
 use std::io;
@@ -166,6 +169,7 @@ impl<'b> HighLighter for SyntectHighLighter<'b> {
 pub struct Pager<S: LineStorage, H: HighLighter> {
     storage: S,
     highlighter: H,
+    active_line: usize,
 }
 
 impl<S: LineStorage, H: HighLighter> Pager<S, H> {
@@ -173,6 +177,7 @@ impl<S: LineStorage, H: HighLighter> Pager<S, H> {
         Pager {
             storage: storage,
             highlighter: highlighter,
+            active_line: 0,
         }
     }
 }
@@ -198,17 +203,29 @@ impl<S: LineStorage, H: HighLighter> Widget for Pager<S, H> {
     }
     fn draw(&mut self, mut window: Window) {
         let height = window.get_height() as usize;
-        let mut cursor = Cursor::new(&mut window)
-            .position(0, 0)
-            .wrapping_direction(WrappingDirection::Down)
-            .wrapping_mode(WrappingMode::Wrap);
+        {
+            let mut cursor = Cursor::new(&mut window)
+                .position(0, 0)
+                .wrapping_direction(WrappingDirection::Down)
+                .wrapping_mode(WrappingMode::Wrap);
 
-        for line in self.storage.view(0..height) {
-            for (style, region) in  self.highlighter.highlight(&line) {
-                cursor.set_text_attribute(style);
-                cursor.write(&region);
+            for line in self.storage.view(self.active_line..(self.active_line+height)) {
+                for (style, region) in  self.highlighter.highlight(&line) {
+                    cursor.set_text_attribute(style);
+                    cursor.write(&region);
+                }
+                cursor.wrap_line();
             }
-            cursor.wrap_line();
         }
+    }
+}
+impl<S: LineStorage, H: HighLighter> Scrollable for Pager<S, H> {
+    fn scroll_backwards(&mut self) {
+        if self.active_line > 0 {
+            self.active_line -= 1;
+        }
+    }
+    fn scroll_forwards(&mut self) {
+        self.active_line += 1; //TODO: check bounds
     }
 }

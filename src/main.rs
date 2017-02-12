@@ -95,11 +95,15 @@ fn main() {
                         break; // TODO why silent fail/break?
                     }
                 },
-                keyboard_evt = keyboard_source.recv() => {
-                    let evt = keyboard_evt.expect("get keyboard event");
-                    match evt {
-                        input::InputEvent::Quit => break,
-                        event => { gui.event(event, &mut gdb); },
+                evt = keyboard_source.recv() => {
+                    match evt.expect("read keyboard event") {
+                        input::InputEvent::Quit => {
+                            gdb.interrupt_execution();
+                            gdb.execute_later(&gdbmi::input::MiCommand::exit());
+                        },
+                        event => {
+                            gui.event(event, &mut gdb);
+                        },
                     }
                 },
                 pty_output = pty_output_source.recv() => {

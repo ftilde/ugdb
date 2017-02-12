@@ -1,11 +1,16 @@
-
+use unsegen::input::{
+    Input,
+    Key,
+    Event,
+};
 
 use std::sync::mpsc;
 
 #[derive(Eq, PartialEq, Clone)]
 pub enum InputEvent {
-    ConsoleEvent(::unsegen::Input),
-    PseudoTerminalEvent(::unsegen::Input),
+    ConsoleEvent(Input),
+    PseudoTerminalEvent(Input),
+    SourcePagerEvent(Input),
     Quit,
 }
 
@@ -17,6 +22,7 @@ pub trait InputSource {
 enum Mode {
     Console,
     PTY,
+    SourcePager,
 }
 
 pub struct ViKeyboardInput {
@@ -28,27 +34,40 @@ impl ViKeyboardInput {
         use termion::input::TermRead;
 
         let mut mode = Mode::Console;
-        let stdin = ::std::io::stdin(); //TODO lock outside of thread
+        let stdin = ::std::io::stdin(); //TODO lock outside of thread?
         let stdin = stdin.lock();
         for e in stdin.events() {
-            let e = e.expect("key");
-            match e {
-                ::termion::event::Event::Key(::termion::event::Key::F(1)) => {
-                    mode = match mode {
-                        Mode::Console => Mode::PTY,
-                        Mode::PTY => Mode::Console,
+            let event = e.expect("event");
+            if let Event::Key(Key::Ctrl('q')) = event {
+                output.send(InputEvent::Quit).expect("send quit");
+            }
+            let (new_mode, optional_event) = match mode {
+                Mode::SourcePager => {
+                    match event {
+                        Event::Key(Key::Esc) => { (Mode::SourcePager, None) },
+                        Event::Key(Key::Char('i')) => { (Mode::Console, None) },
+                        Event::Key(Key::Char('t')) => { (Mode::PTY, None) },
+                        e => { (mode, Some(InputEvent::SourcePagerEvent(Input::new(e)))) },
                     }
                 },
-                e => {
-                    let event = match mode {
-                        Mode::Console => { InputEvent::ConsoleEvent(::unsegen::input::Input::new(e)) },
-                        Mode::PTY => { InputEvent::PseudoTerminalEvent(::unsegen::input::Input::new(e)) },
-                    };
-                    output.send(event).expect("send event");
+                Mode::Console => {
+                    match event {
+                        Event::Key(Key::Esc) => { (Mode::SourcePager, None) },
+                        e => { (mode, Some(InputEvent::ConsoleEvent(Input::new(e)))) },
+                    }
                 },
+                Mode::PTY => {
+                    match event {
+                        Event::Key(Key::Esc) => { (Mode::SourcePager, None) },
+                        e => { (mode, Some(InputEvent::PseudoTerminalEvent(Input::new(e)))) },
+                    }
+                },
+            };
+            mode = new_mode;
+            if let Some(event) = optional_event {
+                output.send(event).expect("send event");
             }
         }
-        output.send(InputEvent::Quit).expect("send quit");
     }
 }
 

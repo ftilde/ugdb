@@ -10,6 +10,10 @@ use unsegen::{
     Input,
     Key,
     SeparatingStyle,
+    Writable,
+    WriteBehavior,
+    EditBehavior,
+    ScrollBehavior,
 };
 use unsegen::widgets::{
     LogViewer,
@@ -18,11 +22,8 @@ use unsegen::widgets::{
     FileLineStorage,
     NoHighLighter,
 };
-use unsegen::input::{
-    Writable,
-    WriteBehavior,
-    EditBehavior,
-    ScrollBehavior,
+use input::{
+    InputEvent,
 };
 
 struct Console {
@@ -220,9 +221,21 @@ impl Gui {
 
     pub fn event(&mut self, event: ::input::InputEvent, gdb: &mut gdbmi::GDB) { //TODO more console events
         match event {
-            ::input::InputEvent::ConsoleEvent(event) => { self.console.event(event, gdb); },
-            ::input::InputEvent::PseudoTerminalEvent(event) => { event.chain(WriteBehavior::new(&mut self.process_pty)); },
-            ::input::InputEvent::Quit => { unreachable!("quit should have been caught in main" ) }, //TODO this is ugly
+            InputEvent::ConsoleEvent(event) => {
+                self.console.event(event, gdb);
+            },
+            InputEvent::PseudoTerminalEvent(event) => {
+                event.chain(WriteBehavior::new(&mut self.process_pty));
+            },
+            InputEvent::SourcePagerEvent(event) => {
+                event.chain(ScrollBehavior::new(&mut self.file_viewer)
+                            .forwards_on(Key::PageDown)
+                            .backwards_on(Key::PageUp)
+                            );
+            },
+            InputEvent::Quit => {
+                unreachable!("quit should have been caught in main" )
+            }, //TODO this is ugly
         }
     }
 }

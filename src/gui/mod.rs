@@ -20,10 +20,16 @@ use unsegen::widgets::{
     PromptLine,
     Pager,
     FileLineStorage,
-    NoHighLighter,
+    SyntectHighLighter,
 };
 use input::{
     InputEvent,
+};
+use syntect::highlighting::{
+    Theme,
+};
+use syntect::parsing::{
+    SyntaxSet,
 };
 
 struct Console {
@@ -167,16 +173,17 @@ impl Writable for PseudoTerminal {
 }
 
 // Gui --------------------------------------------------------------------------------
-pub struct Gui {
+pub struct Gui<'a> {
     console: Console,
     process_pty: PseudoTerminal,
-    file_viewer: Pager<FileLineStorage, NoHighLighter>,
+    file_viewer: Pager<FileLineStorage, SyntectHighLighter<'a>>,
+    syntax_set: SyntaxSet,
 
     left_layout: VerticalLayout,
     right_layout: VerticalLayout,
 }
 
-impl Gui {
+impl<'a> Gui<'a> {
     //pub fn new(process_pty: ::pty::PTYInput, theme_set: &'a ::syntect::highlighting::ThemeSet) -> Self {
             //file_viewer: Pager::new("/home/dominik/test.rs", &theme_set.themes["base16-ocean.dark"]),
 
@@ -184,10 +191,19 @@ impl Gui {
         Gui {
             console: Console::new(),
             process_pty: PseudoTerminal::new(process_pty),
-            file_viewer: Pager::new(FileLineStorage::new("/home/dominik/test.rs").expect("open file"), NoHighLighter),
+            file_viewer: Pager::new(),
+            syntax_set: SyntaxSet::load_defaults_nonewlines(),
             left_layout: VerticalLayout::new(SeparatingStyle::Draw('=')),
             right_layout: VerticalLayout::new(SeparatingStyle::Draw('=')),
         }
+    }
+
+    pub fn load_in_pager(&mut self, path: &str, theme: &'a Theme) {
+        let file_storage = FileLineStorage::new(path).expect("open file"); //TODO propagate open error
+        let syntax = self.syntax_set.find_syntax_for_file(path)
+            .expect("file needs to be openable, see file storage")
+            .unwrap_or(self.syntax_set.find_syntax_plain_text());
+        self.file_viewer.load(file_storage, SyntectHighLighter::new(syntax, theme));
     }
 
     pub fn add_out_of_band_record(&mut self, record: gdbmi::output::OutOfBandRecord) {

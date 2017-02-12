@@ -147,7 +147,6 @@ impl HighLighter for NoHighLighter {
 
 pub struct SyntectHighLighter<'a> {
     highlighter: HighlightLines<'a>,
-    //_syntax_set: SyntaxSet,
 }
 
 impl<'a> SyntectHighLighter<'a> {
@@ -166,19 +165,29 @@ impl<'b> HighLighter for SyntectHighLighter<'b> {
     }
 }
 
-pub struct Pager<S: LineStorage, H: HighLighter> {
+struct PagerContent<S: LineStorage, H: HighLighter> {
     storage: S,
     highlighter: H,
+}
+
+pub struct Pager<S: LineStorage, H: HighLighter> {
+    content: Option<PagerContent<S,H>>,
     active_line: usize,
 }
 
 impl<S: LineStorage, H: HighLighter> Pager<S, H> {
-    pub fn new(storage: S, highlighter: H) -> Self {
+    pub fn new() -> Self {
         Pager {
-            storage: storage,
-            highlighter: highlighter,
+            content: None,
             active_line: 0,
         }
+    }
+
+    pub fn load(&mut self, storage: S, highlighter: H) {
+        self.content = Some(PagerContent {
+            storage: storage,
+            highlighter: highlighter,
+        });
     }
 }
 
@@ -202,19 +211,27 @@ impl<S: LineStorage, H: HighLighter> Widget for Pager<S, H> {
         (Demand::at_least(1), Demand::at_least(1))
     }
     fn draw(&mut self, mut window: Window) {
-        let height = window.get_height() as usize;
-        {
-            let mut cursor = Cursor::new(&mut window)
-                .position(0, 0)
-                .wrapping_direction(WrappingDirection::Down)
-                .wrapping_mode(WrappingMode::Wrap);
+        if let Some(ref mut content) = self.content {
+            // Fill background with correct color
+            let (style, _) = content.highlighter.highlight(" ").next().expect("exactly one formatted space");
+            window.set_default_format(style);
+            window.fill(' ');
 
-            for line in self.storage.view(self.active_line..(self.active_line+height)) {
-                for (style, region) in  self.highlighter.highlight(&line) {
-                    cursor.set_text_attribute(style);
-                    cursor.write(&region);
+            // Draw text around active line
+            let height = window.get_height() as usize;
+            {
+                let mut cursor = Cursor::new(&mut window)
+                    .position(0, 0)
+                    .wrapping_direction(WrappingDirection::Down)
+                    .wrapping_mode(WrappingMode::Wrap);
+
+                for line in content.storage.view(self.active_line..(self.active_line+height)) {
+                    for (style, region) in  content.highlighter.highlight(&line) {
+                        cursor.set_text_attribute(style);
+                        cursor.write(&region);
+                    }
+                    cursor.wrap_line();
                 }
-                cursor.wrap_line();
             }
         }
     }

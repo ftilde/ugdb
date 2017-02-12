@@ -76,12 +76,14 @@ fn main() {
     // Setup signal piping
     let signal_event_source = signalchannel::setup_signal_receiver().expect("took signal_event_source");
 
+    
     let stdout = std::io::stdout();
     {
         let mut terminal = unsegen::Terminal::new(stdout.lock());
-        //let theme_set = syntect::highlighting::ThemeSet::load_defaults();
+        let theme_set = syntect::highlighting::ThemeSet::load_defaults();
         let mut gui = gui::Gui::new(pty_input);
         gui.add_debug_message(&ptyname);
+        gui.load_in_pager("/home/dominik/test.rs", &theme_set.themes["base16-ocean.dark"]);
 
         gui.draw(terminal.create_root_window(unsegen::TextAttribute::default()));
         terminal.present();
@@ -98,7 +100,7 @@ fn main() {
                 evt = keyboard_source.recv() => {
                     match evt.expect("read keyboard event") {
                         input::InputEvent::Quit => {
-                            gdb.interrupt_execution();
+                            gdb.interrupt_execution().expect("interrupt worked");
                             gdb.execute_later(&gdbmi::input::MiCommand::exit());
                         },
                         event => {

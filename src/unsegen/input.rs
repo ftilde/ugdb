@@ -164,6 +164,7 @@ pub trait Writable {
 
 // NavigateBehavior ------------------------------------------------
 
+/*
 pub struct NavigateBehavior<'a, N: Navigatable + 'a> {
     navigatable: &'a mut N,
     up_on: EventSet,
@@ -220,6 +221,7 @@ impl<'a, N: Navigatable + 'a> Behavior for NavigateBehavior<'a, N> {
         }
     }
 }
+*/
 
 pub trait Navigatable {
     fn move_up(&mut self);

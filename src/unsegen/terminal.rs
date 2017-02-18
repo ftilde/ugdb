@@ -4,6 +4,7 @@ use ndarray::{
     Ix,
 };
 use termion::raw::{IntoRawMode, RawTerminal};
+use termion::screen::{AlternateScreen};
 use termion;
 use super::{
     TextAttribute,
@@ -46,13 +47,13 @@ impl Default for FormattedChar {
 pub type CharMatrix = Array<FormattedChar, (Ix,Ix)>;
 pub struct Terminal<'a> {
     values: CharMatrix,
-    terminal: RawTerminal<::std::io::StdoutLock<'a>>,
+    terminal: AlternateScreen<RawTerminal<::std::io::StdoutLock<'a>>>,
 }
 
 impl<'a> Terminal<'a> {
     pub fn new(stdout: ::std::io::StdoutLock<'a>) -> Self {
         use std::io::Write;
-        let mut terminal = stdout.into_raw_mode().expect("raw terminal");
+        let mut terminal = AlternateScreen::from(stdout.into_raw_mode().expect("raw terminal"));
         write!(terminal, "{}", termion::cursor::Hide).expect("write: hide cursor");
         Terminal {
             values: CharMatrix::default((0,0)),

@@ -15,7 +15,7 @@ nix = "^0.7"
 #gdbmi
 nom = "^1.2"
 #unsegen
-termion = "^1.1"
+#termion = "^1.1"
 ndarray = "0.6"
 smallvec = "0.3"
 unicode-segmentation = "1.0"
@@ -24,10 +24,8 @@ syntect = "1.0"
 #pty
 libc = "^0.2"
 
-#[dependencies.termion]
-#git = "https://github.com/Ticki/termion"
-#features = ["nightly"]
+[dependencies.termion]
+git = "https://github.com/ftilde/termion"
 
 #[dependencies.termion]
 #path = "../termion/"
-#features = ["nightly"]

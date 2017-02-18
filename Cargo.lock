@@ -9,7 +9,7 @@ dependencies = [
  "nom 1.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "smallvec 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "syntect 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "termion 1.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "termion 1.1.4 (git+https://github.com/ftilde/termion)",
  "unicode-segmentation 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "unicode-width 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -311,7 +311,7 @@ dependencies = [
 [[package]]
 name = "termion"
 version = "1.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
+source = "git+https://github.com/ftilde/termion#c4da500ebd14e73bef13834885ebeee30807a671"
 dependencies = [
  "libc 0.2.20 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -415,7 +415,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum serde 0.8.23 (registry+https://github.com/rust-lang/crates.io-index)" = "9dad3f759919b92c3068c696c15c3d17238234498bbdcc80f2c469606f948ac8"
 "checksum smallvec 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)" = "3a3c84984c278afe61a46e19868e8b23e2ee3be5b3cc6dea6edad4893bc6c841"
 "checksum syntect 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)" = "8ba7b72e9fd69b1bb80c11eda8a56b95a5156a5bdd7208f358ee7042296313e8"
-"checksum termion 1.1.4 (registry+https://github.com/rust-lang/crates.io-index)" = "9a90df1ede85b25f0bbb50b6313f8fab00e30b3b251f1cc2165faa40924e1417"
+"checksum termion 1.1.4 (git+https://github.com/ftilde/termion)" = "<none>"
 "checksum time 0.1.36 (registry+https://github.com/rust-lang/crates.io-index)" = "211b63c112206356ef1ff9b19355f43740fc3f85960c598a93d3a3d3ba7beade"
 "checksum unicode-segmentation 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)" = "7baebdc1df1363fa66161fca2fe047e4f4209011cc7e045948298996afdf85df"
 "checksum unicode-width 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)" = "bf3a113775714a22dcb774d8ea3655c53a32debae63a063acc00a91cc586245f"

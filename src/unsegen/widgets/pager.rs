@@ -14,8 +14,17 @@ use super::super::input::{
 };
 
 use std::ops::Range;
+use std::cmp::{
+    min,
+    max,
+};
 use std::io;
-use std::io::{BufReader, BufRead, SeekFrom, Read, Seek};
+use std::io::{
+    BufReader,
+    BufRead,
+    SeekFrom,
+    Seek,
+};
 use std::fs::{File};
 use std::path::{Path};
 
@@ -24,75 +33,45 @@ use syntect::highlighting;
 use syntect::easy::{HighlightLines};
 
 pub trait LineStorage {
-    fn view<'a>(&'a mut self, range: Range<usize>) -> Box<DoubleEndedIterator<Item=String> + 'a>;
+    fn view<'a>(&'a mut self, range: Range<usize>) -> Box<Iterator<Item=(usize, String)> + 'a>;
 }
 
 pub struct FileLineStorage {
     reader: BufReader<File>,
-    line_seek_positions: Vec<u64>,
+    line_seek_positions: Vec<usize>,
 }
 impl FileLineStorage {
     pub fn new<P: AsRef<Path>>(path: P) -> io::Result<Self> {
         let file = try!{File::open(path.as_ref())};
         Ok(FileLineStorage {
             reader: BufReader::new(file),
-            line_seek_positions: Vec::new(),
+            line_seek_positions: vec![0],
         })
-    }
-
-    fn skip_to_newline(&mut self) -> io::Result<u64> {
-        let mut buffer = vec![0];
-        let mut num_bytes = 0;
-        while buffer[0] != b'\n' {
-            try!{self.reader.read_exact(&mut buffer)};
-            num_bytes += 1;
-        }
-        Ok(num_bytes)
-    }
-    fn get_line_seek_pos(&mut self, index: usize) -> Option<SeekFrom> {
-        let mut buffer_pos = 0;
-        if index >= self.line_seek_positions.len() {
-            self.reader.seek(SeekFrom::Start(*self.line_seek_positions.last().unwrap_or(&0))).expect("seek to last known");
-            if let Some(&last) = self.line_seek_positions.last() {
-                buffer_pos = last + match self.skip_to_newline() {
-                    Ok(n) => n,
-                    Err(e) => {
-                        if io::ErrorKind::UnexpectedEof == e.kind() {
-                            return None;
-                        } else {
-                            panic!("file read error: {}", e);
-                        }
-                    },
-                }
-            }
-        }
-        while index >= self.line_seek_positions.len() {
-            self.line_seek_positions.push(buffer_pos);
-            buffer_pos += match self.skip_to_newline() {
-                Ok(n) => n,
-                Err(e) => {
-                    if io::ErrorKind::UnexpectedEof == e.kind() {
-                        return None;
-                    } else {
-                        panic!("file read error: {}", e);
-                    }
-                },
-            }
-        }
-        Some(SeekFrom::Start(self.line_seek_positions[index]))
     }
 
     fn get_line(&mut self, index: usize) -> Option<String> {
-        self.get_line_seek_pos(index).map(|p| {
-            self.reader.seek(p).expect("seek to line pos");
-            let mut buffer = Vec::new();
-            self.reader.read_until(b'\n', &mut buffer).expect("read from buffer");
-            String::from_utf8_lossy(&buffer).into_owned()
-        })
+        let mut buffer = Vec::new();
+
+        loop {
+            let current_max_index: usize = self.line_seek_positions[min(index, self.line_seek_positions.len()-1)];
+            self.reader.seek(SeekFrom::Start(current_max_index as u64)).expect("seek to line pos");
+            let n_bytes = self.reader.read_until(b'\n', &mut buffer).expect("read line");
+            if n_bytes == 0 { //We reached EOF
+                return None;
+            }
+            if index < self.line_seek_positions.len() { //We found the desired line
+                let mut string = String::from_utf8_lossy(&buffer).into_owned();
+                if string.as_str().bytes().last().unwrap_or(b'_') == b'\n' {
+                    string.pop();
+                }
+                return Some(string);
+            }
+            self.line_seek_positions.push(current_max_index + n_bytes);
+        }
     }
 }
 impl LineStorage for FileLineStorage {
-    fn view<'a>(&'a mut self, range: Range<usize>) -> Box<DoubleEndedIterator<Item=String> + 'a> {
+    fn view<'a>(&'a mut self, range: Range<usize>) -> Box<Iterator<Item=(usize, String)> + 'a> {
         Box::new(FileLineIterator::new(self, range))
     }
 }
@@ -109,24 +88,16 @@ impl<'a> FileLineIterator<'a> {
     }
 }
 impl<'a> Iterator for FileLineIterator<'a> {
-    type Item = String;
+    type Item = (usize, String);
     fn next(&mut self) -> Option<Self::Item> {
         if self.range.start < self.range.end {
-            let res = self.storage.get_line(self.range.start); //TODO: maybe we want to treat none differently here?
+            let item_index = self.range.start;
             self.range.start += 1;
-            res
-        } else {
-            None
-        }
-    }
-}
-
-impl<'a> DoubleEndedIterator for FileLineIterator<'a> {
-    fn next_back(&mut self) -> Option<Self::Item> {
-        if self.range.start < self.range.end {
-            let res = self.storage.get_line(self.range.end - 1); //TODO: maybe we want to treat none differently here?
-            self.range.end -= 1;
-            res
+            if let Some(line) = self.storage.get_line(item_index) {
+                Some((item_index, line)) //TODO: maybe we want to treat none differently here?
+            } else {
+                None
+            }
         } else {
             None
         }
@@ -217,21 +188,52 @@ impl<S: LineStorage, H: HighLighter> Widget for Pager<S, H> {
             window.set_default_format(style);
             window.fill(' ');
 
-            // Draw text around active line
             let height = window.get_height() as usize;
-            {
-                let mut cursor = Cursor::new(&mut window)
-                    .position(0, 0)
-                    .wrapping_direction(WrappingDirection::Down)
-                    .wrapping_mode(WrappingMode::Wrap);
+            // The highlighter might need a minimum number of lines to figure out the syntax:
+            // TODO: make this configurable?
+            let min_highlight_context = 40;
+            let num_adjacent_lines_to_load = max(height, min_highlight_context/2);
+            let min_line = self.active_line.checked_sub(num_adjacent_lines_to_load).unwrap_or(0);
+            let active_line = self.active_line;
+            let max_line = self.active_line + num_adjacent_lines_to_load;
 
-                for line in content.storage.view(self.active_line..(self.active_line+height)) {
-                    for (style, region) in  content.highlighter.highlight(&line) {
-                        cursor.set_text_attribute(style);
-                        cursor.write(&region);
+            let mut cursor = Cursor::new(&mut window)
+                .position(0, 0)
+                .wrapping_direction(WrappingDirection::Down)
+                .wrapping_mode(WrappingMode::Wrap);
+
+            let num_line_wraps_until_active_line: u32 = {
+                content.storage
+                    .view(min_line..active_line)
+                    .map(|(_,line)| {
+                        cursor.num_expected_wraps(&line) + 1
+                    })
+                    .sum()
+            };
+            let num_line_wraps_from_active_line = {
+                content.storage
+                    .view(active_line..max_line)
+                    .map(|(_,line)| {
+                        cursor.num_expected_wraps(&line) + 1
+                    })
+                    .sum::<u32>()
+            };
+
+            let centered_active_line_start_pos = (height/2) as i32;
+            let best_active_line_pos_for_bottom = max(centered_active_line_start_pos, height as i32 - num_line_wraps_from_active_line as i32);
+            let required_start_pos = min(0, best_active_line_pos_for_bottom as i32 - num_line_wraps_until_active_line as i32);
+
+            cursor.set_position(0, required_start_pos);
+
+            for (line_number, line) in content.storage.view(min_line..max_line) {
+                for (mut style, region) in content.highlighter.highlight(&line) {
+                    if line_number == self.active_line {
+                        style = TextAttribute::new(None, None, Style::new().invert().bold()).or(&style);
                     }
-                    cursor.wrap_line();
+                    cursor.set_text_attribute(style);
+                    cursor.write(&region);
                 }
+                cursor.wrap_line();
             }
         }
     }
@@ -243,6 +245,10 @@ impl<S: LineStorage, H: HighLighter> Scrollable for Pager<S, H> {
         }
     }
     fn scroll_forwards(&mut self) {
-        self.active_line += 1; //TODO: check bounds
+        if let Some(ref mut content) = self.content {
+            if content.storage.view((self.active_line+1)..(self.active_line+2)).next().is_some() {
+                self.active_line += 1;
+            }
+        }
     }
 }

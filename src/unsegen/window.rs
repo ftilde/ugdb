@@ -8,6 +8,7 @@ use ndarray::{
     Ix
 };
 use std::cmp::max;
+use ::unicode_segmentation::UnicodeSegmentation;
 
 type CharMatrixView<'w> = ArrayViewMut<'w, FormattedChar, (Ix,Ix)>;
 pub struct Window<'w> {
@@ -187,16 +188,20 @@ impl<'c, 'w> Cursor<'c, 'w> {
         }
     }
 
-    pub fn write(&mut self, text: &str) {
+    pub fn num_expected_wraps(&self, line: &str) -> u32 {
+        if self.wrapping_mode == WrappingMode::Wrap {
+            let num_chars = line.graphemes(true).count();
+            max(0, ((num_chars as i32 + self.x) / (self.window.get_width() as i32)) as u32)
+        } else {
+            0
+        }
+    }
 
+    pub fn write(&mut self, text: &str) {
         let mut line_it = text.lines().peekable();
         while let Some(line) = line_it.next() {
-            let num_auto_wraps = if self.wrapping_mode == WrappingMode::Wrap {
-                let num_chars = line.chars().count(); //TODO: we do not really want chars, but the real width of the line
-                max(0, (num_chars as i32 + self.x) / (self.window.get_width() as i32))
-            } else {
-                0
-            };
+            let num_auto_wraps = self.num_expected_wraps(line) as i32;
+
             if self.wrapping_direction == WrappingDirection::Up {
                 self.y -= num_auto_wraps; // reserve space for auto wraps
             }

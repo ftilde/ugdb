@@ -12,5 +12,5 @@ pub use self::pager::*;
 
 fn count_grapheme_clusters(text: &str) -> u32 {
     use ::unicode_segmentation::UnicodeSegmentation;
-    text.grapheme_indices(true).count() as u32
+    text.graphemes(true).count() as u32
 }

@@ -50,8 +50,8 @@ impl ::std::fmt::Write for LogViewer {
         let mut s = s.to_owned();
 
         while let Some(newline_offset) = s.find('\n') {
-            let line: String = s.drain(..newline_offset).collect();
-            s.pop(); //Remove the \n
+            let mut line: String = s.drain(..(newline_offset+1)).collect();
+            line.pop(); //Remove the \n
             self.active_line_mut().push_str(&line);
             self.lines.push(String::new());
         }

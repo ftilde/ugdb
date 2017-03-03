@@ -109,12 +109,19 @@ use ::std::sync::atomic::{AtomicBool, Ordering};
 
 pub fn process_output<T: Read>(output: T, result_pipe: Sender<ResultRecord>, out_of_band_pipe: Sender<OutOfBandRecord>, is_running: Arc<AtomicBool>) {
     let mut reader = BufReader::new(output);
+
+    //use std::fs::{File};
+    //let mut f = File::create("/home/dominik/gdbmi.log").unwrap();
+
     loop {
         let mut buffer = String::new();
         match reader.read_line(&mut buffer) {
             Ok(0) => { return; },
             Ok(_) => { /* TODO */
-                //println!("::::: {:?}", buffer);
+                //{
+                //    use std::io::Write;
+                //    write!(f, "{}", buffer).unwrap();
+                //}
                 match Output::parse(&buffer) {
                     Output::Result(record) => {
                         if let ResultRecord{token: _, class: ResultClass::Running, results: _} = record {

@@ -26,7 +26,10 @@ use std::io::{
     Seek,
 };
 use std::fs::{File};
-use std::path::{Path};
+use std::path::{
+    Path,
+    PathBuf,
+};
 
 use syntect::parsing::syntax_definition::SyntaxDefinition;
 use syntect::highlighting;
@@ -39,6 +42,7 @@ pub trait LineStorage {
 pub struct FileLineStorage {
     reader: BufReader<File>,
     line_seek_positions: Vec<usize>,
+    file_path: PathBuf,
 }
 impl FileLineStorage {
     pub fn new<P: AsRef<Path>>(path: P) -> io::Result<Self> {
@@ -46,7 +50,12 @@ impl FileLineStorage {
         Ok(FileLineStorage {
             reader: BufReader::new(file),
             line_seek_positions: vec![0],
+            file_path: path.as_ref().to_path_buf(),
         })
+    }
+
+    pub fn get_file_path(&self) -> &Path {
+        &self.file_path.as_path()
     }
 
     fn get_line(&mut self, index: usize) -> Option<String> {
@@ -136,13 +145,13 @@ impl<'b> HighLighter for SyntectHighLighter<'b> {
     }
 }
 
-struct PagerContent<S: LineStorage, H: HighLighter> {
-    storage: S,
+pub struct PagerContent<S: LineStorage, H: HighLighter> {
+    pub storage: S,
     highlighter: H,
 }
 
 pub struct Pager<S: LineStorage, H: HighLighter> {
-    content: Option<PagerContent<S,H>>,
+    pub content: Option<PagerContent<S,H>>,
     active_line: usize,
 }
 
@@ -159,6 +168,21 @@ impl<S: LineStorage, H: HighLighter> Pager<S, H> {
             storage: storage,
             highlighter: highlighter,
         });
+    }
+    fn line_exists(&mut self, line: usize) -> bool {
+        if let Some(ref mut content) = self.content {
+            content.storage.view(line..(line+1)).next().is_some()
+        } else {
+            false
+        }
+    }
+    pub fn go_to_line(&mut self, line: usize) -> Result<(), ()> {
+        if self.line_exists(line) {
+            self.active_line = line;
+            Ok(())
+        } else {
+            Err(())
+        }
     }
 }
 
@@ -245,10 +269,7 @@ impl<S: LineStorage, H: HighLighter> Scrollable for Pager<S, H> {
         }
     }
     fn scroll_forwards(&mut self) {
-        if let Some(ref mut content) = self.content {
-            if content.storage.view((self.active_line+1)..(self.active_line+2)).next().is_some() {
-                self.active_line += 1;
-            }
-        }
+        let new_line = self.active_line + 1;
+        let _ = self.go_to_line(new_line);
     }
 }

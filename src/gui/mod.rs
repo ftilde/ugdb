@@ -31,6 +31,14 @@ use syntect::highlighting::{
 use syntect::parsing::{
     SyntaxSet,
 };
+use std::io;
+use std::path::Path;
+use gdbmi::output::{
+    OutOfBandRecord,
+    AsyncKind,
+    AsyncClass,
+    NamedValues,
+};
 
 struct Console {
     text_area: LogViewer,
@@ -176,6 +184,7 @@ impl Writable for PseudoTerminal {
 pub struct Gui<'a> {
     console: Console,
     process_pty: PseudoTerminal,
+    highlighting_theme: &'a Theme,
     file_viewer: Pager<FileLineStorage, SyntectHighLighter<'a>>,
     syntax_set: SyntaxSet,
 
@@ -183,14 +192,19 @@ pub struct Gui<'a> {
     right_layout: VerticalLayout,
 }
 
-impl<'a> Gui<'a> {
-    //pub fn new(process_pty: ::pty::PTYInput, theme_set: &'a ::syntect::highlighting::ThemeSet) -> Self {
-            //file_viewer: Pager::new("/home/dominik/test.rs", &theme_set.themes["base16-ocean.dark"]),
+#[derive(Debug)]
+pub enum PagerShowError {
+    CouldNotOpenFile(io::Error),
+    LineDoesNotExist(usize),
+}
 
-    pub fn new(process_pty: ::pty::PTYInput) -> Self {
+impl<'a> Gui<'a> {
+
+    pub fn new(process_pty: ::pty::PTYInput, highlighting_theme: &'a Theme) -> Self {
         Gui {
             console: Console::new(),
             process_pty: PseudoTerminal::new(process_pty),
+            highlighting_theme: highlighting_theme,
             file_viewer: Pager::new(),
             syntax_set: SyntaxSet::load_defaults_nonewlines(),
             left_layout: VerticalLayout::new(SeparatingStyle::Draw('=')),
@@ -198,16 +212,51 @@ impl<'a> Gui<'a> {
         }
     }
 
-    pub fn load_in_pager(&mut self, path: &str, theme: &'a Theme) {
-        let file_storage = FileLineStorage::new(path).expect("open file"); //TODO propagate open error
-        let syntax = self.syntax_set.find_syntax_for_file(path)
-            .expect("file needs to be openable, see file storage")
-            .unwrap_or(self.syntax_set.find_syntax_plain_text());
-        self.file_viewer.load(file_storage, SyntectHighLighter::new(syntax, theme));
+    pub fn show_in_file_viewer<P: AsRef<Path>>(&mut self, path: P, line: usize) -> Result<(), PagerShowError> {
+        let need_to_reload = if let Some(ref content) = self.file_viewer.content {
+            content.storage.get_file_path() != path.as_ref()
+        } else {
+            true
+        };
+        if need_to_reload {
+            try!{self.load_in_file_viewer(path).map_err(|e| PagerShowError::CouldNotOpenFile(e))};
+        }
+        self.file_viewer.go_to_line(line).map_err(|_| PagerShowError::LineDoesNotExist(line))
     }
 
-    pub fn add_out_of_band_record(&mut self, record: gdbmi::output::OutOfBandRecord) {
-        self.console.add_message(format!("oob: {:?}", record));
+    pub fn load_in_file_viewer<P: AsRef<Path>>(&mut self, path: P) -> io::Result<()> {
+        let file_storage = try!{FileLineStorage::new(path.as_ref())};
+        let syntax = self.syntax_set.find_syntax_for_file(path.as_ref())
+            .expect("file IS openable, see file storage")
+            .unwrap_or(self.syntax_set.find_syntax_plain_text());
+        self.file_viewer.load(file_storage, SyntectHighLighter::new(syntax, self.highlighting_theme));
+        Ok(())
+    }
+
+    fn handle_async_record(&mut self, kind: AsyncKind, class: AsyncClass, mut results: NamedValues) {
+        match (kind, class) {
+            (AsyncKind::Exec, AsyncClass::Stopped) => {
+                self.console.add_message(format!("stopped: {:?}", results));
+                let mut frame = results.remove("frame").expect("frame present").unwrap_tuple_or_named_value_list();
+                let path = frame.remove("fullname").expect("fullname present").unwrap_const();
+                let line = frame.remove("line").expect("line present").unwrap_const().parse::<usize>().expect("parse usize") - 1; //TODO we probably want to treat the conversion line_number => buffer index somewhere else...
+                self.show_in_file_viewer(path, line).expect("gdb surely would never lie to us!");
+            },
+            (kind, class) => self.console.add_message(format!("unhandled async_record: [{:?}, {:?}] {:?}", kind, class, results)),
+        }
+    }
+
+    pub fn add_out_of_band_record(&mut self, record: OutOfBandRecord) {
+        match record {
+            OutOfBandRecord::StreamRecord{ kind: _, data} => {
+                use std::fmt::Write;
+                write!(self.console.text_area, "{}", data).expect("Write message");
+            },
+            OutOfBandRecord::AsyncRecord{token: _, kind, class, results} => {
+                self.handle_async_record(kind, class, results);
+            },
+
+        }
     }
 
     pub fn add_pty_input(&mut self, input: Vec<u8>) {

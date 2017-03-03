@@ -76,14 +76,15 @@ fn main() {
     // Setup signal piping
     let signal_event_source = signalchannel::setup_signal_receiver().expect("took signal_event_source");
 
-    
     let stdout = std::io::stdout();
     {
+
         let mut terminal = unsegen::Terminal::new(stdout.lock());
         let theme_set = syntect::highlighting::ThemeSet::load_defaults();
-        let mut gui = gui::Gui::new(pty_input);
+        let mut gui = gui::Gui::new(pty_input, &theme_set.themes["base16-ocean.dark"]);
         gui.add_debug_message(&ptyname);
-        gui.load_in_pager("/home/dominik/test.rs", &theme_set.themes["base16-ocean.dark"]);
+
+        //gui.load_in_file_viewer("/home/dominik/test.rs");
 
         gui.draw(terminal.create_root_window(unsegen::TextAttribute::default()));
         terminal.present();

@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 #[derive(Debug)]
 pub enum ResultClass {
     Done,
@@ -36,17 +38,36 @@ pub enum StreamKind {
 
 
 #[derive(Debug)]
-pub struct Result {
-    variable: String,
+struct NamedValue {
+    name: String,
     value: Value,
 }
+
+pub type NamedValues = BTreeMap<String, Value>;
 
 #[derive(Debug)]
 pub enum Value {
     Const(String),
-    Tuple(Vec<Result>),
+    Tuple(NamedValues),
     ValueList(Vec<Value>),
-    ResultList(Vec<Result>),
+    NamedValueList(NamedValues), //TODO: use a type alias for the map
+}
+
+impl Value {
+    pub fn unwrap_const(self) -> String {
+        if let Value::Const(string) = self {
+            string
+        } else {
+            panic!("Value was not const");
+        }
+    }
+    pub fn unwrap_tuple_or_named_value_list(self) -> NamedValues {
+        match self {
+            Value::Tuple(map) => map,
+            Value::NamedValueList(map) => map,
+            _ => panic!("Value was tuple or named value list"),
+        }
+    }
 }
 
 pub type Token = u64;
@@ -55,7 +76,7 @@ pub type Token = u64;
 pub struct ResultRecord {
     token: Option<Token>,
     class: ResultClass,
-    results: Vec<Result>,
+    results: NamedValues,
 }
 
 #[derive(Debug)]
@@ -64,7 +85,7 @@ pub enum OutOfBandRecord {
         token: Option<Token>,
         kind: AsyncKind,
         class: AsyncClass,
-        results: Vec<Result>
+        results: NamedValues
     },
     StreamRecord {
         kind: StreamKind,
@@ -138,34 +159,59 @@ named!(
         )
     );
 
+fn not_bla(input: &[u8]) -> IResult<&[u8], u8> {
+    let byte = input[0];
+    if byte == b'\"' {
+        IResult::Error(::nom::ErrorKind::Custom(1)) //what are we supposed to return here??
+    } else {
+        IResult::Done(&input[1..], byte)
+    }
+}
+
+named!(
+    escaped_character<u8>,
+    alt!(
+        value!(b'\n', tag!("\\n")) |
+        value!(b'\"', tag!("\\\"")) |
+        not_bla
+        )
+    );
 
 named!(
     string<String>,
     chain!(
         tag!("\"") ~
-        s: is_not!("\"")~
+        s: many0!(escaped_character) ~
         tag!("\""),
-        || String::from_utf8_lossy(s).into_owned()
+        || String::from_utf8_lossy(s.as_slice()).into_owned()
         )
     );
+
+fn to_map(v: Vec<NamedValue>) -> NamedValues { //TODO: fix this and parse the map directly
+    let mut map = BTreeMap::new();
+    for e in v {
+        map.insert(e.name, e.value);
+    }
+    map
+}
 
 named!(value<Value>,
        alt!(
            map!(string, |s| Value::Const(s)) |
-           chain!(tag!("{") ~ results: separated_list!(tag!(","), result) ~ tag!("}"), || Value::Tuple(results)) |
+           chain!(tag!("{") ~ results: separated_list!(tag!(","), result) ~ tag!("}"), || Value::Tuple(to_map(results))) |
            chain!(tag!("[") ~ values: separated_list!(tag!(","), value) ~ tag!("]"), || Value::ValueList(values)) |
-           chain!(tag!("[") ~ results: separated_list!(tag!(","), result) ~ tag!("]"), || Value::ResultList(results))
+           chain!(tag!("[") ~ results: separated_list!(tag!(","), result) ~ tag!("]"), || Value::NamedValueList(to_map(results)))
            )
        );
 
 named!(
-    result<Result>,
+    result<NamedValue>,
     chain!(
         var: is_not!("=") ~
         tag!("=") ~
         val: value,
-        || Result {
-            variable: String::from_utf8_lossy(var).into_owned(),
+        || NamedValue {
+            name: String::from_utf8_lossy(var).into_owned(),
             value: val,
         }
         )
@@ -187,7 +233,7 @@ named!(
                 Output::Result(ResultRecord {
                     token: None,
                     class: c,
-                    results: res,
+                    results: to_map(res),
                 })
             }
             )
@@ -233,7 +279,7 @@ named!(
                     token: None,
                     kind: kind,
                     class: class,
-                    results: results,
+                    results: to_map(results),
                 }
             )
     );
@@ -271,12 +317,21 @@ named!(
 
 named!(
     gdb_line<Output>,
-        value!(Output::GDBLine, tag!("(gdb) \n")) //TODO proper matching
+        value!(Output::GDBLine, tag!("(gdb) ")) //TODO proper matching
     );
 
 fn debug_line(i: &[u8]) -> IResult<&[u8], Output> {
     IResult::Done(i, Output::SomethingElse(String::from_utf8_lossy(i).into_owned()))
 }
+
+// Ends all records, but can probably ignored
+//named!(
+//    nl,
+//    alt!(
+//        tag!("\n") |
+//        tag!("\r\n")
+//        )
+//    );
 
 named!(
     output<Output>,

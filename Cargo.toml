@@ -13,7 +13,7 @@ lazy_static = "0.2.2"
 #pty and gdbmi
 nix = "^0.7"
 #gdbmi
-nom = "^1.2"
+nom = "^2.1"
 #unsegen
 #termion = "^1.1"
 ndarray = "0.6"

@@ -25,7 +25,7 @@ mod unsegen;
 mod gdbmi;
 mod pty;
 
-mod gui;
+mod tui;
 mod input;
 
 mod signalchannel;
@@ -81,19 +81,19 @@ fn main() {
 
         let mut terminal = unsegen::Terminal::new(stdout.lock());
         let theme_set = syntect::highlighting::ThemeSet::load_defaults();
-        let mut gui = gui::Gui::new(pty_input, &theme_set.themes["base16-ocean.dark"]);
-        gui.add_debug_message(&ptyname);
+        let mut tui = tui::Tui::new(pty_input, &theme_set.themes["base16-ocean.dark"]);
+        tui.add_debug_message(&ptyname);
 
-        //gui.load_in_file_viewer("/home/dominik/test.rs");
+        //tui.load_in_file_viewer("/home/dominik/test.rs");
 
-        gui.draw(terminal.create_root_window(unsegen::TextAttribute::default()));
+        tui.draw(terminal.create_root_window(unsegen::TextAttribute::default()));
         terminal.present();
 
         loop {
             select! {
                 oob_evt = out_of_band_pipe.recv() => {
                     if let Ok(record) = oob_evt {
-                        gui.add_out_of_band_record(record);
+                        tui.add_out_of_band_record(record);
                     } else {
                         break; // TODO why silent fail/break?
                     }
@@ -105,12 +105,12 @@ fn main() {
                             gdb.execute_later(&gdbmi::input::MiCommand::exit());
                         },
                         event => {
-                            gui.event(event, &mut gdb);
+                            tui.event(event, &mut gdb);
                         },
                     }
                 },
                 pty_output = pty_output_source.recv() => {
-                    gui.add_pty_input(pty_output.expect("get pty input"));
+                    tui.add_pty_input(pty_output.expect("get pty input"));
                 },
                 signal_event = signal_event_source.recv() => {
                     match signal_event.expect("get signal event") {
@@ -119,7 +119,7 @@ fn main() {
                     }
                 }
             }
-            gui.draw(terminal.create_root_window(unsegen::TextAttribute::default()));
+            tui.draw(terminal.create_root_window(unsegen::TextAttribute::default()));
             terminal.present();
         }
     }

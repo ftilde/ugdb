@@ -1,6 +1,7 @@
 use gdbmi;
 
 use unsegen::{
+    FileLineStorage,
     Key,
     ScrollBehavior,
     SeparatingStyle,
@@ -10,7 +11,6 @@ use unsegen::{
     WriteBehavior,
 };
 use unsegen::widgets::{
-    FileLineStorage,
     Pager,
     SyntectHighLighter,
 };

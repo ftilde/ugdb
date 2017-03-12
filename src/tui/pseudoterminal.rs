@@ -36,7 +36,7 @@ impl PseudoTerminal {
         //TODO: handle control sequences?
         if let Ok(string) = String::from_utf8(self.input_buffer.clone()) {
             use std::fmt::Write;
-            self.display.write_str(&string).expect("Write byte to terminal");
+            self.display.storage.write_str(&string).expect("Write byte to terminal");
             self.input_buffer.clear();
         }
     }

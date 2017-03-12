@@ -91,10 +91,12 @@ impl<'a> Tui<'a> {
         match (kind, class) {
             (AsyncKind::Exec, AsyncClass::Stopped) => {
                 self.console.add_message(format!("stopped: {:?}", results));
-                let mut frame = results.remove("frame").expect("frame present").unwrap_tuple_or_named_value_list();
-                let path = frame.remove("fullname").expect("fullname present").unwrap_const();
-                let line = frame.remove("line").expect("line present").unwrap_const().parse::<usize>().expect("parse usize") - 1; //TODO we probably want to treat the conversion line_number => buffer index somewhere else...
-                self.show_in_file_viewer(path, line).expect("gdb surely would never lie to us!");
+                if let Some(frame_object) = results.remove("frame") {
+                    let mut frame = frame_object.unwrap_tuple_or_named_value_list();
+                    let path = frame.remove("fullname").expect("fullname present").unwrap_const();
+                    let line = frame.remove("line").expect("line present").unwrap_const().parse::<usize>().expect("parse usize") - 1; //TODO we probably want to treat the conversion line_number => buffer index somewhere else...
+                    self.show_in_file_viewer(path, line).expect("loaded file at location indicated by gdb");
+                }
             },
             (kind, class) => self.console.add_message(format!("unhandled async_record: [{:?}, {:?}] {:?}", kind, class, results)),
         }

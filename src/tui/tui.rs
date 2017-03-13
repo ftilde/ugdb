@@ -24,7 +24,10 @@ use syntect::parsing::{
     SyntaxSet,
 };
 use std::io;
-use std::path::Path;
+use std::path::{
+    Path,
+    PathBuf,
+};
 use gdbmi::output::{
     OutOfBandRecord,
     AsyncKind,
@@ -48,7 +51,7 @@ pub struct Tui<'a> {
 
 #[derive(Debug)]
 pub enum PagerShowError {
-    CouldNotOpenFile(io::Error),
+    CouldNotOpenFile(PathBuf, io::Error),
     LineDoesNotExist(usize),
 }
 
@@ -73,7 +76,8 @@ impl<'a> Tui<'a> {
             true
         };
         if need_to_reload {
-            try!{self.load_in_file_viewer(path).map_err(|e| PagerShowError::CouldNotOpenFile(e))};
+            let path_ref = path.as_ref();
+            try!{self.load_in_file_viewer(path_ref).map_err(|e| PagerShowError::CouldNotOpenFile(path_ref.to_path_buf(), e))};
         }
         self.file_viewer.go_to_line(line).map_err(|_| PagerShowError::LineDoesNotExist(line))
     }
@@ -93,9 +97,11 @@ impl<'a> Tui<'a> {
                 self.console.add_message(format!("stopped: {:?}", results));
                 if let Some(frame_object) = results.remove("frame") {
                     let mut frame = frame_object.unwrap_tuple_or_named_value_list();
-                    let path = frame.remove("fullname").expect("fullname present").unwrap_const();
-                    let line = frame.remove("line").expect("line present").unwrap_const().parse::<usize>().expect("parse usize") - 1; //TODO we probably want to treat the conversion line_number => buffer index somewhere else...
-                    self.show_in_file_viewer(path, line).expect("loaded file at location indicated by gdb");
+                    if let Some(path_object) = frame.remove("fullname") { // File information may not be present
+                        let path = path_object.unwrap_const();
+                        let line = frame.remove("line").expect("line present").unwrap_const().parse::<usize>().expect("parse usize") - 1; //TODO we probably want to treat the conversion line_number => buffer index somewhere else...
+                        let _ = self.show_in_file_viewer(path, line); // GDB may give out invalid paths, so we just ignore them (at least for now)
+                    }
                 }
             },
             (kind, class) => self.console.add_message(format!("unhandled async_record: [{:?}, {:?}] {:?}", kind, class, results)),

@@ -137,13 +137,13 @@ impl<S: LineStorage, H: HighLighter> Widget for Pager<S, H> {
                 .wrapping_direction(WrappingDirection::Down)
                 .wrapping_mode(WrappingMode::Wrap);
 
-            let num_line_wraps_until_active_line: u32 = {
+            let num_line_wraps_until_active_line = {
                 content.storage
                     .view(min_line..active_line)
                     .map(|(_,line)| {
                         cursor.num_expected_wraps(&line) + 1
                     })
-                    .sum()
+                    .sum::<u32>()
             };
             let num_line_wraps_from_active_line = {
                 content.storage
@@ -168,7 +168,7 @@ impl<S: LineStorage, H: HighLighter> Widget for Pager<S, H> {
                     cursor.set_text_attribute(style);
                     cursor.write(&region);
                 }
-                cursor.wrap_line();
+                cursor.fill_and_wrap_line();
             }
         }
     }

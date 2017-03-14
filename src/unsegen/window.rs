@@ -163,6 +163,12 @@ impl<'c, 'w> Cursor<'c, 'w> {
         self
     }
     */
+    pub fn fill_and_wrap_line(&mut self) {
+        while self.x < self.window.get_width() as i32 {
+            self.write(" ");
+        }
+        self.wrap_line();
+    }
 
     pub fn wrap_line(&mut self) {
         match self.wrapping_direction {

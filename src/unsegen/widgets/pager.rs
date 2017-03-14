@@ -161,13 +161,17 @@ impl<S: LineStorage, H: HighLighter> Widget for Pager<S, H> {
             cursor.set_position(0, required_start_pos);
 
             for (line_number, line) in content.storage.view(min_line..max_line) {
+                let base_style = if line_number == self.active_line {
+                    TextAttribute::new(None, None, Style::new().invert().bold()).or(&style)
+                } else {
+                    TextAttribute::default()
+                };
+
                 for (mut style, region) in content.highlighter.highlight(&line) {
-                    if line_number == self.active_line {
-                        style = TextAttribute::new(None, None, Style::new().invert().bold()).or(&style);
-                    }
-                    cursor.set_text_attribute(style);
+                    cursor.set_text_attribute(base_style.or(&style));
                     cursor.write(&region);
                 }
+                cursor.set_text_attribute(base_style);
                 cursor.fill_and_wrap_line();
             }
         }

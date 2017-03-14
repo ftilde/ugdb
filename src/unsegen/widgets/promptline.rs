@@ -48,6 +48,15 @@ impl PromptLine {
             layout: HorizontalLayout::new(SeparatingStyle::None),
         }
     }
+
+    pub fn previous_line(&self, n: usize) -> Option<&str> {
+        self.history.get(self.history.len().checked_sub(n).unwrap_or(0)).map(String::as_str)
+    }
+
+    pub fn active_line(&self) -> &str {
+        self.line.get()
+    }
+
     pub fn finish_line(&mut self) -> &str {
         if self.history.is_empty() || self.line.get() != self.history.last().expect("history is not empty").as_str() {
             self.history.push(self.line.get().to_owned());

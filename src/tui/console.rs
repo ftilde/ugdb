@@ -40,7 +40,11 @@ impl Console {
 
     pub fn event(&mut self, input: unsegen::Input, gdb: &mut gdbmi::GDB) { //TODO more console events
         if input.event == Event::Key(Key::Char('\n')) {
-            let line = self.prompt_line.finish_line().to_owned();
+            let line = if self.prompt_line.active_line().is_empty() {
+                self.prompt_line.previous_line(1).unwrap_or("").to_owned()
+            } else {
+                self.prompt_line.finish_line().to_owned()
+            };
             match line.as_ref() {
                 "!stop" => {
                     gdb.interrupt_execution().expect("interrupted gdb");

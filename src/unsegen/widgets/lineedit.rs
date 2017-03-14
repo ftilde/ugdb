@@ -31,7 +31,7 @@ impl LineEdit {
         }
     }
 
-    pub fn get(&mut self) -> &str {
+    pub fn get(&self) -> &str {
         &self.text
     }
 

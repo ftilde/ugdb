@@ -167,7 +167,7 @@ impl<S: LineStorage, H: HighLighter> Widget for Pager<S, H> {
                     TextAttribute::default()
                 };
 
-                for (mut style, region) in content.highlighter.highlight(&line) {
+                for (style, region) in content.highlighter.highlight(&line) {
                     cursor.set_text_attribute(base_style.or(&style));
                     cursor.write(&region);
                 }

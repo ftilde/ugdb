@@ -7,8 +7,14 @@ use unsegen::input::{
 use std::sync::mpsc;
 
 #[derive(Eq, PartialEq, Clone)]
+pub enum ConsoleEvent {
+    Raw(Input),
+    ToggleLog,
+}
+
+#[derive(Eq, PartialEq, Clone)]
 pub enum InputEvent {
-    ConsoleEvent(Input),
+    ConsoleEvent(ConsoleEvent),
     PseudoTerminalEvent(Input),
     SourcePagerEvent(Input),
     Quit,
@@ -53,7 +59,8 @@ impl ViKeyboardInput {
                 Mode::Console => {
                     match event {
                         Event::Key(Key::Esc) => { (Mode::SourcePager, None) },
-                        e => { (mode, Some(InputEvent::ConsoleEvent(Input::new(e)))) },
+                        Event::Key(Key::F(1)) => { (mode, Some(InputEvent::ConsoleEvent(ConsoleEvent::ToggleLog))) },
+                        e => { (mode, Some(InputEvent::ConsoleEvent(ConsoleEvent::Raw(Input::new(e))))) },
                     }
                 },
                 Mode::PTY => {

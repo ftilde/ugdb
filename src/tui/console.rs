@@ -16,10 +16,19 @@ use unsegen::widgets::{
     LogViewer,
     PromptLine,
 };
+use input::{
+    ConsoleEvent,
+};
 
+enum ActiveLog {
+    Debug,
+    Gdb,
+}
 
 pub struct Console {
-    text_area: LogViewer,
+    debug_log: LogViewer,
+    gdb_log: LogViewer,
+    active_log: ActiveLog,
     prompt_line: PromptLine,
     layout: VerticalLayout,
 }
@@ -27,7 +36,9 @@ pub struct Console {
 impl Console {
     pub fn new() -> Self {
         Console {
-            text_area: LogViewer::new(),
+            debug_log: LogViewer::new(),
+            gdb_log: LogViewer::new(),
+            active_log: ActiveLog::Gdb,
             prompt_line: PromptLine::with_prompt("(gdb) ".into()),
             layout: VerticalLayout::new(unsegen::SeparatingStyle::Draw('=')),
         }
@@ -35,10 +46,44 @@ impl Console {
 
     pub fn add_message(&mut self, msg: String) {
         use std::fmt::Write;
-        write!(self.text_area.storage, " -=- {}\n", msg).expect("Write message");
+        write!(self.gdb_log.storage, "{}\n", msg).expect("Write message");
     }
 
-    pub fn event(&mut self, input: unsegen::Input, gdb: &mut gdbmi::GDB) { //TODO more console events
+    pub fn add_debug_message(&mut self, msg: String) {
+        use std::fmt::Write;
+        write!(self.debug_log.storage, " -=- {}\n", msg).expect("Write message");
+    }
+
+    pub fn toggle_active_log(&mut self) {
+        self.active_log = match self.active_log {
+            ActiveLog::Debug => ActiveLog::Gdb,
+            ActiveLog::Gdb => ActiveLog::Debug,
+        };
+    }
+
+    fn get_active_log_viewer_mut(&mut self) -> &mut LogViewer {
+        match self.active_log {
+            ActiveLog::Debug => &mut self.debug_log,
+            ActiveLog::Gdb => &mut self.gdb_log,
+        }
+    }
+
+    fn get_active_log_viewer(&self) -> &LogViewer {
+        match self.active_log {
+            ActiveLog::Debug => &self.debug_log,
+            ActiveLog::Gdb => &self.gdb_log,
+        }
+    }
+
+    pub fn event(&mut self, event: ::input::ConsoleEvent, gdb: &mut gdbmi::GDB) { //TODO more console events
+
+        match event {
+            ConsoleEvent::Raw(e) => self.handle_raw_input(e, gdb),
+            ConsoleEvent::ToggleLog => self.toggle_active_log(),
+        }
+    }
+
+    fn handle_raw_input(&mut self, input: unsegen::Input, gdb: &mut gdbmi::GDB) { //TODO more console events
         if input.event == Event::Key(Key::Char('\n')) {
             let line = if self.prompt_line.active_line().is_empty() {
                 self.prompt_line.previous_line(1).unwrap_or("").to_owned()
@@ -58,7 +103,7 @@ impl Console {
                     self.add_message(format!("(gdb) {}", line));
                     match gdb.execute(&gdbmi::input::MiCommand::cli_exec(line)) {
                         Ok(result) => {
-                            self.add_message(format!("Result: {:?}", result));
+                            self.add_debug_message(format!("Result: {:?}", result));
                         },
                         Err(gdbmi::ExecuteError::Quit) => { self.add_message(format!("quit")); },
                         Err(gdbmi::ExecuteError::Busy) => { self.add_message(format!("GDB is running!")); },
@@ -86,7 +131,7 @@ impl Console {
                         .clear_on(Key::Ctrl('c'))
                     )
                 .chain(
-                    ScrollBehavior::new(&mut self.text_area)
+                    ScrollBehavior::new(self.get_active_log_viewer_mut())
                         .forwards_on(Key::PageDown)
                         .backwards_on(Key::PageUp)
                     );
@@ -96,17 +141,17 @@ impl Console {
 
 impl Widget for Console {
     fn space_demand(&self) -> (Demand, Demand) {
-        let widgets: Vec<&Widget> = vec![&self.text_area, &self.prompt_line];
+        let widgets: Vec<&Widget> = vec![self.get_active_log_viewer(), &self.prompt_line];
         self.layout.space_demand(widgets.as_slice())
     }
     fn draw(&mut self, window: Window) {
-        let mut widgets: Vec<&mut Widget> = vec![&mut self.text_area, &mut self.prompt_line];
+        // We cannot use self.get_active_log_viewer_mut(), because it apparently borrows
+        // self mutably in its entirety. TODO: Maybe there is another way?
+        let active_log_viewer = match self.active_log {
+            ActiveLog::Debug => &mut self.debug_log,
+            ActiveLog::Gdb => &mut self.gdb_log,
+        };
+        let mut widgets: Vec<&mut Widget> = vec![active_log_viewer, &mut self.prompt_line];
         self.layout.draw(window, &mut widgets)
-    }
-}
-
-impl ::std::fmt::Write for Console {
-    fn write_str(&mut self, s: &str) -> ::std::fmt::Result {
-        self.text_area.storage.write_str(s)
     }
 }

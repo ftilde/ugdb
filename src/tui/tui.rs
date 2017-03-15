@@ -1,5 +1,3 @@
-use gdbmi;
-
 use unsegen::{
     FileLineStorage,
     Key,
@@ -28,6 +26,7 @@ use std::path::{
     Path,
     PathBuf,
 };
+use gdbmi;
 use gdbmi::output::{
     OutOfBandRecord,
     AsyncKind,
@@ -94,7 +93,7 @@ impl<'a> Tui<'a> {
     fn handle_async_record(&mut self, kind: AsyncKind, class: AsyncClass, mut results: NamedValues) {
         match (kind, class) {
             (AsyncKind::Exec, AsyncClass::Stopped) => {
-                self.console.add_message(format!("stopped: {:?}", results));
+                self.console.add_debug_message(format!("stopped: {:?}", results));
                 if let Some(frame_object) = results.remove("frame") {
                     let mut frame = frame_object.unwrap_tuple_or_named_value_list();
                     if let Some(path_object) = frame.remove("fullname") { // File information may not be present
@@ -104,15 +103,14 @@ impl<'a> Tui<'a> {
                     }
                 }
             },
-            (kind, class) => self.console.add_message(format!("unhandled async_record: [{:?}, {:?}] {:?}", kind, class, results)),
+            (kind, class) => self.console.add_debug_message(format!("unhandled async_record: [{:?}, {:?}] {:?}", kind, class, results)),
         }
     }
 
     pub fn add_out_of_band_record(&mut self, record: OutOfBandRecord) {
         match record {
             OutOfBandRecord::StreamRecord{ kind: _, data} => {
-                use std::fmt::Write;
-                write!(self.console, "{}", data).expect("Write message");
+                self.console.add_message(data);
             },
             OutOfBandRecord::AsyncRecord{token: _, kind, class, results} => {
                 self.handle_async_record(kind, class, results);
@@ -126,7 +124,7 @@ impl<'a> Tui<'a> {
     }
 
     pub fn add_debug_message(&mut self, msg: &str) {
-        self.console.add_message(format!("Debug: {}", msg));
+        self.console.add_debug_message(format!("Debug: {}", msg));
     }
 
     pub fn draw(&mut self, window: Window) {
@@ -146,7 +144,7 @@ impl<'a> Tui<'a> {
         self.right_layout.draw(window_r, &mut right_widgets);
     }
 
-    pub fn event(&mut self, event: ::input::InputEvent, gdb: &mut gdbmi::GDB) { //TODO more console events
+    pub fn event(&mut self, event: InputEvent, gdb: &mut gdbmi::GDB) { //TODO more console events
         match event {
             InputEvent::ConsoleEvent(event) => {
                 self.console.event(event, gdb);

@@ -2,15 +2,16 @@ use unsegen;
 use gdbmi;
 
 use unsegen::{
-    VerticalLayout,
-    Widget,
     Demand,
-    Window,
+    EditBehavior,
     Event,
     Input,
     Key,
-    EditBehavior,
     ScrollBehavior,
+    SeparatingStyle,
+    VerticalLayout,
+    Widget,
+    Window,
 };
 use unsegen::widgets::{
     LogViewer,
@@ -40,7 +41,7 @@ impl Console {
             gdb_log: LogViewer::new(),
             active_log: ActiveLog::Gdb,
             prompt_line: PromptLine::with_prompt("(gdb) ".into()),
-            layout: VerticalLayout::new(unsegen::SeparatingStyle::Draw('=')),
+            layout: VerticalLayout::new(SeparatingStyle::Draw('=')),
         }
     }
 

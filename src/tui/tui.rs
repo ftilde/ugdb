@@ -1,16 +1,9 @@
 use unsegen::{
-    FileLineStorage,
-    Key,
-    ScrollBehavior,
     SeparatingStyle,
     VerticalLayout,
     Widget,
     Window,
     WriteBehavior,
-};
-use unsegen::widgets::{
-    Pager,
-    SyntectHighLighter,
 };
 use input::{
     InputEvent,
@@ -18,14 +11,7 @@ use input::{
 use syntect::highlighting::{
     Theme,
 };
-use syntect::parsing::{
-    SyntaxSet,
-};
-use std::io;
-use std::path::{
-    Path,
-    PathBuf,
-};
+
 use gdbmi;
 use gdbmi::output::{
     OutOfBandRecord,
@@ -35,23 +21,16 @@ use gdbmi::output::{
 };
 
 use super::console::Console;
+use super::srcview::SrcView;
 use super::pseudoterminal::PseudoTerminal;
 
 pub struct Tui<'a> {
     console: Console,
     process_pty: PseudoTerminal,
-    highlighting_theme: &'a Theme,
-    file_viewer: Pager<FileLineStorage, SyntectHighLighter<'a>>,
-    syntax_set: SyntaxSet,
+    src_view: SrcView<'a>,
 
     left_layout: VerticalLayout,
     right_layout: VerticalLayout,
-}
-
-#[derive(Debug)]
-pub enum PagerShowError {
-    CouldNotOpenFile(PathBuf, io::Error),
-    LineDoesNotExist(usize),
 }
 
 impl<'a> Tui<'a> {
@@ -60,34 +39,10 @@ impl<'a> Tui<'a> {
         Tui {
             console: Console::new(),
             process_pty: PseudoTerminal::new(process_pty),
-            highlighting_theme: highlighting_theme,
-            file_viewer: Pager::new(),
-            syntax_set: SyntaxSet::load_defaults_nonewlines(),
+            src_view: SrcView::new(highlighting_theme),
             left_layout: VerticalLayout::new(SeparatingStyle::Draw('=')),
             right_layout: VerticalLayout::new(SeparatingStyle::Draw('=')),
         }
-    }
-
-    pub fn show_in_file_viewer<P: AsRef<Path>>(&mut self, path: P, line: usize) -> Result<(), PagerShowError> {
-        let need_to_reload = if let Some(ref content) = self.file_viewer.content {
-            content.storage.get_file_path() != path.as_ref()
-        } else {
-            true
-        };
-        if need_to_reload {
-            let path_ref = path.as_ref();
-            try!{self.load_in_file_viewer(path_ref).map_err(|e| PagerShowError::CouldNotOpenFile(path_ref.to_path_buf(), e))};
-        }
-        self.file_viewer.go_to_line(line).map_err(|_| PagerShowError::LineDoesNotExist(line))
-    }
-
-    pub fn load_in_file_viewer<P: AsRef<Path>>(&mut self, path: P) -> io::Result<()> {
-        let file_storage = try!{FileLineStorage::new(path.as_ref())};
-        let syntax = self.syntax_set.find_syntax_for_file(path.as_ref())
-            .expect("file IS openable, see file storage")
-            .unwrap_or(self.syntax_set.find_syntax_plain_text());
-        self.file_viewer.load(file_storage, SyntectHighLighter::new(syntax, self.highlighting_theme));
-        Ok(())
     }
 
     fn handle_async_record(&mut self, kind: AsyncKind, class: AsyncClass, mut results: NamedValues) {
@@ -99,7 +54,7 @@ impl<'a> Tui<'a> {
                     if let Some(path_object) = frame.remove("fullname") { // File information may not be present
                         let path = path_object.unwrap_const();
                         let line = frame.remove("line").expect("line present").unwrap_const().parse::<usize>().expect("parse usize") - 1; //TODO we probably want to treat the conversion line_number => buffer index somewhere else...
-                        let _ = self.show_in_file_viewer(path, line); // GDB may give out invalid paths, so we just ignore them (at least for now)
+                        let _ = self.src_view.show_in_file_viewer(path, line); // GDB may give out invalid paths, so we just ignore them (at least for now)
                     }
                 }
             },
@@ -137,10 +92,10 @@ impl<'a> Tui<'a> {
         separator.set_default_format(TextAttribute::new(Color::green(), Color::blue(), Style::new().bold().italic().underline()));
         separator.fill('|');
 
-        let mut left_widgets: Vec<&mut Widget> = vec![&mut self.console];
+        let mut left_widgets: Vec<&mut Widget> = vec![&mut self.src_view, &mut self.console];
         self.left_layout.draw(window_l, &mut left_widgets);
 
-        let mut right_widgets: Vec<&mut Widget> = vec![&mut self.file_viewer, &mut self.process_pty];
+        let mut right_widgets: Vec<&mut Widget> = vec![&mut self.process_pty];
         self.right_layout.draw(window_r, &mut right_widgets);
     }
 
@@ -153,10 +108,7 @@ impl<'a> Tui<'a> {
                 event.chain(WriteBehavior::new(&mut self.process_pty));
             },
             InputEvent::SourcePagerEvent(event) => {
-                event.chain(ScrollBehavior::new(&mut self.file_viewer)
-                            .forwards_on(Key::PageDown)
-                            .backwards_on(Key::PageUp)
-                            );
+                self.src_view.event(event, gdb)
             },
             InputEvent::Quit => {
                 unreachable!("quit should have been caught in main" )

@@ -8,6 +8,7 @@ use ndarray::{
     Ix
 };
 use std::cmp::max;
+use std::borrow::Cow;
 use ::unicode_segmentation::UnicodeSegmentation;
 
 type CharMatrixView<'w> = ArrayViewMut<'w, FormattedChar, (Ix,Ix)>;
@@ -111,6 +112,7 @@ pub struct Cursor<'c, 'w: 'c> {
     text_attribute: Option<TextAttribute>,
     x: i32,
     y: i32,
+    tab_column_width: usize,
 }
 
 impl<'c, 'w> Cursor<'c, 'w> {
@@ -122,6 +124,7 @@ impl<'c, 'w> Cursor<'c, 'w> {
             text_attribute: None,
             x: 0,
             y: 0,
+            tab_column_width: 4,
         }
     }
 
@@ -203,6 +206,13 @@ impl<'c, 'w> Cursor<'c, 'w> {
         }
     }
 
+    fn current_cluster_width(&self, grapheme_cluster: &str) -> usize {
+        match grapheme_cluster {
+            "\t" => self.tab_column_width - ((self.x as usize) % self.tab_column_width),
+            g => ::unicode_width::UnicodeWidthStr::width(g),
+        }
+    }
+
     pub fn write(&mut self, text: &str) {
         let mut line_it = text.lines().peekable();
         while let Some(line) = line_it.next() {
@@ -211,7 +221,14 @@ impl<'c, 'w> Cursor<'c, 'w> {
             if self.wrapping_direction == WrappingDirection::Up {
                 self.y -= num_auto_wraps; // reserve space for auto wraps
             }
-            for grapheme_cluster in ::unicode_segmentation::UnicodeSegmentation::graphemes(line, true) {
+            for grapheme_cluster_ref in ::unicode_segmentation::UnicodeSegmentation::graphemes(line, true) {
+                let grapheme_cluster = if grapheme_cluster_ref == "\t" {
+                    use std::iter::FromIterator;
+                    let width = self.tab_column_width - ((self.x as usize) % self.tab_column_width);
+                    Cow::Owned(String::from_iter(::std::iter::repeat(" ").take(width)))
+                } else {
+                    Cow::Borrowed(grapheme_cluster_ref)
+                };
                 if self.wrapping_mode == WrappingMode::Wrap && (self.x as u32) >= self.window.get_width() {
                     self.y += 1;
                     self.x = 0;
@@ -220,17 +237,17 @@ impl<'c, 'w> Cursor<'c, 'w> {
                     && 0 <= self.y && (self.y as u32) < self.window.get_height() {
 
                     let text_attribute = self.active_text_attribute();
-                    self.write_grapheme_cluster_unchecked(FormattedChar::new(grapheme_cluster, text_attribute));
+                    self.write_grapheme_cluster_unchecked(FormattedChar::new(grapheme_cluster.as_ref(), text_attribute));
                 }
+                let cluster_width = self.current_cluster_width(grapheme_cluster.as_ref());
                 self.x += 1;
-                let cluster_width = ::unicode_width::UnicodeWidthStr::width(grapheme_cluster);
                 if cluster_width > 1 {
                     let text_attribute = self.active_text_attribute();
                     for _ in 1..cluster_width {
                         if self.x >= self.window.get_width() as i32 {
                             break;
                         }
-                        self.write_grapheme_cluster_unchecked(FormattedChar::new(grapheme_cluster, text_attribute.clone()));
+                        self.write_grapheme_cluster_unchecked(FormattedChar::new("", text_attribute.clone()));
                         self.x += 1;
                     }
                 }

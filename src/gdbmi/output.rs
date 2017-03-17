@@ -179,6 +179,7 @@ named!(
     escaped_character<u8>,
     alt!(
         value!(b'\n', tag!("\\n")) |
+        value!(b'\t', tag!("\\t")) |
         value!(b'\"', tag!("\\\"")) |
         not_bla
         )

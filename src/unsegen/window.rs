@@ -241,13 +241,12 @@ impl<'c, 'w> Cursor<'c, 'w> {
                 }
                 let cluster_width = self.current_cluster_width(grapheme_cluster.as_ref());
                 self.x += 1;
-                if cluster_width > 1 {
+                if cluster_width > 1 && 0 <= self.y && (self.y as u32) < self.window.get_height() {
                     let text_attribute = self.active_text_attribute();
                     for _ in 1..cluster_width {
-                        if self.x >= self.window.get_width() as i32 {
-                            break;
+                        if 0 <= self.x && (self.x as u32) < self.window.get_width() {
+                            self.write_grapheme_cluster_unchecked(FormattedChar::new("", text_attribute.clone()));
                         }
-                        self.write_grapheme_cluster_unchecked(FormattedChar::new("", text_attribute.clone()));
                         self.x += 1;
                     }
                 }

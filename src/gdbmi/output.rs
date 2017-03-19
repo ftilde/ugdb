@@ -38,9 +38,9 @@ pub enum StreamKind {
 
 
 #[derive(Debug)]
-struct NamedValue {
-    name: String,
-    value: Value,
+pub struct NamedValue {
+    pub name: String,
+    pub value: Value,
 }
 
 pub type NamedValues = BTreeMap<String, Value>;
@@ -65,7 +65,13 @@ impl Value {
         match self {
             Value::Tuple(map) => map,
             Value::NamedValueList(map) => map,
-            _ => panic!("Value was tuple or named value list"),
+            _ => panic!("Value was not tuple or named value list"),
+        }
+    }
+    pub fn unwrap_valuelist(self) -> Vec<Value> {
+        match self {
+            Value::ValueList(list) => list,
+            _ => panic!("Value was not value list"),
         }
     }
 }
@@ -75,8 +81,8 @@ pub type Token = u64;
 #[derive(Debug)]
 pub struct ResultRecord {
     token: Option<Token>,
-    class: ResultClass,
-    results: NamedValues,
+    pub class: ResultClass,
+    pub results: NamedValues,
 }
 
 #[derive(Debug)]

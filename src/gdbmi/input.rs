@@ -1,4 +1,7 @@
 use std::io::{Write, Error};
+use std::path::{
+    Path,
+};
 
 #[derive(Debug)]
 pub struct MiCommand {
@@ -33,6 +36,23 @@ impl MiCommand {
     pub fn cli_exec(command: String) -> MiCommand {
         //TODO need quotes everywhere?
         Self::interpreter_exec("console".to_owned(), format!("\"{}\"", command))
+    }
+
+    pub fn data_disassemble_file<P: AsRef<Path>>(file: P, linenum: usize, lines: Option<usize>) -> MiCommand {
+        MiCommand {
+            operation: "data-disassemble".to_owned(),
+            options: vec!["-f".to_owned(), file.as_ref().to_string_lossy().to_string(), "-l".to_owned(), linenum.to_string(), "-n".to_owned(), lines.map(|l| l as isize).unwrap_or(-1).to_string()],
+            parameters: vec!["0".to_owned()], //TODO: as parameter?
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn data_disassemble_address(start_addr: usize, end_addr: usize) -> MiCommand {
+        MiCommand {
+            operation: "data-disassemble".to_owned(),
+            options: vec!["-s".to_owned(), start_addr.to_string(), "-e".to_owned(), end_addr.to_string()],
+            parameters: vec!["0".to_owned()], //TODO: as parameter?
+        }
     }
 
     // Be aware: This does not seem to always interrupt execution.

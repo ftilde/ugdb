@@ -45,30 +45,26 @@ impl<'a> Tui<'a> {
         }
     }
 
-    fn handle_async_record(&mut self, kind: AsyncKind, class: AsyncClass, mut results: NamedValues) {
+    fn handle_async_record(&mut self, kind: AsyncKind, class: AsyncClass, mut results: NamedValues, gdb: &mut gdbmi::GDB) {
         match (kind, class) {
             (AsyncKind::Exec, AsyncClass::Stopped) => {
                 self.console.add_debug_message(format!("stopped: {:?}", results));
                 if let Some(frame_object) = results.remove("frame") {
-                    let mut frame = frame_object.unwrap_tuple_or_named_value_list();
-                    if let Some(path_object) = frame.remove("fullname") { // File information may not be present
-                        let path = path_object.unwrap_const();
-                        let line = frame.remove("line").expect("line present").unwrap_const().parse::<usize>().expect("parse usize") - 1; //TODO we probably want to treat the conversion line_number => buffer index somewhere else...
-                        let _ = self.src_view.show_in_file_viewer(path, line); // GDB may give out invalid paths, so we just ignore them (at least for now)
-                    }
+                    let frame = frame_object.unwrap_tuple_or_named_value_list();
+                    self.src_view.show_frame(frame, gdb)
                 }
             },
             (kind, class) => self.console.add_debug_message(format!("unhandled async_record: [{:?}, {:?}] {:?}", kind, class, results)),
         }
     }
 
-    pub fn add_out_of_band_record(&mut self, record: OutOfBandRecord) {
+    pub fn add_out_of_band_record(&mut self, record: OutOfBandRecord, gdb: &mut gdbmi::GDB) {
         match record {
             OutOfBandRecord::StreamRecord{ kind: _, data} => {
                 self.console.add_message(data);
             },
             OutOfBandRecord::AsyncRecord{token: _, kind, class, results} => {
-                self.handle_async_record(kind, class, results);
+                self.handle_async_record(kind, class, results, gdb);
             },
 
         }

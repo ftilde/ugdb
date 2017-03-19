@@ -93,7 +93,7 @@ fn main() {
             select! {
                 oob_evt = out_of_band_pipe.recv() => {
                     if let Ok(record) = oob_evt {
-                        tui.add_out_of_band_record(record);
+                        tui.add_out_of_band_record(record, &mut gdb);
                     } else {
                         break; // TODO why silent fail/break?
                     }

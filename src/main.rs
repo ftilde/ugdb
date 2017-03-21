@@ -5,6 +5,7 @@ extern crate lazy_static;
 
 // For unsegen
 extern crate termion;
+#[macro_use]
 extern crate ndarray;
 extern crate smallvec;
 extern crate unicode_segmentation;

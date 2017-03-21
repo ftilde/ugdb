@@ -9,6 +9,7 @@ use ndarray::{
 };
 use std::cmp::max;
 use std::borrow::Cow;
+use std::ops::Range;
 use ::unicode_segmentation::UnicodeSegmentation;
 
 type CharMatrixView<'w> = ArrayViewMut<'w, FormattedChar, (Ix,Ix)>;
@@ -35,6 +36,26 @@ impl<'w> Window<'w> {
 
     pub fn get_height(&self) -> u32 {
         self.values.dim().0 as u32
+    }
+
+    pub fn clone_mut<'a>(&'a mut self) -> Window<'a> {
+        let mat_view_clone = self.values.view_mut();
+        Window {
+            pos_x: self.pos_x,
+            pos_y: self.pos_y,
+            values: mat_view_clone,
+            default_format: self.default_format,
+        }
+    }
+
+    pub fn create_subwindow<'a>(&'a mut self, x_range: Range<u32>, y_range: Range<u32>) -> Window<'a> {
+        let sub_mat = self.values.slice_mut(s![x_range.start as isize..x_range.end as isize, y_range.start as isize..y_range.end as isize]);
+        Window {
+            pos_x: self.pos_x + x_range.start,
+            pos_y: self.pos_y + y_range.start,
+            values: sub_mat,
+            default_format: self.default_format,
+        }
     }
 
     pub fn split_v(self, split_pos: u32) -> (Self, Self) {

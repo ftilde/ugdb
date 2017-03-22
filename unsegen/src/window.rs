@@ -48,7 +48,13 @@ impl<'w> Window<'w> {
         }
     }
 
+    //TODO: nicer argument handling with RangeArgument once it's stabilized: https://github.com/rust-lang/rust/issues/30877
     pub fn create_subwindow<'a>(&'a mut self, x_range: Range<u32>, y_range: Range<u32>) -> Window<'a> {
+        assert!(x_range.start < x_range.end, "Invalid x_range: start >= end");
+        assert!(y_range.start < y_range.end, "Invalid y_range: start >= end");
+        assert!(x_range.end < self.get_width(), "Invalid x_range: end >= width");
+        assert!(y_range.end < self.get_height(), "Invalid y_range: end >= width");
+
         let sub_mat = self.values.slice_mut(s![x_range.start as isize..x_range.end as isize, y_range.start as isize..y_range.end as isize]);
         Window {
             pos_x: self.pos_x + x_range.start,

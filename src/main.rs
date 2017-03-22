@@ -1,16 +1,11 @@
 #![feature(mpsc_select)]
-// For main
-#[macro_use]
-extern crate lazy_static;
 
-// For unsegen
-extern crate termion;
-#[macro_use]
-extern crate ndarray;
-extern crate smallvec;
-extern crate unicode_segmentation;
-extern crate unicode_width;
+extern crate unsegen;
+
+// These are used because (due to lifetime issues) we have to manage SyntaxSet, TermRead etc. ourselves
+// TODO: maybe reexport types in unsegen?
 extern crate syntect;
+extern crate termion;
 
 // For pty
 extern crate libc;
@@ -22,7 +17,10 @@ extern crate nom;
 //For gdbmi AND pty
 extern crate nix;
 
-mod unsegen;
+// For signalchannel
+#[macro_use]
+extern crate lazy_static;
+
 mod gdbmi;
 mod pty;
 

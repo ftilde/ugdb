@@ -1,3 +1,11 @@
+#[macro_use]
+extern crate ndarray;
+extern crate smallvec;
+extern crate syntect;
+extern crate termion;
+extern crate unicode_segmentation;
+extern crate unicode_width;
+
 pub mod input;
 pub mod layouts;
 pub mod linestorage;

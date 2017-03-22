@@ -4,14 +4,11 @@ version = "0.1.0"
 dependencies = [
  "lazy_static 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.20 (registry+https://github.com/rust-lang/crates.io-index)",
- "ndarray 0.6.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "nix 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "nom 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "smallvec 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "syntect 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "termion 1.1.4 (git+https://github.com/ftilde/termion)",
- "unicode-segmentation 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "unicode-width 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "unsegen 0.1.0",
 ]
 
 [[package]]
@@ -336,6 +333,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "unicode-width"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "unsegen"
+version = "0.1.0"
+dependencies = [
+ "ndarray 0.6.10 (registry+https://github.com/rust-lang/crates.io-index)",
+ "smallvec 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "syntect 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "termion 1.1.4 (git+https://github.com/ftilde/termion)",
+ "unicode-segmentation 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "unicode-width 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
+]
 
 [[package]]
 name = "void"

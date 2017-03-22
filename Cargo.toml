@@ -14,18 +14,12 @@ lazy_static = "0.2.2"
 nix = "^0.7"
 #gdbmi
 nom = "^2.1"
-#unsegen
-#termion = "^1.1"
-ndarray = "0.6"
-smallvec = "0.3"
-unicode-segmentation = "1.0"
-unicode-width = "0.1"
-syntect = "1.0"
 #pty
 libc = "^0.2"
 
+#unsegen
+syntect = "1.0"
 [dependencies.termion]
 git = "https://github.com/ftilde/termion"
-
-#[dependencies.termion]
-#path = "../termion/"
+[dependencies.unsegen]
+path = "unsegen/"

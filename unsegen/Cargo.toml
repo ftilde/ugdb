@@ -1,0 +1,18 @@
+[package]
+name = "unsegen"
+version = "0.1.0"
+authors = ["ftilde <ftilde@protonmail.com>"]
+
+[dependencies]
+ndarray = "0.6"
+smallvec = "0.3"
+syntect = "1.0"
+#termion = "^1.1"
+unicode-segmentation = "1.0"
+unicode-width = "0.1"
+
+[dependencies.termion]
+git = "https://github.com/ftilde/termion"
+
+#[dependencies.termion]
+#path = "../termion/"

@@ -1,3 +1,4 @@
 target
 Makefile
 *.swp
+output.log

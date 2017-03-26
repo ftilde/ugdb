@@ -134,7 +134,7 @@ dependencies = [
 
 [[package]]
 name = "ndarray"
-version = "0.6.10"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "itertools 0.5.9 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -338,7 +338,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "unsegen"
 version = "0.1.0"
 dependencies = [
- "ndarray 0.6.10 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ndarray 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "smallvec 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "syntect 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "termion 1.1.4 (git+https://github.com/ftilde/termion)",
@@ -402,7 +402,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum libc 0.2.20 (registry+https://github.com/rust-lang/crates.io-index)" = "684f330624d8c3784fb9558ca46c4ce488073a8d22450415c5eb4f4cfb0d11b5"
 "checksum matrixmultiply 0.1.13 (registry+https://github.com/rust-lang/crates.io-index)" = "7ce012d2c43046267a74283eaa7e9a51941479901e2b86702be10f27e2779158"
 "checksum miniz-sys 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)" = "28eaee17666671fa872e567547e8428e83308ebe5808cdf6a0e28397dbe2c726"
-"checksum ndarray 0.6.10 (registry+https://github.com/rust-lang/crates.io-index)" = "89546d09f09763c3f9b975cb45f4f9941b884f07b26116ab0fbcb169a1bba9ff"
+"checksum ndarray 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)" = "d196105b3c595819369bd469561a59191c1ae31e8ccd3dac338dc2247340d7a8"
 "checksum nix 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)" = "a0d95c5fa8b641c10ad0b8887454ebaafa3c92b5cd5350f8fc693adafd178e7b"
 "checksum nom 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "e5d4598834859fedb9a0a69d5b862a970e77982a92f544d547257a4d49469067"
 "checksum num 0.1.36 (registry+https://github.com/rust-lang/crates.io-index)" = "bde7c03b09e7c6a301ee81f6ddf66d7a28ec305699e3d3b056d2fc56470e3120"

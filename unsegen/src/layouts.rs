@@ -11,7 +11,7 @@ pub enum SeparatingStyle {
     //AlternateStyle(TextAttribute),
     Draw(char)
 }
-fn layout_linearly(mut available_space: u32, separator_width: u32, demands: &[Demand]) -> Box<[u32]>
+pub fn layout_linearly(mut available_space: u32, separator_width: u32, demands: &[Demand]) -> Box<[u32]>
 {
     let mut assigned_spaces = vec![0; demands.len()].into_boxed_slice();
     let mut max_max_demand = None;

@@ -13,7 +13,7 @@ use super::super::input::{
 };
 
 pub struct LogViewer {
-    pub storage: MemoryLineStorage,
+    pub storage: MemoryLineStorage<String>,
     scrollback_position: Option<usize>,
     scroll_step: usize,
 }

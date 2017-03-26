@@ -4,13 +4,16 @@ use unsegen::{
     HorizontalLayout,
     Key,
     MemoryLineStorage,
+    StringLineStorage,
     ScrollBehavior,
     SeparatingStyle,
     Widget,
     Window,
 };
 use unsegen::widgets::{
+    LineNumberDecorator,
     Pager,
+    PagerContent,
     SyntectHighLighter,
 };
 use input::{
@@ -44,8 +47,8 @@ pub enum PagerShowError {
 pub struct SrcView<'a> {
     highlighting_theme: &'a Theme,
     syntax_set: SyntaxSet,
-    file_viewer: Pager<FileLineStorage, SyntectHighLighter<'a>>,
-    asm_viewer: Pager<MemoryLineStorage, SyntectHighLighter<'a>>,
+    file_viewer: Pager<FileLineStorage, SyntectHighLighter<'a>, LineNumberDecorator<String>>,
+    asm_viewer: Pager<StringLineStorage, SyntectHighLighter<'a>>,
     layout: HorizontalLayout,
 }
 
@@ -79,7 +82,7 @@ impl<'a> SrcView<'a> {
         }
         let syntax = self.syntax_set.find_syntax_by_extension("s")
             .unwrap_or(self.syntax_set.find_syntax_plain_text());
-        self.asm_viewer.load(asm_storage, SyntectHighLighter::new(syntax, self.highlighting_theme));
+        self.asm_viewer.load(PagerContent::create(asm_storage).with_highlighter(SyntectHighLighter::new(syntax, self.highlighting_theme)));
     }
 
     pub fn show_in_file_viewer<P: AsRef<Path>>(&mut self, path: P, line: usize) -> Result<(), PagerShowError> {
@@ -100,7 +103,11 @@ impl<'a> SrcView<'a> {
         let syntax = self.syntax_set.find_syntax_for_file(path.as_ref())
             .expect("file IS openable, see file storage")
             .unwrap_or(self.syntax_set.find_syntax_plain_text());
-        self.file_viewer.load(file_storage, SyntectHighLighter::new(syntax, self.highlighting_theme));
+        self.file_viewer.load(
+            PagerContent::create(file_storage)
+            .with_highlighter(SyntectHighLighter::new(syntax, self.highlighting_theme))
+            .with_decorator(LineNumberDecorator::default())
+            );
         Ok(())
     }
     pub fn event(&mut self, event: Input, _ /*gdb*/: &mut gdbmi::GDB) {

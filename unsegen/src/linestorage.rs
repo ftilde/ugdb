@@ -9,27 +9,142 @@ use std::io::{
     SeekFrom,
     Seek,
 };
-use std::fs::{File};
+use std::fmt;
+use std::fs::File;
 use std::path::{
     Path,
     PathBuf,
 };
+use std::ops:: {
+    Add,
+    AddAssign,
+    Sub,
+    SubAssign,
+};
 
-pub trait LineStorage {
-    fn view_line<'a>(&'a mut self, pos: usize) -> Option<String>;
-
-    fn view<'a>(&'a mut self, range: Range<usize>) -> Box<DoubleEndedIterator<Item=(usize, String)> + 'a>
-        where Self: ::std::marker::Sized { // Not exactly sure, why this is needed... we only store a reference?!
-        Box::new(LineStorageIterator::new(self, range))
+// Starting from 0, i.e., treating LineStorage like an array of lines
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd)]
+pub struct LineIndex(usize);
+impl From<usize> for LineIndex {
+    fn from(index: usize) -> Self {
+        LineIndex(index)
+    }
+}
+impl Into<usize> for LineIndex {
+    fn into(self) -> usize {
+        let LineIndex(index) = self;
+        index
     }
 }
 
-struct LineStorageIterator<'a, L: 'a + LineStorage> {
+impl From<LineNumber> for LineIndex {
+    fn from(number: LineNumber) -> Self {
+        let raw_number: usize = number.into();
+        raw_number.into()
+    }
+}
+impl Add<usize> for LineIndex {
+    type Output = Self;
+    fn add(self, rhs: usize) -> Self {
+        let raw_index: usize = self.into();
+        (raw_index + rhs).into()
+    }
+}
+impl AddAssign<usize> for LineIndex {
+    fn add_assign(&mut self, rhs: usize) {
+        *self = *self + rhs;
+    }
+}
+impl Sub<usize> for LineIndex {
+    type Output = Self;
+    fn sub(self, rhs: usize) -> Self {
+        let raw_index: usize = self.into();
+        (raw_index - rhs).into()
+    }
+}
+impl SubAssign<usize> for LineIndex {
+    fn sub_assign(&mut self, rhs: usize) {
+        *self = *self - rhs;
+    }
+}
+impl fmt::Display for LineIndex {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+// Starting from 1, i.e., treating LineStorage like lines displayed in an editor
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd)]
+pub struct LineNumber(usize);
+impl From<usize> for LineNumber {
+    fn from(number: usize) -> Self {
+        LineNumber(number)
+    }
+}
+impl Into<usize> for LineNumber {
+    fn into(self) -> usize {
+        let LineNumber(number) = self;
+        debug_assert!(number > 0, "Invalid LineNumber: Number == 0");
+        number
+    }
+}
+impl From<LineIndex> for LineNumber {
+    fn from(index: LineIndex) -> Self {
+        let raw_index: usize = index.into();
+        raw_index.into()
+    }
+}
+impl Add<usize> for LineNumber {
+    type Output = Self;
+    fn add(self, rhs: usize) -> Self {
+        let raw_number: usize = self.into();
+        (raw_number + rhs).into()
+    }
+}
+impl AddAssign<usize> for LineNumber {
+    fn add_assign(&mut self, rhs: usize) {
+        *self = *self + rhs;
+    }
+}
+impl Sub<usize> for LineNumber {
+    type Output = Self;
+    fn sub(self, rhs: usize) -> Self {
+        let raw_number: usize = self.into();
+        debug_assert!(raw_number > rhs, "Overflowing sub on LineNumber: Result would be <= 0");
+        (raw_number - rhs).into()
+    }
+}
+impl SubAssign<usize> for LineNumber {
+    fn sub_assign(&mut self, rhs: usize) {
+        *self = *self - rhs;
+    }
+}
+impl fmt::Display for LineNumber {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+pub trait LineStorage {
+    type Line;
+    fn view_line<'a, I: Into<LineIndex>>(&'a mut self, pos: I) -> Option<Self::Line>;
+
+    fn view<'a, I: Into<LineIndex>>(&'a mut self, range: Range<I>) -> Box<DoubleEndedIterator<Item=(LineIndex, Self::Line)> + 'a>
+        where Self: ::std::marker::Sized { // Not exactly sure, why this is needed... we only store a reference?!
+        let urange = Range::<usize> {
+            start: range.start.into().into(),
+            end: range.end.into().into(),
+        };
+        Box::new(LineStorageIterator::<Self::Line, Self>::new(self, urange))
+    }
+}
+
+struct LineStorageIterator<'a, I: 'a, L: 'a + LineStorage<Line=I>> {
     storage: &'a mut L,
     range: Range<usize>,
 }
 
-impl<'a, L: 'a + LineStorage> LineStorageIterator<'a, L> {
+impl<'a, I: 'a, L: 'a + LineStorage<Line=I>> LineStorageIterator<'a, I, L> {
     fn new(storage: &'a mut L, range: Range<usize>) -> Self {
         LineStorageIterator {
             storage: storage,
@@ -37,14 +152,14 @@ impl<'a, L: 'a + LineStorage> LineStorageIterator<'a, L> {
         }
     }
 }
-impl<'a, L: 'a + LineStorage> Iterator for LineStorageIterator<'a, L> {
-    type Item = (usize, String);
+impl<'a, I: 'a, L: 'a + LineStorage<Line=I>> Iterator for LineStorageIterator<'a, I, L> {
+    type Item = (LineIndex, I);
     fn next(&mut self) -> Option<Self::Item> {
         if self.range.start < self.range.end {
             let item_index = self.range.start;
             self.range.start += 1;
             if let Some(line) = self.storage.view_line(item_index) {
-                Some((item_index, line)) //TODO: maybe we want to treat none differently here?
+                Some((item_index.into(), line)) //TODO: maybe we want to treat none differently here?
             } else {
                 None
             }
@@ -54,13 +169,13 @@ impl<'a, L: 'a + LineStorage> Iterator for LineStorageIterator<'a, L> {
     }
 }
 
-impl<'a, L: 'a + LineStorage> DoubleEndedIterator for LineStorageIterator<'a, L> {
+impl<'a, I: 'a, L: 'a + LineStorage<Line=I>> DoubleEndedIterator for LineStorageIterator<'a, I, L> {
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.range.start < self.range.end {
             let item_index = self.range.end - 1;
             self.range.end -= 1;
             if let Some(line) = self.storage.view_line(item_index) {
-                Some((item_index, line)) //TODO: maybe we want to treat none differently here?
+                Some((item_index.into(), line)) //TODO: maybe we want to treat none differently here?
             } else {
                 None
             }
@@ -70,22 +185,15 @@ impl<'a, L: 'a + LineStorage> DoubleEndedIterator for LineStorageIterator<'a, L>
     }
 }
 
-pub struct MemoryLineStorage {
-    lines: Vec<String>,
+pub struct MemoryLineStorage<L> {
+    lines: Vec<L>,
 }
 
-impl MemoryLineStorage {
+impl<L> MemoryLineStorage<L> {
     pub fn new() -> Self {
         MemoryLineStorage {
             lines: Vec::new(),
         }
-    }
-
-    pub fn active_line_mut(&mut self) -> &mut String {
-        if self.lines.is_empty() {
-            self.lines.push(String::new());
-        }
-        return self.lines.last_mut().expect("last line");
     }
 
     pub fn num_lines_stored(&self) -> usize {
@@ -93,8 +201,28 @@ impl MemoryLineStorage {
     }
 }
 
-impl ::std::fmt::Write for MemoryLineStorage {
-    fn write_str(&mut self, s: &str) -> ::std::fmt::Result {
+impl<L: Default> MemoryLineStorage<L> {
+    pub fn active_line_mut(&mut self) -> &mut L {
+        if self.lines.is_empty() {
+            self.lines.push(L::default());
+        }
+        return self.lines.last_mut().expect("last line");
+    }
+}
+
+
+impl<L: Clone> LineStorage for MemoryLineStorage<L> {
+    type Line = L;
+    fn view_line<'a, I: Into<LineIndex>>(&'a mut self, pos: I) -> Option<L> {
+        let upos: usize = pos.into().into();
+        self.lines.get(upos).map(|s: &L| s.clone())
+    }
+}
+
+pub type StringLineStorage = MemoryLineStorage<String>;
+
+impl fmt::Write for StringLineStorage {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
         let mut s = s.to_owned();
 
         while let Some(newline_offset) = s.find('\n') {
@@ -105,12 +233,6 @@ impl ::std::fmt::Write for MemoryLineStorage {
         }
         self.active_line_mut().push_str(&s);
         Ok(())
-    }
-}
-
-impl LineStorage for MemoryLineStorage {
-    fn view_line<'a>(&'a mut self, pos: usize) -> Option<String> {
-        self.lines.get(pos).map(|s| s.clone())
     }
 }
 
@@ -156,9 +278,8 @@ impl FileLineStorage {
 }
 
 impl LineStorage for FileLineStorage {
-    fn view_line<'a>(&'a mut self, pos: usize) -> Option<String> {
-        self.get_line(pos)
+    type Line = String;
+    fn view_line<'a, I: Into<LineIndex>>(&'a mut self, pos: I) -> Option<String> {
+        self.get_line(pos.into().into())
     }
 }
-
-

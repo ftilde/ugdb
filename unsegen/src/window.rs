@@ -5,20 +5,70 @@ use super::{
 use ndarray::{
     ArrayViewMut,
     Axis,
-    Ix
+    Ix,
+    Ix2,
 };
 use std::cmp::max;
 use std::borrow::Cow;
-use std::ops::Range;
+use std::ops::{
+    Range,
+    RangeFrom,
+    RangeFull,
+    RangeTo,
+};
 use ::unicode_segmentation::UnicodeSegmentation;
 
-type CharMatrixView<'w> = ArrayViewMut<'w, FormattedChar, (Ix,Ix)>;
+type CharMatrixView<'w> = ArrayViewMut<'w, FormattedChar, Ix2>;
 pub struct Window<'w> {
     pos_x: u32,
     pos_y: u32,
     values: CharMatrixView<'w>,
     default_format: TextAttribute,
 }
+
+//TODO: Move to std traits and types once they are stabilized: https://github.com/rust-lang/rust/issues/30877
+pub enum WindowBound<T> {
+    Unbound,
+    Inclusive(T),
+    Exclusive(T),
+}
+pub trait WindowRangeArgument<T> {
+    fn start(&self) -> WindowBound<T>;
+    fn end(&self) -> WindowBound<T>;
+}
+impl<T: Copy> WindowRangeArgument<T> for Range<T> {
+    fn start(&self) -> WindowBound<T> {
+        WindowBound::Inclusive(self.start)
+    }
+    fn end(&self) -> WindowBound<T> {
+        WindowBound::Exclusive(self.end)
+    }
+}
+impl<T: Copy> WindowRangeArgument<T> for RangeFrom<T> {
+    fn start(&self) -> WindowBound<T> {
+        WindowBound::Inclusive(self.start)
+    }
+    fn end(&self) -> WindowBound<T> {
+        WindowBound::Unbound
+    }
+}
+impl<T: Copy> WindowRangeArgument<T> for RangeTo<T> {
+    fn start(&self) -> WindowBound<T> {
+        WindowBound::Unbound
+    }
+    fn end(&self) -> WindowBound<T> {
+        WindowBound::Exclusive(self.end)
+    }
+}
+impl<T> WindowRangeArgument<T> for RangeFull {
+    fn start(&self) -> WindowBound<T> {
+        WindowBound::Unbound
+    }
+    fn end(&self) -> WindowBound<T> {
+        WindowBound::Unbound
+    }
+}
+
 
 impl<'w> Window<'w> {
     pub fn new(values: CharMatrixView<'w>, default_format: TextAttribute) -> Self {
@@ -48,17 +98,36 @@ impl<'w> Window<'w> {
         }
     }
 
-    //TODO: nicer argument handling with RangeArgument once it's stabilized: https://github.com/rust-lang/rust/issues/30877
-    pub fn create_subwindow<'a>(&'a mut self, x_range: Range<u32>, y_range: Range<u32>) -> Window<'a> {
-        assert!(x_range.start < x_range.end, "Invalid x_range: start >= end");
-        assert!(y_range.start < y_range.end, "Invalid y_range: start >= end");
-        assert!(x_range.end < self.get_width(), "Invalid x_range: end >= width");
-        assert!(y_range.end < self.get_height(), "Invalid y_range: end >= width");
+    pub fn create_subwindow<'a, WX: WindowRangeArgument<u32>, WY: WindowRangeArgument<u32>>(&'a mut self, x_range: WX, y_range: WY) -> Window<'a> {
+        let x_range_start = match x_range.start() {
+            WindowBound::Unbound => 0,
+            WindowBound::Inclusive(i) => i,
+            WindowBound::Exclusive(i) => i-1,
+        };
+        let x_range_end = match x_range.end() {
+            WindowBound::Unbound => self.get_width(),
+            WindowBound::Inclusive(i) => i-1,
+            WindowBound::Exclusive(i) => i,
+        };
+        let y_range_start = match y_range.start() {
+            WindowBound::Unbound => 0,
+            WindowBound::Inclusive(i) => i,
+            WindowBound::Exclusive(i) => i-1,
+        };
+        let y_range_end = match y_range.end() {
+            WindowBound::Unbound => self.get_height(),
+            WindowBound::Inclusive(i) => i-1,
+            WindowBound::Exclusive(i) => i,
+        };
+        assert!(x_range_start <= x_range_end, "Invalid x_range: start > end");
+        assert!(y_range_start <= y_range_end, "Invalid y_range: start > end");
+        assert!(x_range_end <= self.get_width(), "Invalid x_range: end > width");
+        assert!(y_range_end <= self.get_height(), "Invalid y_range: end > height");
 
-        let sub_mat = self.values.slice_mut(s![x_range.start as isize..x_range.end as isize, y_range.start as isize..y_range.end as isize]);
+        let sub_mat = self.values.slice_mut(s![y_range_start as isize..y_range_end as isize, x_range_start as isize..x_range_end as isize]);
         Window {
-            pos_x: self.pos_x + x_range.start,
-            pos_y: self.pos_y + y_range.start,
+            pos_x: self.pos_x + x_range_start,
+            pos_y: self.pos_y + y_range_start,
             values: sub_mat,
             default_format: self.default_format,
         }
@@ -66,7 +135,7 @@ impl<'w> Window<'w> {
 
     pub fn split_v(self, split_pos: u32) -> (Self, Self) {
         assert!(split_pos <= self.get_height(), "Invalid split_pos");
-        //let split_pos = min(split_pos, self.get_height());
+
         let (first_mat, second_mat) = self.values.split_at(Axis(0), split_pos as Ix);
         let w_u = Window {
             pos_x: self.pos_x,
@@ -85,7 +154,7 @@ impl<'w> Window<'w> {
 
     pub fn split_h(self, split_pos: u32) -> (Self, Self) {
         assert!(split_pos <= self.get_width(), "Invalid split_pos");
-        //let split_pos = min(split_pos, self.get_height());
+
         let (first_mat, second_mat) = self.values.split_at(Axis(1), split_pos as Ix);
         let w_l = Window {
             pos_x: self.pos_x,
@@ -165,6 +234,10 @@ impl<'c, 'w> Cursor<'c, 'w> {
         self
     }
 
+    pub fn get_position(&self) -> (i32, i32) {
+        (self.x, self.y)
+    }
+
     pub fn set_wrapping_direction(&mut self, wrapping_direction: WrappingDirection) {
         self.wrapping_direction = wrapping_direction;
     }
@@ -241,6 +314,10 @@ impl<'c, 'w> Cursor<'c, 'w> {
     }
 
     pub fn write(&mut self, text: &str) {
+        if self.window.get_width() == 0 || self.window.get_height() == 0 {
+            return;
+        }
+
         let mut line_it = text.lines().peekable();
         while let Some(line) = line_it.next() {
             let num_auto_wraps = self.num_expected_wraps(line) as i32;
@@ -292,4 +369,11 @@ impl<'c, 'w> Cursor<'c, 'w> {
         self.wrap_line();
     }
 
+}
+
+impl<'c, 'w> ::std::fmt::Write for Cursor<'c, 'w> {
+    fn write_str(&mut self, s: &str) -> ::std::fmt::Result {
+        self.write(s);
+        Ok(())
+    }
 }

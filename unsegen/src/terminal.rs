@@ -2,6 +2,7 @@ use ndarray::{
     Array,
     Axis,
     Ix,
+    Ix2,
 };
 use termion::raw::{IntoRawMode, RawTerminal};
 use termion::screen::{AlternateScreen};
@@ -44,7 +45,7 @@ impl Default for FormattedChar {
     }
 }
 
-pub type CharMatrix = Array<FormattedChar, (Ix,Ix)>;
+pub type CharMatrix = Array<FormattedChar, Ix2>;
 pub struct Terminal<'a> {
     values: CharMatrix,
     terminal: AlternateScreen<RawTerminal<::std::io::StdoutLock<'a>>>,
@@ -56,14 +57,14 @@ impl<'a> Terminal<'a> {
         let mut terminal = AlternateScreen::from(stdout.into_raw_mode().expect("raw terminal"));
         write!(terminal, "{}", termion::cursor::Hide).expect("write: hide cursor");
         Terminal {
-            values: CharMatrix::default((0,0)),
+            values: CharMatrix::default(Ix2(0,0)),
             terminal: terminal
         }
     }
 
     pub fn create_root_window(&mut self, default_format: TextAttribute) -> Window {
         let (x, y) = termion::terminal_size().expect("get terminal size");
-        let dim = (y as Ix, x as Ix);
+        let dim = Ix2(y as Ix, x as Ix);
         //if dim != self.values.dim() {
         self.values = CharMatrix::default(dim);
         //}

@@ -1,4 +1,5 @@
 use unsegen::{
+    Cursor,
     Demand,
     FileLineStorage,
     HorizontalLayout,
@@ -6,13 +7,13 @@ use unsegen::{
     LineNumber,
     LineIndex,
     MemoryLineStorage,
-    StringLineStorage,
     ScrollBehavior,
     SeparatingStyle,
     Widget,
     Window,
 };
 use unsegen::widgets::{
+    LineDecorator,
     LineNumberDecorator,
     Pager,
     PagerContent,
@@ -47,11 +48,51 @@ pub enum PagerShowError {
     LineDoesNotExist(LineIndex),
 }
 
+#[derive(Clone)]
+struct AssemblyLine {
+    content: String,
+    address: usize,
+}
+
+impl AssemblyLine {
+    fn new(content: String, address: usize) -> Self {
+        AssemblyLine {
+            content: content,
+            address: address,
+        }
+    }
+}
+
+impl PagerLine for AssemblyLine {
+    fn get_content(&self) -> &str {
+        &self.content
+    }
+}
+
+struct AssemblyDecorator;
+
+impl LineDecorator for AssemblyDecorator {
+    type Line = AssemblyLine;
+    fn horizontal_space_demand<'a, 'b: 'a>(&'a self, lines: Box<DoubleEndedIterator<Item=(LineIndex, Self::Line)> + 'b>) -> Demand {
+        let max_space = lines.last().map(|(_,l)| {
+            ::unicode_width::UnicodeWidthStr::width(format!(" 0x{:x} ", l.address).as_str())
+        }).unwrap_or(0);
+        Demand::from_to(0, max_space as u32)
+    }
+    fn decorate(&self, line: &Self::Line, _: LineIndex, mut window: Window) {
+        let width = window.get_width() as usize - 4;
+        let mut cursor = Cursor::new(&mut window).position(0,0);
+
+        use std::fmt::Write;
+        let _ = write!(cursor, " 0x{:0>width$x} ", line.address, width=width);
+    }
+}
+
 pub struct SrcView<'a> {
     highlighting_theme: &'a Theme,
     syntax_set: SyntaxSet,
     file_viewer: Pager<FileLineStorage, SyntectHighLighter<'a>, LineNumberDecorator<String>>,
-    asm_viewer: Pager<StringLineStorage, SyntectHighLighter<'a>>,
+    asm_viewer: Pager<MemoryLineStorage<AssemblyLine>, SyntectHighLighter<'a>, AssemblyDecorator>,
     layout: HorizontalLayout,
 }
 
@@ -77,16 +118,19 @@ impl<'a> SrcView<'a> {
     pub fn show_in_asm_viewer<P: AsRef<Path>, L: Into<LineNumber>>(&mut self, file: P, line: L, gdb: &mut gdbmi::GDB) {
         let line_u: usize = line.into().into();
         let disass_obj = gdb.execute(&MiCommand::data_disassemble_file(file, line_u, None)).expect("disassembly successful").results.remove("asm_insns").expect("asm_insns present");
-        let mut asm_storage = MemoryLineStorage::new();
+        let mut asm_storage = MemoryLineStorage::<AssemblyLine>::new();
         for tuple in disass_obj.unwrap_valuelist() {
-            use std::fmt::Write;
             let mut tuple = tuple.unwrap_tuple_or_named_value_list();
             let instruction = tuple.remove("inst").expect("inst present").unwrap_const();
-            writeln!(asm_storage, "{}", instruction).expect("write to storage");
+            let address = usize::from_str_radix(&tuple.remove("address").expect("address present").unwrap_const()[2..],16).expect("Parse address");
+            asm_storage.lines.push(AssemblyLine::new(instruction, address));
         }
         let syntax = self.syntax_set.find_syntax_by_extension("s")
             .unwrap_or(self.syntax_set.find_syntax_plain_text());
-        self.asm_viewer.load(PagerContent::create(asm_storage).with_highlighter(SyntectHighLighter::new(syntax, self.highlighting_theme)));
+        self.asm_viewer.load(
+            PagerContent::create(asm_storage)
+            .with_highlighter(SyntectHighLighter::new(syntax, self.highlighting_theme))
+            .with_decorator(AssemblyDecorator));
     }
 
     pub fn show_in_file_viewer<P: AsRef<Path>, L: Into<LineIndex>>(&mut self, path: P, line: L) -> Result<(), PagerShowError> {

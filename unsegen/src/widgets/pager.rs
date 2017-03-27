@@ -138,11 +138,11 @@ impl<L: PagerLine> LineDecorator for LineNumberDecorator<L> {
     }
     fn decorate(&self, _: &L, index: LineIndex, mut window: Window) {
         let width = window.get_width() as usize - 2;
-        let last_number = LineNumber::from(index);
+        let line_number = LineNumber::from(index);
         let mut cursor = Cursor::new(&mut window).position(0,0);
 
         use std::fmt::Write;
-        let _ = write!(cursor, " {:width$} ", last_number, width = width);
+        let _ = write!(cursor, " {:width$} ", line_number, width = width);
     }
 }
 

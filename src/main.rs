@@ -1,6 +1,7 @@
 #![feature(mpsc_select)]
 
 extern crate unsegen;
+extern crate unicode_width;
 
 // These are used because (due to lifetime issues) we have to manage SyntaxSet, TermRead etc. ourselves
 // TODO: maybe reexport types in unsegen?

@@ -10,6 +10,7 @@ name = "gdbmi"
 
 [dependencies]
 lazy_static = "0.2.2"
+unicode-width = "0.1"
 #pty and gdbmi
 nix = "^0.7"
 #gdbmi

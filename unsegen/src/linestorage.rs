@@ -186,7 +186,7 @@ impl<'a, I: 'a, L: 'a + LineStorage<Line=I>> DoubleEndedIterator for LineStorage
 }
 
 pub struct MemoryLineStorage<L> {
-    lines: Vec<L>,
+    pub lines: Vec<L>,
 }
 
 impl<L> MemoryLineStorage<L> {

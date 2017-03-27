@@ -20,8 +20,6 @@ use ::unicode_segmentation::UnicodeSegmentation;
 
 type CharMatrixView<'w> = ArrayViewMut<'w, FormattedChar, Ix2>;
 pub struct Window<'w> {
-    pos_x: u32,
-    pos_y: u32,
     values: CharMatrixView<'w>,
     default_format: TextAttribute,
 }
@@ -73,8 +71,6 @@ impl<T> WindowRangeArgument<T> for RangeFull {
 impl<'w> Window<'w> {
     pub fn new(values: CharMatrixView<'w>, default_format: TextAttribute) -> Self {
         Window {
-            pos_x: 0,
-            pos_y: 0,
             values: values,
             default_format: default_format,
         }
@@ -91,8 +87,6 @@ impl<'w> Window<'w> {
     pub fn clone_mut<'a>(&'a mut self) -> Window<'a> {
         let mat_view_clone = self.values.view_mut();
         Window {
-            pos_x: self.pos_x,
-            pos_y: self.pos_y,
             values: mat_view_clone,
             default_format: self.default_format,
         }
@@ -126,8 +120,6 @@ impl<'w> Window<'w> {
 
         let sub_mat = self.values.slice_mut(s![y_range_start as isize..y_range_end as isize, x_range_start as isize..x_range_end as isize]);
         Window {
-            pos_x: self.pos_x + x_range_start,
-            pos_y: self.pos_y + y_range_start,
             values: sub_mat,
             default_format: self.default_format,
         }
@@ -138,14 +130,10 @@ impl<'w> Window<'w> {
 
         let (first_mat, second_mat) = self.values.split_at(Axis(0), split_pos as Ix);
         let w_u = Window {
-            pos_x: self.pos_x,
-            pos_y: self.pos_y,
             values: first_mat,
             default_format: self.default_format,
         };
         let w_d = Window {
-            pos_x: self.pos_x,
-            pos_y: self.pos_y+split_pos,
             values: second_mat,
             default_format: self.default_format,
         };
@@ -157,14 +145,10 @@ impl<'w> Window<'w> {
 
         let (first_mat, second_mat) = self.values.split_at(Axis(1), split_pos as Ix);
         let w_l = Window {
-            pos_x: self.pos_x,
-            pos_y: self.pos_y,
             values: first_mat,
             default_format: self.default_format,
         };
         let w_r = Window {
-            pos_x: self.pos_x+split_pos,
-            pos_y: self.pos_y,
             values: second_mat,
             default_format: self.default_format,
         };

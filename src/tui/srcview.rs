@@ -3,6 +3,8 @@ use unsegen::{
     FileLineStorage,
     HorizontalLayout,
     Key,
+    LineNumber,
+    LineIndex,
     MemoryLineStorage,
     StringLineStorage,
     ScrollBehavior,
@@ -14,6 +16,7 @@ use unsegen::widgets::{
     LineNumberDecorator,
     Pager,
     PagerContent,
+    PagerLine,
     SyntectHighLighter,
 };
 use input::{
@@ -41,7 +44,7 @@ use gdbmi::input::{
 #[derive(Debug)]
 pub enum PagerShowError {
     CouldNotOpenFile(PathBuf, io::Error),
-    LineDoesNotExist(usize),
+    LineDoesNotExist(LineIndex),
 }
 
 pub struct SrcView<'a> {
@@ -65,14 +68,15 @@ impl<'a> SrcView<'a> {
     pub fn show_frame(&mut self, mut frame: NamedValues, gdb: &mut gdbmi::GDB) {
         if let Some(path_object) = frame.remove("fullname") { // File information may not be present
             let path = path_object.unwrap_const();
-            let line = frame.remove("line").expect("line present").unwrap_const().parse::<usize>().expect("parse usize") - 1; //TODO we probably want to treat the conversion line_number => buffer index somewhere else...
+            let line: LineNumber = frame.remove("line").expect("line present").unwrap_const().parse::<usize>().expect("Parse usize").into();
             let _ = self.show_in_file_viewer(&path, line); // GDB may give out invalid paths, so we just ignore them (at least for now)
             self.show_in_asm_viewer(&path, line, gdb); // GDB may give out invalid paths, so we just ignore them (at least for now)
         }
     }
 
-    pub fn show_in_asm_viewer<P: AsRef<Path>>(&mut self, file: P, line: usize, gdb: &mut gdbmi::GDB) {
-        let disass_obj = gdb.execute(&MiCommand::data_disassemble_file(file, line, None)).expect("disassembly successful").results.remove("asm_insns").expect("asm_insns present");
+    pub fn show_in_asm_viewer<P: AsRef<Path>, L: Into<LineNumber>>(&mut self, file: P, line: L, gdb: &mut gdbmi::GDB) {
+        let line_u: usize = line.into().into();
+        let disass_obj = gdb.execute(&MiCommand::data_disassemble_file(file, line_u, None)).expect("disassembly successful").results.remove("asm_insns").expect("asm_insns present");
         let mut asm_storage = MemoryLineStorage::new();
         for tuple in disass_obj.unwrap_valuelist() {
             use std::fmt::Write;
@@ -85,7 +89,7 @@ impl<'a> SrcView<'a> {
         self.asm_viewer.load(PagerContent::create(asm_storage).with_highlighter(SyntectHighLighter::new(syntax, self.highlighting_theme)));
     }
 
-    pub fn show_in_file_viewer<P: AsRef<Path>>(&mut self, path: P, line: usize) -> Result<(), PagerShowError> {
+    pub fn show_in_file_viewer<P: AsRef<Path>, L: Into<LineIndex>>(&mut self, path: P, line: L) -> Result<(), PagerShowError> {
         let need_to_reload = if let Some(ref content) = self.file_viewer.content {
             content.storage.get_file_path() != path.as_ref()
         } else {
@@ -95,6 +99,7 @@ impl<'a> SrcView<'a> {
             let path_ref = path.as_ref();
             try!{self.load_in_file_viewer(path_ref).map_err(|e| PagerShowError::CouldNotOpenFile(path_ref.to_path_buf(), e))};
         }
+        let line = line.into();
         self.file_viewer.go_to_line(line).map_err(|_| PagerShowError::LineDoesNotExist(line))
     }
 

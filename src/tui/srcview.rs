@@ -1,6 +1,7 @@
 use unsegen::{
     Cursor,
     Demand,
+    Event,
     FileLineStorage,
     HorizontalLayout,
     Key,
@@ -88,34 +89,83 @@ impl LineDecorator for AssemblyDecorator {
     }
 }
 
-pub struct SrcView<'a> {
+pub struct SourceView<'a> {
     highlighting_theme: &'a Theme,
     syntax_set: SyntaxSet,
-    file_viewer: Pager<FileLineStorage, SyntectHighLighter<'a>, LineNumberDecorator<String>>,
-    asm_viewer: Pager<MemoryLineStorage<AssemblyLine>, SyntectHighLighter<'a>, AssemblyDecorator>,
-    layout: HorizontalLayout,
+    pager: Pager<FileLineStorage, SyntectHighLighter<'a>, LineNumberDecorator<String>>,
 }
 
-impl<'a> SrcView<'a> {
+impl<'a> SourceView<'a> {
     pub fn new(highlighting_theme: &'a Theme) -> Self {
-        SrcView {
+        SourceView {
             highlighting_theme: highlighting_theme,
             syntax_set: SyntaxSet::load_defaults_nonewlines(),
-            file_viewer: Pager::new(),
-            asm_viewer: Pager::new(),
-            layout: HorizontalLayout::new(SeparatingStyle::Draw('|')),
-        }
-    }
-    pub fn show_frame(&mut self, mut frame: NamedValues, gdb: &mut gdbmi::GDB) {
-        if let Some(path_object) = frame.remove("fullname") { // File information may not be present
-            let path = path_object.unwrap_const();
-            let line: LineNumber = frame.remove("line").expect("line present").unwrap_const().parse::<usize>().expect("Parse usize").into();
-            let _ = self.show_in_file_viewer(&path, line); // GDB may give out invalid paths, so we just ignore them (at least for now)
-            self.show_in_asm_viewer(&path, line, gdb); // GDB may give out invalid paths, so we just ignore them (at least for now)
+            pager: Pager::new(),
         }
     }
 
-    pub fn show_in_asm_viewer<P: AsRef<Path>, L: Into<LineNumber>>(&mut self, file: P, line: L, gdb: &mut gdbmi::GDB) {
+    pub fn show<P: AsRef<Path>, L: Into<LineIndex>>(&mut self, path: P, line: L) -> Result<(), PagerShowError> {
+        let need_to_reload = if let Some(ref content) = self.pager.content {
+            content.storage.get_file_path() != path.as_ref()
+        } else {
+            true
+        };
+        if need_to_reload {
+            let path_ref = path.as_ref();
+            try!{self.load(path_ref).map_err(|e| PagerShowError::CouldNotOpenFile(path_ref.to_path_buf(), e))};
+        }
+        let line = line.into();
+        self.pager.go_to_line(line).map_err(|_| PagerShowError::LineDoesNotExist(line))
+    }
+
+    fn load<P: AsRef<Path>>(&mut self, path: P) -> io::Result<()> {
+        let file_storage = try!{FileLineStorage::new(path.as_ref())};
+        let syntax = self.syntax_set.find_syntax_for_file(path.as_ref())
+            .expect("file IS openable, see file storage")
+            .unwrap_or(self.syntax_set.find_syntax_plain_text());
+        self.pager.load(
+            PagerContent::create(file_storage)
+            .with_highlighter(SyntectHighLighter::new(syntax, self.highlighting_theme))
+            .with_decorator(LineNumberDecorator::default())
+            );
+        Ok(())
+    }
+
+    pub fn event(&mut self, event: Input, _ /*gdb*/: &mut gdbmi::GDB) {
+        event.chain(ScrollBehavior::new(&mut self.pager)
+                    .forwards_on(Key::PageDown)
+                    .forwards_on(Key::Char('j'))
+                    .backwards_on(Key::PageUp)
+                    .backwards_on(Key::Char('k'))
+                   );
+    }
+}
+
+impl<'a> Widget for SourceView<'a> {
+    fn space_demand(&self) -> (Demand, Demand) {
+        self.pager.space_demand()
+    }
+    fn draw(&mut self, window: Window) {
+        self.pager.draw(window)
+    }
+}
+
+pub struct AssemblyView<'a> {
+    highlighting_theme: &'a Theme,
+    syntax_set: SyntaxSet,
+    pager: Pager<MemoryLineStorage<AssemblyLine>, SyntectHighLighter<'a>, AssemblyDecorator>,
+}
+
+impl<'a> AssemblyView<'a> {
+    pub fn new(highlighting_theme: &'a Theme) -> Self {
+        AssemblyView {
+            highlighting_theme: highlighting_theme,
+            syntax_set: SyntaxSet::load_defaults_nonewlines(),
+            pager: Pager::new(),
+        }
+    }
+
+    pub fn show<P: AsRef<Path>, L: Into<LineNumber>>(&mut self, file: P, line: L, gdb: &mut gdbmi::GDB) {
         let line_u: usize = line.into().into();
         let disass_obj = gdb.execute(&MiCommand::data_disassemble_file(file, line_u, None)).expect("disassembly successful").results.remove("asm_insns").expect("asm_insns present");
         let mut asm_storage = MemoryLineStorage::<AssemblyLine>::new();
@@ -127,53 +177,97 @@ impl<'a> SrcView<'a> {
         }
         let syntax = self.syntax_set.find_syntax_by_extension("s")
             .unwrap_or(self.syntax_set.find_syntax_plain_text());
-        self.asm_viewer.load(
+        self.pager.load(
             PagerContent::create(asm_storage)
             .with_highlighter(SyntectHighLighter::new(syntax, self.highlighting_theme))
             .with_decorator(AssemblyDecorator));
     }
-
-    pub fn show_in_file_viewer<P: AsRef<Path>, L: Into<LineIndex>>(&mut self, path: P, line: L) -> Result<(), PagerShowError> {
-        let need_to_reload = if let Some(ref content) = self.file_viewer.content {
-            content.storage.get_file_path() != path.as_ref()
-        } else {
-            true
-        };
-        if need_to_reload {
-            let path_ref = path.as_ref();
-            try!{self.load_in_file_viewer(path_ref).map_err(|e| PagerShowError::CouldNotOpenFile(path_ref.to_path_buf(), e))};
-        }
-        let line = line.into();
-        self.file_viewer.go_to_line(line).map_err(|_| PagerShowError::LineDoesNotExist(line))
-    }
-
-    pub fn load_in_file_viewer<P: AsRef<Path>>(&mut self, path: P) -> io::Result<()> {
-        let file_storage = try!{FileLineStorage::new(path.as_ref())};
-        let syntax = self.syntax_set.find_syntax_for_file(path.as_ref())
-            .expect("file IS openable, see file storage")
-            .unwrap_or(self.syntax_set.find_syntax_plain_text());
-        self.file_viewer.load(
-            PagerContent::create(file_storage)
-            .with_highlighter(SyntectHighLighter::new(syntax, self.highlighting_theme))
-            .with_decorator(LineNumberDecorator::default())
-            );
-        Ok(())
-    }
     pub fn event(&mut self, event: Input, _ /*gdb*/: &mut gdbmi::GDB) {
-        event.chain(ScrollBehavior::new(&mut self.file_viewer)
+        event.chain(ScrollBehavior::new(&mut self.pager)
                     .forwards_on(Key::PageDown)
+                    .forwards_on(Key::Char('j'))
                     .backwards_on(Key::PageUp)
+                    .backwards_on(Key::Char('k'))
                    );
     }
 }
 
-impl<'a> Widget for SrcView<'a> {
+impl<'a> Widget for AssemblyView<'a> {
     fn space_demand(&self) -> (Demand, Demand) {
-        let widgets: Vec<&Widget> = vec![&self.asm_viewer, &self.file_viewer];
+        self.pager.space_demand()
+    }
+    fn draw(&mut self, window: Window) {
+        self.pager.draw(window)
+    }
+}
+
+enum CodeWindowMode {
+    Source,
+    Assembly,
+}
+
+pub struct CodeWindow<'a> {
+    src_view: SourceView<'a>,
+    asm_view: AssemblyView<'a>,
+    layout: HorizontalLayout,
+    mode: CodeWindowMode,
+}
+
+impl<'a> CodeWindow<'a> {
+    pub fn new(highlighting_theme: &'a Theme) -> Self {
+        CodeWindow {
+            src_view: SourceView::new(highlighting_theme),
+            asm_view: AssemblyView::new(highlighting_theme),
+            layout: HorizontalLayout::new(SeparatingStyle::Draw('|')),
+            mode: CodeWindowMode::Source,
+        }
+    }
+    pub fn show_frame(&mut self, mut frame: NamedValues, gdb: &mut gdbmi::GDB) {
+        if let Some(path_object) = frame.remove("fullname") { // File information may not be present
+            let path = path_object.unwrap_const();
+            let line: LineNumber = frame.remove("line").expect("line present").unwrap_const().parse::<usize>().expect("Parse usize").into();
+            let _ = self.src_view.show(&path, line); // GDB may give out invalid paths, so we just ignore them (at least for now)
+            self.asm_view.show(&path, line, gdb); // GDB may give out invalid paths, so we just ignore them (at least for now)
+        }
+    }
+
+    fn toggle_mode(&mut self) {
+        self.mode = match self.mode {
+            CodeWindowMode::Assembly => CodeWindowMode::Source,
+            CodeWindowMode::Source => CodeWindowMode::Assembly,
+        }
+    }
+
+    pub fn event(&mut self, event: Input, gdb: &mut gdbmi::GDB) {
+        event.chain(|i: Input| match i.event {
+            Event::Key(Key::Char('d')) => {
+                self.toggle_mode();
+                None
+            },
+            _ => Some(i),
+        }).chain(|i: Input| {
+            match self.mode {
+                CodeWindowMode::Assembly => self.asm_view.event(i, gdb),
+                CodeWindowMode::Source => self.src_view.event(i, gdb),
+            }
+            None
+        });
+    }
+}
+
+impl<'a> Widget for CodeWindow<'a> {
+    fn space_demand(&self) -> (Demand, Demand) {
+        let widgets: Vec<&Widget> = match self.mode {
+            CodeWindowMode::Assembly => vec![&self.asm_view, &self.src_view],
+            CodeWindowMode::Source => vec![&self.src_view],
+        };
         self.layout.space_demand(widgets.as_slice())
     }
     fn draw(&mut self, window: Window) {
-        let mut widgets: Vec<&mut Widget> = vec![&mut self.asm_viewer, &mut self.file_viewer];
+        let mut widgets: Vec<&mut Widget> = match self.mode {
+            CodeWindowMode::Assembly => vec![&mut self.asm_view, &mut self.src_view],
+            CodeWindowMode::Source => vec![&mut self.src_view],
+        };
         self.layout.draw(window, &mut widgets)
     }
 }

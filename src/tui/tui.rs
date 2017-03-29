@@ -21,13 +21,13 @@ use gdbmi::output::{
 };
 
 use super::console::Console;
-use super::srcview::SrcView;
+use super::srcview::CodeWindow;
 use super::pseudoterminal::PseudoTerminal;
 
 pub struct Tui<'a> {
     console: Console,
     process_pty: PseudoTerminal,
-    src_view: SrcView<'a>,
+    src_view: CodeWindow<'a>,
 
     left_layout: VerticalLayout,
     right_layout: VerticalLayout,
@@ -39,7 +39,7 @@ impl<'a> Tui<'a> {
         Tui {
             console: Console::new(),
             process_pty: PseudoTerminal::new(process_pty),
-            src_view: SrcView::new(highlighting_theme),
+            src_view: CodeWindow::new(highlighting_theme),
             left_layout: VerticalLayout::new(SeparatingStyle::Draw('=')),
             right_layout: VerticalLayout::new(SeparatingStyle::Draw('=')),
         }

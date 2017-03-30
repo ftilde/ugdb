@@ -197,7 +197,7 @@ pub struct Pager<S, H = NoHighLighter, D = NoDecorator<<S as LineStorage>::Line>
     where S: LineStorage, D: LineDecorator , H: HighLighter {
 
     pub content: Option<PagerContent<S,H,D>>,
-    active_line: LineIndex,
+    current_line: LineIndex,
 }
 
 impl<S, H, D> Pager<S, H, D>
@@ -206,7 +206,7 @@ impl<S, H, D> Pager<S, H, D>
     pub fn new() -> Self {
         Pager {
             content: None,
-            active_line: 0.into(),
+            current_line: 0.into(),
         }
     }
 
@@ -224,11 +224,15 @@ impl<S, H, D> Pager<S, H, D>
     pub fn go_to_line<L: Into<LineIndex>>(&mut self, line: L) -> Result<(), ()> {
         let line: LineIndex = line.into();
         if self.line_exists(line) {
-            self.active_line = line;
+            self.current_line = line;
             Ok(())
         } else {
             Err(())
         }
+    }
+
+    pub fn current_line(&self) -> LineIndex {
+        self.current_line
     }
 }
 
@@ -245,9 +249,9 @@ impl<S, H, D> Widget for Pager<S, H, D>
             // TODO: make this configurable?
             let min_highlight_context = 40;
             let num_adjacent_lines_to_load = max(height, min_highlight_context/2);
-            let active_line: usize = self.active_line.into();
-            let min_line = active_line.checked_sub(num_adjacent_lines_to_load).unwrap_or(0);
-            let max_line = active_line + num_adjacent_lines_to_load;
+            let current_line: usize = self.current_line.into();
+            let min_line = current_line.checked_sub(num_adjacent_lines_to_load).unwrap_or(0);
+            let max_line = current_line + num_adjacent_lines_to_load;
 
 
             // Split window
@@ -266,31 +270,31 @@ impl<S, H, D> Widget for Pager<S, H, D>
                 .wrapping_direction(WrappingDirection::Down)
                 .wrapping_mode(WrappingMode::Wrap);
 
-            let num_line_wraps_until_active_line = {
+            let num_line_wraps_until_current_line = {
                 content.storage
-                    .view(min_line..active_line)
+                    .view(min_line..current_line)
                     .map(|(_,line)| {
                         cursor.num_expected_wraps(line.get_content()) + 1
                     })
                     .sum::<u32>()
             };
-            let num_line_wraps_from_active_line = {
+            let num_line_wraps_from_current_line = {
                 content.storage
-                    .view(active_line..max_line)
+                    .view(current_line..max_line)
                     .map(|(_,line)| {
                         cursor.num_expected_wraps(line.get_content()) + 1
                     })
                     .sum::<u32>()
             };
 
-            let centered_active_line_start_pos = (height/2) as i32;
-            let best_active_line_pos_for_bottom = max(centered_active_line_start_pos, height as i32 - num_line_wraps_from_active_line as i32);
-            let required_start_pos = min(0, best_active_line_pos_for_bottom as i32 - num_line_wraps_until_active_line as i32);
+            let centered_current_line_start_pos = (height/2) as i32;
+            let best_current_line_pos_for_bottom = max(centered_current_line_start_pos, height as i32 - num_line_wraps_from_current_line as i32);
+            let required_start_pos = min(0, best_current_line_pos_for_bottom as i32 - num_line_wraps_until_current_line as i32);
 
             cursor.set_position(0, required_start_pos);
 
             for (line_index, line) in content.storage.view(min_line..max_line) {
-                let base_style = if line_index == self.active_line {
+                let base_style = if line_index == self.current_line {
                     TextAttribute::new(None, None, Style::new().invert().bold()).or(&style)
                 } else {
                     TextAttribute::default()
@@ -317,12 +321,12 @@ impl<S, H, D> Scrollable for Pager<S, H, D>
     where S: LineStorage, S::Line: PagerLine, H: HighLighter, D: LineDecorator<Line=S::Line> {
 
     fn scroll_backwards(&mut self) {
-        if self.active_line > 0.into() {
-            self.active_line -= 1;
+        if self.current_line > 0.into() {
+            self.current_line -= 1;
         }
     }
     fn scroll_forwards(&mut self) {
-        let new_line = self.active_line + 1;
+        let new_line = self.current_line + 1;
         let _ = self.go_to_line(new_line);
     }
 }

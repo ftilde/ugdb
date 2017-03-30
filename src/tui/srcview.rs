@@ -131,6 +131,18 @@ impl<'a> SourceView<'a> {
         Ok(())
     }
 
+    fn current_line(&self) -> LineNumber {
+        self.pager.current_line().into()
+    }
+
+    fn current_file(&self) -> Option<&Path> {
+        if let Some(ref content) = self.pager.content {
+            Some(content.storage.get_file_path())
+        } else {
+            None
+        }
+    }
+
     pub fn event(&mut self, event: Input, _ /*gdb*/: &mut gdbmi::GDB) {
         event.chain(ScrollBehavior::new(&mut self.pager)
                     .forwards_on(Key::PageDown)
@@ -165,9 +177,9 @@ impl<'a> AssemblyView<'a> {
         }
     }
 
-    pub fn show<P: AsRef<Path>, L: Into<LineNumber>>(&mut self, file: P, line: L, gdb: &mut gdbmi::GDB) {
+    pub fn show<P: AsRef<Path>, L: Into<LineNumber>>(&mut self, file: P, line: L, gdb: &mut gdbmi::GDB) -> Result<(), () /* Disassembly unsuccessful */> {
         let line_u: usize = line.into().into();
-        let disass_obj = gdb.execute(&MiCommand::data_disassemble_file(file, line_u, None)).expect("disassembly successful").results.remove("asm_insns").expect("asm_insns present");
+        let disass_obj = try!{gdb.execute(&MiCommand::data_disassemble_file(file, line_u, None)).expect("disassembly successful").results.remove("asm_insns").ok_or(())};
         let mut asm_storage = MemoryLineStorage::<AssemblyLine>::new();
         for tuple in disass_obj.unwrap_valuelist() {
             let mut tuple = tuple.unwrap_tuple_or_named_value_list();
@@ -181,6 +193,7 @@ impl<'a> AssemblyView<'a> {
             PagerContent::create(asm_storage)
             .with_highlighter(SyntectHighLighter::new(syntax, self.highlighting_theme))
             .with_decorator(AssemblyDecorator));
+        Ok(())
     }
     pub fn event(&mut self, event: Input, _ /*gdb*/: &mut gdbmi::GDB) {
         event.chain(ScrollBehavior::new(&mut self.pager)
@@ -227,21 +240,35 @@ impl<'a> CodeWindow<'a> {
             let path = path_object.unwrap_const();
             let line: LineNumber = frame.remove("line").expect("line present").unwrap_const().parse::<usize>().expect("Parse usize").into();
             let _ = self.src_view.show(&path, line); // GDB may give out invalid paths, so we just ignore them (at least for now)
-            self.asm_view.show(&path, line, gdb); // GDB may give out invalid paths, so we just ignore them (at least for now)
+            if self.asm_view.show(&path, line, gdb).is_err() {
+                self.mode = CodeWindowMode::Source;
+            };
         }
     }
 
-    fn toggle_mode(&mut self) {
+    fn toggle_mode(&mut self, gdb: &mut gdbmi::GDB) {
         self.mode = match self.mode {
-            CodeWindowMode::Assembly => CodeWindowMode::Source,
-            CodeWindowMode::Source => CodeWindowMode::Assembly,
+            CodeWindowMode::Assembly => {
+                CodeWindowMode::Source
+            },
+            CodeWindowMode::Source => {
+                if let Some(path) = self.src_view.current_file() {
+                    if self.asm_view.show(path, self.src_view.current_line(), gdb).is_ok() {
+                        CodeWindowMode::Assembly
+                    } else {
+                        CodeWindowMode::Source
+                    }
+                } else {
+                    CodeWindowMode::Source
+                }
+            },
         }
     }
 
     pub fn event(&mut self, event: Input, gdb: &mut gdbmi::GDB) {
         event.chain(|i: Input| match i.event {
             Event::Key(Key::Char('d')) => {
-                self.toggle_mode();
+                self.toggle_mode(gdb);
                 None
             },
             _ => Some(i),

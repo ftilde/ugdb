@@ -40,7 +40,8 @@ impl Into<usize> for LineIndex {
 impl From<LineNumber> for LineIndex {
     fn from(number: LineNumber) -> Self {
         let raw_number: usize = number.into();
-        raw_number.into()
+        let raw_index = raw_number - 1;
+        raw_index.into()
     }
 }
 impl Add<usize> for LineIndex {
@@ -91,7 +92,8 @@ impl Into<usize> for LineNumber {
 impl From<LineIndex> for LineNumber {
     fn from(index: LineIndex) -> Self {
         let raw_index: usize = index.into();
-        raw_index.into()
+        let raw_number = raw_index + 1;
+        raw_number.into()
     }
 }
 impl Add<usize> for LineNumber {

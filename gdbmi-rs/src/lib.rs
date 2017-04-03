@@ -1,3 +1,6 @@
+extern crate nix;
+#[macro_use]
+extern crate nom;
 
 pub mod input;
 pub mod output;

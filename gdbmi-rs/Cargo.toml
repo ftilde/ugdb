@@ -1,0 +1,8 @@
+[package]
+name = "gdbmi"
+version = "0.1.0"
+authors = ["ftilde <ftilde@protonmail.com>"]
+
+[dependencies]
+nom = "^2.1"
+nix = "^0.7"

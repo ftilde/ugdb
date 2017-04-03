@@ -1,5 +1,6 @@
 #![feature(mpsc_select)]
 
+extern crate gdbmi;
 extern crate unsegen;
 extern crate unicode_width;
 
@@ -11,10 +12,6 @@ extern crate termion;
 // For pty
 extern crate libc;
 
-// For gdbmi
-#[macro_use]
-extern crate nom;
-
 //For gdbmi AND pty
 extern crate nix;
 
@@ -22,7 +19,6 @@ extern crate nix;
 #[macro_use]
 extern crate lazy_static;
 
-mod gdbmi;
 mod pty;
 
 mod tui;

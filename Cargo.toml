@@ -1,5 +1,5 @@
 [package]
-name = "gdbmi"
+name = "ugdb"
 version = "0.1.0"
 authors = ["ftilde <ftilde@protonmail.com>"]
 
@@ -11,16 +11,18 @@ name = "gdbmi"
 [dependencies]
 lazy_static = "0.2.2"
 unicode-width = "0.1"
-#pty and gdbmi
-nix = "^0.7"
-#gdbmi
-nom = "^2.1"
 #pty
+nix = "^0.7"
 libc = "^0.2"
 
 #unsegen
 syntect = "1.0"
-[dependencies.termion]
-git = "https://github.com/ftilde/termion"
+termion = "^1.3"
+#[dependencies.termion]
+#git = "https://github.com/ftilde/termion"
+
 [dependencies.unsegen]
 path = "unsegen/"
+
+[dependencies.gdbmi]
+path = "gdbmi-rs/"

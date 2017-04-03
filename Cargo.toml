@@ -6,9 +6,11 @@ authors = ["ftilde <ftilde@protonmail.com>"]
 
 [[bin]]
 doc = false
-name = "gdbmi"
+name = "ugdb"
 
 [dependencies]
+chan = "^0.1"
+chan-signal = "^0.2"
 lazy_static = "0.2.2"
 unicode-width = "0.1"
 #pty

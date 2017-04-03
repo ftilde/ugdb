@@ -19,6 +19,10 @@ pub struct GDB {
     //outputThread: thread::Thread,
 }
 
+pub trait OutOfBandRecordSink: std::marker::Send {
+    fn send(&self, output::OutOfBandRecord);
+}
+
 #[derive(Debug, PartialEq)]
 pub enum ExecuteError {
     Busy,
@@ -26,7 +30,7 @@ pub enum ExecuteError {
 }
 
 impl GDB {
-    pub fn spawn(executable_path: &str, process_tty_name: &str) -> Result<(GDB, mpsc::Receiver<output::OutOfBandRecord>), ::std::io::Error> {
+    pub fn spawn<S>(executable_path: &str, process_tty_name: &str, oob_sink: S) -> Result<GDB, ::std::io::Error> where S: OutOfBandRecordSink + 'static{
         let mut child = try!{Command::new("/bin/gdb")
             .arg("--interpreter=mi")
             .arg(format!("--tty={}", process_tty_name))
@@ -39,19 +43,17 @@ impl GDB {
         let is_running = Arc::new(AtomicBool::new(false));
         let is_running_for_thread = is_running.clone();
         let (result_input, result_output) = mpsc::channel();
-        let (out_of_band_input, out_of_band_output) = mpsc::channel();
         /*let outputThread = */ thread::spawn(move || {
-            output::process_output(stdout, result_input, out_of_band_input, is_running_for_thread);
+            output::process_output(stdout, result_input, oob_sink, is_running_for_thread);
         });
         Ok(
-            (GDB {
+            GDB {
                 process: child,
                 stdin: stdin,
                 is_running: is_running,
                 result_output: result_output,
                 //outputThread: outputThread,
-            },
-            out_of_band_output)
+            }
           )
     }
 

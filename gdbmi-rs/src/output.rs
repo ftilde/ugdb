@@ -107,13 +107,14 @@ enum Output {
     SomethingElse(String) /* Debug */
 }
 
-use ::nom::{IResult};
-use ::std::io::{Read, BufRead, BufReader};
-use ::std::sync::mpsc::Sender;
-use ::std::sync::Arc;
-use ::std::sync::atomic::{AtomicBool, Ordering};
+use nom::{IResult};
+use std::io::{Read, BufRead, BufReader};
+use std::sync::mpsc::Sender;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use OutOfBandRecordSink;
 
-pub fn process_output<T: Read>(output: T, result_pipe: Sender<ResultRecord>, out_of_band_pipe: Sender<OutOfBandRecord>, is_running: Arc<AtomicBool>) {
+pub fn process_output<T: Read, S: OutOfBandRecordSink>(output: T, result_pipe: Sender<ResultRecord>, out_of_band_pipe: S, is_running: Arc<AtomicBool>) {
     let mut reader = BufReader::new(output);
 
     //use std::fs::{File};
@@ -139,11 +140,11 @@ pub fn process_output<T: Read>(output: T, result_pipe: Sender<ResultRecord>, out
                         if let OutOfBandRecord::AsyncRecord{token: _, kind: _, class: AsyncClass::Stopped, results: _} = record {
                             is_running.store(false, Ordering::Relaxed /*TODO: maybe something else? */);
                         }
-                        out_of_band_pipe.send(record).expect("send out of band record to pipe");
+                        out_of_band_pipe.send(record);
                     },
                     Output::GDBLine => { },
                     //Output::SomethingElse(_) => { /*println!("SOMETHING ELSE: {}", str);*/ }
-                    Output::SomethingElse(text) => { out_of_band_pipe.send(OutOfBandRecord::StreamRecord{ kind: StreamKind::Target, data: text}).expect("send something else to pipe"); }
+                    Output::SomethingElse(text) => { out_of_band_pipe.send(OutOfBandRecord::StreamRecord{ kind: StreamKind::Target, data: text}); }
                 }
             },
             Err(e) => { panic!("{}", e); },

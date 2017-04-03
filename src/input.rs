@@ -4,7 +4,9 @@ pub use unsegen::input::{
     Event,
 };
 
-use std::sync::mpsc;
+use chan::{
+    Sender,
+};
 
 #[derive(Eq, PartialEq, Clone)]
 pub enum ConsoleEvent {
@@ -21,7 +23,7 @@ pub enum InputEvent {
 }
 
 pub trait InputSource {
-    fn start_loop(event_sink: mpsc::Sender<InputEvent>) -> Self;
+    fn start_loop(event_sink: Sender<InputEvent>) -> Self;
 }
 
 #[derive(Clone, Copy)]
@@ -36,7 +38,7 @@ pub struct ViKeyboardInput {
 }
 
 impl ViKeyboardInput {
-    fn input_loop(output: mpsc::Sender<InputEvent>) {
+    fn input_loop(output: Sender<InputEvent>) {
         use termion::input::TermRead;
 
         let mut mode = Mode::Console;
@@ -45,7 +47,7 @@ impl ViKeyboardInput {
         for e in stdin.events() {
             let event = e.expect("event");
             if let Event::Key(Key::Ctrl('q')) = event {
-                output.send(InputEvent::Quit).expect("send quit");
+                output.send(InputEvent::Quit);
             }
             let (new_mode, optional_event) = match mode {
                 Mode::SourcePager => {
@@ -72,14 +74,14 @@ impl ViKeyboardInput {
             };
             mode = new_mode;
             if let Some(event) = optional_event {
-                output.send(event).expect("send event");
+                output.send(event);
             }
         }
     }
 }
 
 impl InputSource for ViKeyboardInput {
-    fn start_loop(event_sink: mpsc::Sender<InputEvent>) -> Self {
+    fn start_loop(event_sink: Sender<InputEvent>) -> Self {
         let input_thread = ::std::thread::spawn(move || {
             Self::input_loop(event_sink);
         });

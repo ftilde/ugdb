@@ -1,4 +1,9 @@
-use std::collections::BTreeMap;
+pub use json::{
+    JsonValue,
+};
+pub use json::object::{
+    Object,
+};
 
 #[derive(Debug)]
 pub enum ResultClass {
@@ -36,53 +41,13 @@ pub enum StreamKind {
     Log,
 }
 
-
-#[derive(Debug)]
-pub struct NamedValue {
-    pub name: String,
-    pub value: Value,
-}
-
-pub type NamedValues = BTreeMap<String, Value>;
-
-#[derive(Debug)]
-pub enum Value {
-    Const(String),
-    Tuple(NamedValues),
-    ValueList(Vec<Value>),
-    NamedValueList(NamedValues), //TODO: use a type alias for the map
-}
-
-impl Value {
-    pub fn unwrap_const(self) -> String {
-        if let Value::Const(string) = self {
-            string
-        } else {
-            panic!("Value was not const");
-        }
-    }
-    pub fn unwrap_tuple_or_named_value_list(self) -> NamedValues {
-        match self {
-            Value::Tuple(map) => map,
-            Value::NamedValueList(map) => map,
-            _ => panic!("Value was not tuple or named value list"),
-        }
-    }
-    pub fn unwrap_valuelist(self) -> Vec<Value> {
-        match self {
-            Value::ValueList(list) => list,
-            _ => panic!("Value was not value list"),
-        }
-    }
-}
-
 pub type Token = u64;
 
 #[derive(Debug)]
 pub struct ResultRecord {
     token: Option<Token>,
     pub class: ResultClass,
-    pub results: NamedValues,
+    pub results: Object,
 }
 
 #[derive(Debug)]
@@ -91,7 +56,7 @@ pub enum OutOfBandRecord {
         token: Option<Token>,
         kind: AsyncKind,
         class: AsyncClass,
-        results: NamedValues
+        results: Object,
     },
     StreamRecord {
         kind: StreamKind,
@@ -202,34 +167,30 @@ named!(
         )
     );
 
-fn to_map(v: Vec<NamedValue>) -> NamedValues { //TODO: fix this and parse the map directly
-    let mut map = BTreeMap::new();
-    for e in v {
-        map.insert(e.name, e.value);
+fn to_map(v: Vec<(String, JsonValue)>) -> Object { //TODO: fix this and parse the map directly
+    let mut obj = Object::new();
+    for (name, value) in v {
+        obj.insert(&name, value);
     }
-    map
+    obj
 }
 
-named!(value<Value>,
+named!(value<JsonValue>,
        alt!(
-           map!(string, |s| Value::Const(s)) |
-           chain!(tag!("{") ~ results: separated_list!(tag!(","), result) ~ tag!("}"), || Value::Tuple(to_map(results))) |
-           chain!(tag!("[") ~ values: separated_list!(tag!(","), value) ~ tag!("]"), || Value::ValueList(values)) |
-           chain!(tag!("[") ~ results: separated_list!(tag!(","), result) ~ tag!("]"), || Value::NamedValueList(to_map(results)))
+           map!(string, |s| JsonValue::String(s)) |
+           chain!(tag!("{") ~ results: separated_list!(tag!(","), result) ~ tag!("}"), || JsonValue::Object(to_map(results))) |
+           chain!(tag!("[") ~ values: separated_list!(tag!(","), value) ~ tag!("]"), || JsonValue::Array(values)) |
+           chain!(tag!("[") ~ results: separated_list!(tag!(","), result) ~ tag!("]"), || JsonValue::Object(to_map(results)))
            )
        );
 
 named!(
-    result<NamedValue>,
+    result<(String, JsonValue)>,
     chain!(
         var: is_not!("=") ~
         tag!("=") ~
         val: value,
-        || NamedValue {
-            name: String::from_utf8_lossy(var).into_owned(),
-            value: val,
-        }
-        )
+        || (String::from_utf8_lossy(var).into_owned(), val))
     );
 
 named!(

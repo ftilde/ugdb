@@ -1,3 +1,4 @@
+extern crate json;
 extern crate nix;
 #[macro_use]
 extern crate nom;

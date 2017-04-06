@@ -31,7 +31,7 @@ use syntect::parsing::{
     SyntaxSet,
 };
 use gdbmi::output::{
-    NamedValues,
+    Object,
 };
 use std::io;
 use std::path::{
@@ -179,13 +179,17 @@ impl<'a> AssemblyView<'a> {
 
     pub fn show<P: AsRef<Path>, L: Into<LineNumber>>(&mut self, file: P, line: L, gdb: &mut gdbmi::GDB) -> Result<(), () /* Disassembly unsuccessful */> {
         let line_u: usize = line.into().into();
-        let disass_obj = try!{gdb.execute(&MiCommand::data_disassemble_file(file, line_u, None)).expect("disassembly successful").results.remove("asm_insns").ok_or(())};
+        let ref disass_object = gdb.execute(&MiCommand::data_disassemble_file(file, line_u, None)).expect("disassembly successful").results["asm_insns"];
+        if !disass_object.is_array() {
+            //Disassembly object is not an array
+            return Err(());
+        }
         let mut asm_storage = MemoryLineStorage::<AssemblyLine>::new();
-        for tuple in disass_obj.unwrap_valuelist() {
-            let mut tuple = tuple.unwrap_tuple_or_named_value_list();
-            let instruction = tuple.remove("inst").expect("inst present").unwrap_const();
-            let address = usize::from_str_radix(&tuple.remove("address").expect("address present").unwrap_const()[2..],16).expect("Parse address");
-            asm_storage.lines.push(AssemblyLine::new(instruction, address));
+        for tuple in disass_object.members() {
+            let instruction = tuple["inst"].as_str().expect("No instruction in disassembly object");
+            let address_str = tuple["address"].as_str().expect("No address in disassembly object");
+            let address = usize::from_str_radix(&address_str[2..],16).expect("Parse address");
+            asm_storage.lines.push(AssemblyLine::new(instruction.to_owned(), address));
         }
         let syntax = self.syntax_set.find_syntax_by_extension("s")
             .unwrap_or(self.syntax_set.find_syntax_plain_text());
@@ -235,12 +239,11 @@ impl<'a> CodeWindow<'a> {
             mode: CodeWindowMode::Source,
         }
     }
-    pub fn show_frame(&mut self, mut frame: NamedValues, gdb: &mut gdbmi::GDB) {
-        if let Some(path_object) = frame.remove("fullname") { // File information may not be present
-            let path = path_object.unwrap_const();
-            let line: LineNumber = frame.remove("line").expect("line present").unwrap_const().parse::<usize>().expect("Parse usize").into();
-            let _ = self.src_view.show(&path, line); // GDB may give out invalid paths, so we just ignore them (at least for now)
-            if self.asm_view.show(&path, line, gdb).is_err() {
+    pub fn show_frame(&mut self, frame: &Object, gdb: &mut gdbmi::GDB) {
+        if let Some(path) = frame["fullname"].as_str() { // File information may not be present
+            let line: LineNumber = frame["line"].as_str().expect("line present").parse::<usize>().expect("Parse usize").into();
+            let _ = self.src_view.show(path, line); // GDB may give out invalid paths, so we just ignore them (at least for now)
+            if self.asm_view.show(path, line, gdb).is_err() {
                 self.mode = CodeWindowMode::Source;
             };
         }

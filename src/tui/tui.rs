@@ -17,7 +17,8 @@ use gdbmi::output::{
     OutOfBandRecord,
     AsyncKind,
     AsyncClass,
-    NamedValues,
+    Object,
+    JsonValue,
 };
 
 use super::console::Console;
@@ -45,12 +46,11 @@ impl<'a> Tui<'a> {
         }
     }
 
-    fn handle_async_record(&mut self, kind: AsyncKind, class: AsyncClass, mut results: NamedValues, gdb: &mut gdbmi::GDB) {
+    fn handle_async_record(&mut self, kind: AsyncKind, class: AsyncClass, results: &Object, gdb: &mut gdbmi::GDB) {
         match (kind, class) {
             (AsyncKind::Exec, AsyncClass::Stopped) => {
                 self.console.add_debug_message(format!("stopped: {:?}", results));
-                if let Some(frame_object) = results.remove("frame") {
-                    let frame = frame_object.unwrap_tuple_or_named_value_list();
+                if let JsonValue::Object(ref frame) = results["frame"] {
                     self.src_view.show_frame(frame, gdb)
                 }
             },
@@ -64,7 +64,7 @@ impl<'a> Tui<'a> {
                 self.console.add_message(data);
             },
             OutOfBandRecord::AsyncRecord{token: _, kind, class, results} => {
-                self.handle_async_record(kind, class, results, gdb);
+                self.handle_async_record(kind, class, &results, gdb);
             },
 
         }

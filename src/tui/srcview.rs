@@ -30,18 +30,24 @@ use syntect::highlighting::{
 use syntect::parsing::{
     SyntaxSet,
 };
+use gdbmi;
 use gdbmi::output::{
     Object,
+    JsonValue,
+    BreakPointEvent,
+};
+use gdbmi::input::{
+    MiCommand,
 };
 use std::io;
 use std::path::{
     Path,
     PathBuf,
 };
-use gdbmi;
-use gdbmi::input::{
-    MiCommand,
+use std::collections::{
+    HashMap,
 };
+use std::fmt;
 
 #[derive(Debug)]
 pub enum PagerShowError {
@@ -52,11 +58,24 @@ pub enum PagerShowError {
 #[derive(Clone)]
 struct AssemblyLine {
     content: String,
-    address: usize,
+    address: Address,
+}
+
+#[derive(Clone)]
+struct Address(usize);
+impl Address {
+    fn parse(string: &str) -> Option<Self> {
+        usize::from_str_radix(&string[2..],16).map(|u| Address(u)).ok()
+    }
+}
+impl fmt::Display for Address {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, " 0x{:0$x} ", self.0)
+    }
 }
 
 impl AssemblyLine {
-    fn new(content: String, address: usize) -> Self {
+    fn new(content: String, address: Address) -> Self {
         AssemblyLine {
             content: content,
             address: address,
@@ -76,7 +95,7 @@ impl LineDecorator for AssemblyDecorator {
     type Line = AssemblyLine;
     fn horizontal_space_demand<'a, 'b: 'a>(&'a self, lines: Box<DoubleEndedIterator<Item=(LineIndex, Self::Line)> + 'b>) -> Demand {
         let max_space = lines.last().map(|(_,l)| {
-            ::unicode_width::UnicodeWidthStr::width(format!(" 0x{:x} ", l.address).as_str())
+            ::unicode_width::UnicodeWidthStr::width(format!(" 0x{:x} ", l.address.0).as_str())
         }).unwrap_or(0);
         Demand::from_to(0, max_space as u32)
     }
@@ -85,7 +104,7 @@ impl LineDecorator for AssemblyDecorator {
         let mut cursor = Cursor::new(&mut window).position(0,0);
 
         use std::fmt::Write;
-        let _ = write!(cursor, " 0x{:0>width$x} ", line.address, width=width);
+        let _ = write!(cursor, " 0x{:0>width$x} ", line.address.0, width=width);
     }
 }
 
@@ -168,6 +187,7 @@ pub struct AssemblyView<'a> {
     pager: Pager<MemoryLineStorage<AssemblyLine>, SyntectHighLighter<'a>, AssemblyDecorator>,
 }
 
+
 impl<'a> AssemblyView<'a> {
     pub fn new(highlighting_theme: &'a Theme) -> Self {
         AssemblyView {
@@ -188,7 +208,7 @@ impl<'a> AssemblyView<'a> {
         for tuple in disass_object.members() {
             let instruction = tuple["inst"].as_str().expect("No instruction in disassembly object");
             let address_str = tuple["address"].as_str().expect("No address in disassembly object");
-            let address = usize::from_str_radix(&address_str[2..],16).expect("Parse address");
+            let address = Address::parse(address_str).expect("Parse address");
             asm_storage.lines.push(AssemblyLine::new(instruction.to_owned(), address));
         }
         let syntax = self.syntax_set.find_syntax_by_extension("s")
@@ -218,6 +238,31 @@ impl<'a> Widget for AssemblyView<'a> {
     }
 }
 
+struct BreakPoint {
+    number: usize,
+    address: Address,
+    enabled: bool,
+    file: PathBuf,    // TODO: Might be optional if no debug info is present!
+    line: LineNumber, //  ''
+}
+
+impl BreakPoint {
+    fn from_json(bkpt: &Object) -> Self {
+        let number = bkpt["number"].as_str().expect("find id").parse::<usize>().expect("Parse usize");
+        let enabled = bkpt["enabled"].as_str().expect("find enabled") == "y";
+        let address = Address::parse(bkpt["addr"].as_str().expect("find address")).expect("Parse address");
+        let file = bkpt["fullname"].as_str().expect("find full file name");
+        let line = bkpt["line"].as_str().expect("find line number").parse::<usize>().expect("Parse usize").into();
+        BreakPoint {
+            number: number,
+            address: address,
+            enabled: enabled,
+            file: PathBuf::from(file),
+            line: line,
+        }
+    }
+}
+
 enum CodeWindowMode {
     Source,
     Assembly,
@@ -228,6 +273,7 @@ pub struct CodeWindow<'a> {
     asm_view: AssemblyView<'a>,
     layout: HorizontalLayout,
     mode: CodeWindowMode,
+    breakpoints: HashMap<usize, BreakPoint>,
 }
 
 impl<'a> CodeWindow<'a> {
@@ -237,6 +283,7 @@ impl<'a> CodeWindow<'a> {
             asm_view: AssemblyView::new(highlighting_theme),
             layout: HorizontalLayout::new(SeparatingStyle::Draw('|')),
             mode: CodeWindowMode::Source,
+            breakpoints: HashMap::new(),
         }
     }
     pub fn show_frame(&mut self, frame: &Object, gdb: &mut gdbmi::GDB) {
@@ -246,6 +293,26 @@ impl<'a> CodeWindow<'a> {
             if self.asm_view.show(path, line, gdb).is_err() {
                 self.mode = CodeWindowMode::Source;
             };
+        }
+    }
+
+    pub fn handle_breakpoint_event(&mut self, bp_type: BreakPointEvent, info: &Object) {
+        match bp_type {
+            BreakPointEvent::Created | BreakPointEvent::Modified => {
+                if let JsonValue::Object(ref bkpt) = info["bkpt"] {
+                    let bp = BreakPoint::from_json(bkpt);
+                    let id = bp.number;
+                    let res = self.breakpoints.insert(id, bp);
+                    debug_assert!(bp_type != BreakPointEvent::Created || res.is_none(), "Created with existing id");
+                    //debug_assert!(bp_type != BreakPointEvent::Modified || res.is_some(), "Modified non-existent id");
+                } else {
+                    panic!("Invalid bkpt");
+                }
+            },
+            BreakPointEvent::Deleted => {
+                let id = info["id"].as_str().expect("find id").parse::<usize>().expect("Parse usize");
+                self.breakpoints.remove(&id);
+            },
         }
     }
 

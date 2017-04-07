@@ -5,7 +5,7 @@ pub use json::object::{
     Object,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResultClass {
     Done,
     Running,
@@ -14,15 +14,28 @@ pub enum ResultClass {
     Exit,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BreakPointEvent {
+    Created,
+    Deleted,
+    Modified,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ThreadEvent {
+    Created,
+    GroupStarted,
+    Exited,
+    GroupExited,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AsyncClass {
     Stopped,
-    ThreadCreated,
-    ThreadGroupStarted,
-    ThreadExited,
-    ThreadGroupExited,
     CmdParamChanged,
     LibraryLoaded,
+    Thread(ThreadEvent),
+    BreakPoint(BreakPointEvent),
     Other(String) //?
 }
 
@@ -228,12 +241,15 @@ named!(
     async_class<AsyncClass>,
     alt!(
             value!(AsyncClass::Stopped, tag!("stopped")) |
-            value!(AsyncClass::ThreadCreated, tag!("thread-created")) |
-            value!(AsyncClass::ThreadGroupStarted, tag!("thread-group-started")) |
-            value!(AsyncClass::ThreadExited, tag!("thread-exited")) |
-            value!(AsyncClass::ThreadGroupExited, tag!("thread-group-exited")) |
+            value!(AsyncClass::Thread(ThreadEvent::Created), tag!("thread-created")) |
+            value!(AsyncClass::Thread(ThreadEvent::GroupStarted), tag!("thread-group-started")) |
+            value!(AsyncClass::Thread(ThreadEvent::Exited), tag!("thread-exited")) |
+            value!(AsyncClass::Thread(ThreadEvent::GroupExited), tag!("thread-group-exited")) |
             value!(AsyncClass::CmdParamChanged, tag!("cmd-param-changed")) |
             value!(AsyncClass::LibraryLoaded, tag!("library-loaded")) |
+            value!(AsyncClass::BreakPoint(BreakPointEvent::Created), tag!("breakpoint-created")) |
+            value!(AsyncClass::BreakPoint(BreakPointEvent::Deleted), tag!("breakpoint-deleted")) |
+            value!(AsyncClass::BreakPoint(BreakPointEvent::Modified), tag!("breakpoint-modified")) |
             map!(is_not!(","), |msg| AsyncClass::Other(String::from_utf8_lossy(msg).into_owned()))
         )
     );

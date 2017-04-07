@@ -49,12 +49,18 @@ impl<'a> Tui<'a> {
     fn handle_async_record(&mut self, kind: AsyncKind, class: AsyncClass, results: &Object, gdb: &mut gdbmi::GDB) {
         match (kind, class) {
             (AsyncKind::Exec, AsyncClass::Stopped) => {
-                self.console.add_debug_message(format!("stopped: {:?}", results));
+                self.console.add_debug_message(format!("stopped: {}", JsonValue::Object(results.clone()).pretty(2)));
                 if let JsonValue::Object(ref frame) = results["frame"] {
-                    self.src_view.show_frame(frame, gdb)
+                    self.src_view.show_frame(frame, gdb);
                 }
             },
-            (kind, class) => self.console.add_debug_message(format!("unhandled async_record: [{:?}, {:?}] {:?}", kind, class, results)),
+            (AsyncKind::Notify, AsyncClass::BreakPoint(event)) => {
+                self.console.add_debug_message(format!("bkpoint {:?}: {}", event, JsonValue::Object(results.clone()).pretty(2)));
+                self.src_view.handle_breakpoint_event(event, &results);
+            },
+            (kind, class) => {
+                self.console.add_debug_message(format!("unhandled async_record: [{:?}, {:?}] {}", kind, class, JsonValue::Object(results.clone()).pretty(2)));
+            },
         }
     }
 

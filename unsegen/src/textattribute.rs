@@ -91,7 +91,7 @@ impl Color {
             b: b,
         }
     }
-    /*
+
     pub fn black() -> Self {
         Color::new(0,0,0)
     }
@@ -101,7 +101,6 @@ impl Color {
     pub fn red() -> Self {
         Color::new(255,0,0)
     }
-    */
     pub fn green() -> Self {
         Color::new(0,255,0)
     }

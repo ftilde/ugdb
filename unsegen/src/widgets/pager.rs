@@ -142,7 +142,7 @@ impl<L: PagerLine> LineDecorator for LineNumberDecorator<L> {
         let mut cursor = Cursor::new(&mut window).position(0,0);
 
         use std::fmt::Write;
-        let _ = write!(cursor, " {:width$} ", line_number, width = width);
+        write!(cursor, " {:width$} ", line_number, width = width).unwrap();
     }
 }
 
@@ -152,7 +152,7 @@ impl<L: PagerLine> LineDecorator for LineNumberDecorator<L> {
 pub struct PagerContent<S: LineStorage, H: HighLighter, D: LineDecorator> {
     pub storage: S,
     highlighter: H,
-    decorator: D,
+    pub decorator: D,
 }
 
 impl <S> PagerContent<S, NoHighLighter, NoDecorator<S::Line>>

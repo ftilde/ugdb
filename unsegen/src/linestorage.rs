@@ -23,7 +23,7 @@ use std::ops:: {
 };
 
 // Starting from 0, i.e., treating LineStorage like an array of lines
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Debug, Hash)]
 pub struct LineIndex(usize);
 impl From<usize> for LineIndex {
     fn from(index: usize) -> Self {
@@ -75,7 +75,7 @@ impl fmt::Display for LineIndex {
 }
 
 // Starting from 1, i.e., treating LineStorage like lines displayed in an editor
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Debug, Hash)]
 pub struct LineNumber(usize);
 impl From<usize> for LineNumber {
     fn from(number: usize) -> Self {

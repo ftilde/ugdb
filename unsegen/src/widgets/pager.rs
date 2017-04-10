@@ -191,6 +191,11 @@ impl <S, H> PagerContent<S, H, NoDecorator<S::Line>>
     }
 }
 
+#[derive(Debug)]
+pub enum PagerError {
+    LineDoesNotExist,
+}
+
 // Pager --------------------------------------------------------------------------------------------------
 
 pub struct Pager<S, H = NoHighLighter, D = NoDecorator<<S as LineStorage>::Line>>
@@ -221,14 +226,24 @@ impl<S, H, D> Pager<S, H, D>
             false
         }
     }
-    pub fn go_to_line<L: Into<LineIndex>>(&mut self, line: L) -> Result<(), ()> {
+
+    pub fn go_to_line<L: Into<LineIndex>>(&mut self, line: L) -> Result<(), PagerError> {
         let line: LineIndex = line.into();
         if self.line_exists(line) {
             self.current_line = line;
             Ok(())
         } else {
-            Err(())
+            Err(PagerError::LineDoesNotExist)
         }
+    }
+
+    pub fn go_to_line_if<F: Fn(LineIndex, &S::Line) -> bool>(&mut self, predicate: F) -> Result<(), PagerError> {
+        let line = if let Some(ref mut content) = self.content {
+            content.storage.view(0..).find(|&(index, ref line)| predicate(index.into(), line)).ok_or(PagerError::LineDoesNotExist)
+        } else {
+            Err(PagerError::LineDoesNotExist)
+        };
+        line.and_then(|(index, _)| self.go_to_line(index))
     }
 
     pub fn current_line(&self) -> LineIndex {

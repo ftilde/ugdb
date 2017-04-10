@@ -20,6 +20,7 @@ use unsegen::widgets::{
     LineDecorator,
     Pager,
     PagerContent,
+    PagerError,
     PagerLine,
     SyntectHighLighter,
 };
@@ -62,10 +63,19 @@ pub enum PagerShowError {
     LineDoesNotExist(LineIndex),
 }
 
-#[derive(Clone)]
-struct AssemblyLine {
-    content: String,
-    address: Address,
+#[derive(Debug, Clone)]
+struct SrcPosition {
+    file: PathBuf,
+    line: LineNumber,
+}
+
+impl SrcPosition {
+    fn new(file: PathBuf, line: LineNumber) -> Self {
+        SrcPosition {
+            file: file,
+            line: line,
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -87,117 +97,145 @@ impl Add<usize> for Address {
     }
 }
 
-impl AssemblyLine {
-    fn new(content: String, address: Address) -> Self {
-        AssemblyLine {
-            content: content,
-            address: address,
-        }
+#[derive(Clone)]
+struct AssemblyLine {
+    content: String,
+    address: Address,
+        src_position: Option<SrcPosition>,
     }
-}
 
-impl PagerLine for AssemblyLine {
-    fn get_content(&self) -> &str {
-        &self.content
-    }
-}
-
-struct AssemblyDecorator {
-    stop_position: Option<Address>,
-    breakpoint_addresses: HashSet<Address>,
-}
-
-impl AssemblyDecorator {
-    fn new<'a, I: Iterator<Item=&'a BreakPoint>>(address_range: Range<Address>, stop_position: Option<Address>, breakpoints: I) -> Self {
-        let addresses = breakpoints.filter_map(|bp| {
-            if bp.enabled && address_range.start <= bp.address && bp.address < address_range.end {
-                Some(bp.address)
-            } else {
-                None
+    impl AssemblyLine {
+        fn new(content: String, address: Address, src_position: Option<SrcPosition>) -> Self {
+            AssemblyLine {
+                content: content,
+                address: address,
+                src_position: src_position,
             }
-        }).collect();
-        let stop_position = if let Some(p) = stop_position {
-            if address_range.start <= p && p < address_range.end {
-                Some(p)
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-        AssemblyDecorator {
-            stop_position: stop_position,
-            breakpoint_addresses: addresses,
         }
     }
-}
 
-impl LineDecorator for AssemblyDecorator {
-    type Line = AssemblyLine;
-    fn horizontal_space_demand<'a, 'b: 'a>(&'a self, lines: Box<DoubleEndedIterator<Item=(LineIndex, Self::Line)> + 'b>) -> Demand {
-        let max_space = lines.last().map(|(_,l)| {
-            ::unicode_width::UnicodeWidthStr::width(format!(" 0x{:x} ", l.address.0).as_str())
-        }).unwrap_or(0);
-        Demand::from_to(0, max_space as u32)
-    }
-    fn decorate(&self, line: &Self::Line, _: LineIndex, mut window: Window) {
-        let width = window.get_width() as usize - 4;
-        let mut cursor = Cursor::new(&mut window).position(0,0);
-
-        use std::fmt::Write;
-        let at_stop_position = self.stop_position.map(|p| p ==line.address).unwrap_or(false);
-        let right_border = if at_stop_position {
-            '▶'
-        } else {
-            ' '
-        };
-        let style = if self.breakpoint_addresses.contains(&line.address) {
-            TextAttribute::new(Color::red(), None, None)
-        } else if at_stop_position {
-            TextAttribute::new(Color::green(), None, Style::new().bold())
-        } else {
-            TextAttribute::plain()
-        };
-        cursor.set_text_attribute(style);
-        write!(cursor, " 0x{:0>width$x}{}", line.address.0, right_border, width=width).unwrap();
-    }
-}
-
-pub struct AssemblyView<'a> {
-    highlighting_theme: &'a Theme,
-    syntax_set: SyntaxSet,
-    pager: Pager<MemoryLineStorage<AssemblyLine>, SyntectHighLighter<'a>, AssemblyDecorator>,
-    last_stop_position: Option<Address>,
-}
-
-
-impl<'a> AssemblyView<'a> {
-    pub fn new(highlighting_theme: &'a Theme) -> Self {
-        AssemblyView {
-            highlighting_theme: highlighting_theme,
-            syntax_set: SyntaxSet::load_defaults_nonewlines(),
-            pager: Pager::new(),
-            last_stop_position: None,
+    impl PagerLine for AssemblyLine {
+        fn get_content(&self) -> &str {
+            &self.content
         }
     }
-    fn set_last_stop_position(&mut self, pos: Address) {
-        self.last_stop_position = Some(pos);
+
+    struct AssemblyDecorator {
+        stop_position: Option<Address>,
+        breakpoint_addresses: HashSet<Address>,
     }
 
-    fn show<'b, P: AsRef<Path>, L: Into<LineNumber>, I: Iterator<Item=&'b BreakPoint>>(&mut self, file: P, line: L, breakpoints: I, gdb: &mut gdbmi::GDB) -> Result<(), () /* Disassembly unsuccessful */> {
-        let line_u: usize = line.into().into();
-        let ref disass_object = gdb.execute(&MiCommand::data_disassemble_file(file, line_u, None)).expect("disassembly successful").results["asm_insns"];
-        if let &JsonValue::Array(ref members) = disass_object {
-            let mut asm_storage = MemoryLineStorage::<AssemblyLine>::new();
-            let mut last_stop_line: Option<LineIndex> = None;
-            for (line_index, tuple) in members.iter().enumerate() {
-                let instruction = tuple["inst"].as_str().expect("No instruction in disassembly object");
-                let address_str = tuple["address"].as_str().expect("No address in disassembly object");
-                let address = Address::parse(address_str).expect("Parse address");
-                if self.last_stop_position.map(|a| a == address).unwrap_or(false) {
-                    last_stop_line = Some(line_index.into());
+    impl AssemblyDecorator {
+        fn new<'a, I: Iterator<Item=&'a BreakPoint>>(address_range: Range<Address>, stop_position: Option<Address>, breakpoints: I) -> Self {
+            let addresses = breakpoints.filter_map(|bp| {
+                if bp.enabled && address_range.start <= bp.address && bp.address < address_range.end {
+                    Some(bp.address)
+                } else {
+                    None
                 }
-                asm_storage.lines.push(AssemblyLine::new(instruction.to_owned(), address));
+            }).collect();
+            let stop_position = if let Some(p) = stop_position {
+                if address_range.start <= p && p < address_range.end {
+                    Some(p)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+            AssemblyDecorator {
+                stop_position: stop_position,
+                breakpoint_addresses: addresses,
+            }
+        }
+    }
+
+    impl LineDecorator for AssemblyDecorator {
+        type Line = AssemblyLine;
+        fn horizontal_space_demand<'a, 'b: 'a>(&'a self, lines: Box<DoubleEndedIterator<Item=(LineIndex, Self::Line)> + 'b>) -> Demand {
+            let max_space = lines.last().map(|(_,l)| {
+                ::unicode_width::UnicodeWidthStr::width(format!(" 0x{:x} ", l.address.0).as_str())
+            }).unwrap_or(0);
+            Demand::from_to(0, max_space as u32)
+        }
+        fn decorate(&self, line: &Self::Line, _: LineIndex, mut window: Window) {
+            let width = window.get_width() as usize - 4;
+            let mut cursor = Cursor::new(&mut window).position(0,0);
+
+            use std::fmt::Write;
+            let at_stop_position = self.stop_position.map(|p| p ==line.address).unwrap_or(false);
+            let right_border = if at_stop_position {
+                '▶'
+            } else {
+                ' '
+            };
+            let style = if self.breakpoint_addresses.contains(&line.address) {
+                TextAttribute::new(Color::red(), None, None)
+            } else if at_stop_position {
+                TextAttribute::new(Color::green(), None, Style::new().bold())
+            } else {
+                TextAttribute::plain()
+            };
+            cursor.set_text_attribute(style);
+            write!(cursor, " 0x{:0>width$x}{}", line.address.0, right_border, width=width).unwrap();
+        }
+    }
+
+    pub struct AssemblyView<'a> {
+        highlighting_theme: &'a Theme,
+        syntax_set: SyntaxSet,
+        pager: Pager<MemoryLineStorage<AssemblyLine>, SyntectHighLighter<'a>, AssemblyDecorator>,
+        last_stop_position: Option<Address>,
+    }
+
+
+    impl<'a> AssemblyView<'a> {
+        pub fn new(highlighting_theme: &'a Theme) -> Self {
+            AssemblyView {
+                highlighting_theme: highlighting_theme,
+                syntax_set: SyntaxSet::load_defaults_nonewlines(),
+                pager: Pager::new(),
+                last_stop_position: None,
+            }
+        }
+        fn set_last_stop_position(&mut self, pos: Address) {
+            self.last_stop_position = Some(pos);
+        }
+
+        fn go_to_address(&mut self, pos: Address) -> Result<(), PagerError> {
+            self.pager.go_to_line_if(|_, line| line.address == pos)
+        }
+
+        fn go_to_first_applicable_line<L: Into<LineNumber>>(&mut self, file: &Path, line: L) -> Result<(), PagerError> {
+            let line: LineNumber = line.into();
+            self.pager.go_to_line_if(|_, l| {
+                if let Some(ref src_position) = l.src_position {
+                    src_position.file == file && src_position.line == line
+                } else {
+                    false
+                }
+            })
+        }
+
+        fn go_to_last_stop_position(&mut self) -> Result<(), PagerError> {
+            if let Some(address) = self.last_stop_position {
+                self.go_to_address(address)
+            } else {
+                Err(PagerError::LineDoesNotExist)
+            }
+        }
+
+        fn show<'b, P: AsRef<Path>, L: Into<LineNumber>, I: Iterator<Item=&'b BreakPoint>>(&mut self, file: P, line: L, breakpoints: I, gdb: &mut gdbmi::GDB) -> Result<(), () /* Disassembly unsuccessful */> {
+            let line_u: usize = line.into().into();
+            let ref disass_object = gdb.execute(&MiCommand::data_disassemble_file(file, line_u, None)).expect("disassembly successful").results["asm_insns"];
+            if let &JsonValue::Array(ref members) = disass_object {
+                let mut asm_storage = MemoryLineStorage::<AssemblyLine>::new();
+                //TODO use inline assembly mode and keep track of SrcPosition for each instruction!
+                for tuple in members.iter() {
+                    let instruction = tuple["inst"].as_str().expect("No instruction in disassembly object");
+                    let address_str = tuple["address"].as_str().expect("No address in disassembly object");
+                    let address = Address::parse(address_str).expect("Parse address");
+                    asm_storage.lines.push(AssemblyLine::new(instruction.to_owned(), address, None /*TODO!*/));
             }
             let min_address = Address::parse(members.first().expect("No instructions")["address"].as_str().expect("min_address not present or not a string")).expect("Parse min address");
             //TODO: use RangeInclusive when available on stable
@@ -208,11 +246,6 @@ impl<'a> AssemblyView<'a> {
                 PagerContent::create(asm_storage)
                 .with_highlighter(SyntectHighLighter::new(syntax, self.highlighting_theme))
                 .with_decorator(AssemblyDecorator::new(min_address..max_address, self.last_stop_position, breakpoints)));
-            //TODO: Do not always go to last_stop_pos. maybe we want to sync with src_view (e.g. if
-            // asmview was just activated!)
-            if let Some(new_active_line) = last_stop_line {
-                self.pager.go_to_line(new_active_line).expect("last_cursor_line in pager");
-            }
             Ok(())
         } else {
             // Disassembly object is not an array:
@@ -312,6 +345,27 @@ impl<'a> SourceView<'a> {
     }
     fn set_last_stop_position<P: AsRef<Path>>(&mut self, file: P, pos: LineNumber) {
         self.last_stop_position = Some((file.as_ref().to_path_buf(), pos));
+    }
+
+    fn go_to_line<L: Into<LineNumber>>(&mut self, line: L) -> Result<(), PagerError> {
+        self.pager.go_to_line(line.into())
+    }
+
+    fn go_to_last_stop_position(&mut self) -> Result<(), PagerError> {
+        let (same_file, line) = if let Some(ref content) = self.pager.content {
+            if let Some((ref file, line)) = self.last_stop_position {
+                (file == content.storage.get_file_path(), line)
+            } else {
+                return Err(PagerError::LineDoesNotExist)
+            }
+        } else {
+            return Err(PagerError::LineDoesNotExist)
+        };
+        if same_file {
+            self.go_to_line(line)
+        } else {
+            Err(PagerError::LineDoesNotExist)
+        }
     }
 
     fn get_last_line_number_for<P: AsRef<Path>>(&self, file: P) -> Option<LineNumber>{
@@ -441,11 +495,17 @@ impl<'a> CodeWindow<'a> {
             let line: LineNumber = frame["line"].as_str().expect("line present").parse::<usize>().expect("Parse usize").into();
             let address = Address::parse(frame["addr"].as_str().expect("address present")).expect("Parse address");
             self.src_view.set_last_stop_position(path, line);
-            let _ = self.src_view.show(path, line, self.breakpoints.values()); // GDB may give out invalid paths, so we just ignore them (at least for now)
+            // GDB may give out invalid paths, so we just ignore them (at least for now)
+            if self.src_view.show(path, line, self.breakpoints.values()).is_ok() {
+                self.src_view.go_to_last_stop_position().expect("We just set a last stop pos!");
+            }
+
             self.asm_view.set_last_stop_position(address);
             if self.asm_view.show(path, line, self.breakpoints.values(), gdb).is_err() {
                 self.mode = CodeWindowMode::Source;
-            };
+            } else {
+                self.asm_view.go_to_last_stop_position().expect("We just set a last stop pos and it must be valid!");
+            }
         }
     }
 
@@ -478,6 +538,11 @@ impl<'a> CodeWindow<'a> {
             CodeWindowMode::Source => {
                 if let Some(path) = self.src_view.current_file() {
                     if self.asm_view.show(path, self.src_view.current_line(), self.breakpoints.values(), gdb).is_ok() {
+
+                        // The current line may not have associated assembly!
+                        // TODO: Maybe we want to try the next line or something...
+                        let _ = self.asm_view.go_to_first_applicable_line(path, self.src_view.current_line());
+
                         CodeWindowMode::Assembly
                     } else {
                         CodeWindowMode::Source
@@ -498,7 +563,7 @@ impl<'a> CodeWindow<'a> {
             _ => Some(i),
         }).chain(|i: Input| {
             match self.mode {
-                CodeWindowMode::Assembly => self.asm_view.event(i, gdb),
+                CodeWindowMode::Assembly => self.asm_view.event(i, gdb), //TODO: update src view and jump to current line
                 CodeWindowMode::Source => self.src_view.event(i, gdb),
             }
             None

@@ -10,11 +10,9 @@ use ndarray::{
 };
 use std::cmp::max;
 use std::borrow::Cow;
-use std::ops::{
-    Range,
-    RangeFrom,
-    RangeFull,
-    RangeTo,
+use ranges::{
+    Bound,
+    RangeArgument,
 };
 use ::unicode_segmentation::UnicodeSegmentation;
 
@@ -22,49 +20,6 @@ type CharMatrixView<'w> = ArrayViewMut<'w, FormattedChar, Ix2>;
 pub struct Window<'w> {
     values: CharMatrixView<'w>,
     default_format: TextAttribute,
-}
-
-//TODO: Move to std traits and types once they are stabilized: https://github.com/rust-lang/rust/issues/30877
-pub enum WindowBound<T> {
-    Unbound,
-    Inclusive(T),
-    Exclusive(T),
-}
-pub trait WindowRangeArgument<T> {
-    fn start(&self) -> WindowBound<T>;
-    fn end(&self) -> WindowBound<T>;
-}
-impl<T: Copy> WindowRangeArgument<T> for Range<T> {
-    fn start(&self) -> WindowBound<T> {
-        WindowBound::Inclusive(self.start)
-    }
-    fn end(&self) -> WindowBound<T> {
-        WindowBound::Exclusive(self.end)
-    }
-}
-impl<T: Copy> WindowRangeArgument<T> for RangeFrom<T> {
-    fn start(&self) -> WindowBound<T> {
-        WindowBound::Inclusive(self.start)
-    }
-    fn end(&self) -> WindowBound<T> {
-        WindowBound::Unbound
-    }
-}
-impl<T: Copy> WindowRangeArgument<T> for RangeTo<T> {
-    fn start(&self) -> WindowBound<T> {
-        WindowBound::Unbound
-    }
-    fn end(&self) -> WindowBound<T> {
-        WindowBound::Exclusive(self.end)
-    }
-}
-impl<T> WindowRangeArgument<T> for RangeFull {
-    fn start(&self) -> WindowBound<T> {
-        WindowBound::Unbound
-    }
-    fn end(&self) -> WindowBound<T> {
-        WindowBound::Unbound
-    }
 }
 
 
@@ -92,26 +47,26 @@ impl<'w> Window<'w> {
         }
     }
 
-    pub fn create_subwindow<'a, WX: WindowRangeArgument<u32>, WY: WindowRangeArgument<u32>>(&'a mut self, x_range: WX, y_range: WY) -> Window<'a> {
+    pub fn create_subwindow<'a, WX: RangeArgument<u32>, WY: RangeArgument<u32>>(&'a mut self, x_range: WX, y_range: WY) -> Window<'a> {
         let x_range_start = match x_range.start() {
-            WindowBound::Unbound => 0,
-            WindowBound::Inclusive(i) => i,
-            WindowBound::Exclusive(i) => i-1,
+            Bound::Unbound => 0,
+            Bound::Inclusive(i) => i,
+            Bound::Exclusive(i) => i-1,
         };
         let x_range_end = match x_range.end() {
-            WindowBound::Unbound => self.get_width(),
-            WindowBound::Inclusive(i) => i-1,
-            WindowBound::Exclusive(i) => i,
+            Bound::Unbound => self.get_width(),
+            Bound::Inclusive(i) => i-1,
+            Bound::Exclusive(i) => i,
         };
         let y_range_start = match y_range.start() {
-            WindowBound::Unbound => 0,
-            WindowBound::Inclusive(i) => i,
-            WindowBound::Exclusive(i) => i-1,
+            Bound::Unbound => 0,
+            Bound::Inclusive(i) => i,
+            Bound::Exclusive(i) => i-1,
         };
         let y_range_end = match y_range.end() {
-            WindowBound::Unbound => self.get_height(),
-            WindowBound::Inclusive(i) => i-1,
-            WindowBound::Exclusive(i) => i,
+            Bound::Unbound => self.get_height(),
+            Bound::Inclusive(i) => i-1,
+            Bound::Exclusive(i) => i,
         };
         assert!(x_range_start <= x_range_end, "Invalid x_range: start > end");
         assert!(y_range_start <= y_range_end, "Invalid y_range: start > end");

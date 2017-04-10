@@ -21,7 +21,10 @@ use std::ops:: {
     Sub,
     SubAssign,
 };
-
+use ranges::{
+    Bound,
+    RangeArgument,
+};
 // Starting from 0, i.e., treating LineStorage like an array of lines
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Debug, Hash)]
 pub struct LineIndex(usize);
@@ -131,11 +134,32 @@ pub trait LineStorage {
     type Line;
     fn view_line<'a, I: Into<LineIndex>>(&'a mut self, pos: I) -> Option<Self::Line>;
 
-    fn view<'a, I: Into<LineIndex>>(&'a mut self, range: Range<I>) -> Box<DoubleEndedIterator<Item=(LineIndex, Self::Line)> + 'a>
+    fn view<'a, I: Into<LineIndex>, R: RangeArgument<I>>(&'a mut self, range: R) -> Box<DoubleEndedIterator<Item=(LineIndex, Self::Line)> + 'a>
         where Self: ::std::marker::Sized { // Not exactly sure, why this is needed... we only store a reference?!
+        let start: LineIndex = match range.start() { // Always inclusive
+            Bound::Unbound => 0.into(),
+            Bound::Inclusive(i) => i.into(),
+            Bound::Exclusive(i) => i.into()+1,
+        };
+        let end: LineIndex = match range.end() { // Always exclusive
+            Bound::Unbound => {
+                //This is not particularly nice, but what can you do...
+                let u_start: usize = start.into();
+                let mut end = start;
+                for i in u_start.. {
+                    end += 1;
+                    if self.view_line(i).is_none() {
+                        break;
+                    }
+                }
+                end
+            },
+            Bound::Inclusive(i) => i.into()+1,
+            Bound::Exclusive(i) => i.into(),
+        };
         let urange = Range::<usize> {
-            start: range.start.into().into(),
-            end: range.end.into().into(),
+            start: start.into(),
+            end: end.into(),
         };
         Box::new(LineStorageIterator::<Self::Line, Self>::new(self, urange))
     }

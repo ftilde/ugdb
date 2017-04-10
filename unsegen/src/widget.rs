@@ -49,7 +49,7 @@ impl Demand {
         }
     }
 
-    pub fn max(self, other: Self) -> Self {
+    pub fn max(&self, other: Self) -> Self {
         Demand {
             min: max(self.min, other.min),
             max: if let (Some(l), Some(r)) = (self.max, other.max) {
@@ -58,5 +58,9 @@ impl Demand {
                 None
             }
         }
+    }
+
+    pub fn max_assign(&mut self, other: Self) {
+        *self = self.max(other);
     }
 }

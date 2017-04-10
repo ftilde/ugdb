@@ -11,6 +11,7 @@ pub mod layouts;
 pub mod linestorage;
 pub mod terminal;
 pub mod textattribute;
+pub mod ranges;
 pub mod widget;
 pub mod widgets;
 pub mod window;

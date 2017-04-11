@@ -1,0 +1,13 @@
+Finish up CodeWindow:
+ - Breakpoint handling
+Fix Cursor:
+ - Remove Seldomly used WrappingDirection. Handle special case in logviewer seperately
+ - Properly deal with width > 1 grapheme clusters and tabs
+Add WatchTable (?):
+ - Implement table widget, JsonObjectViewer
+Add Container management:
+ - Top level layouting as a tree of containers (cf. i3)
+ - Different kinds of containers (hsplit, vsplit, widget (or extension), grid?
+ - Configurable by layout file (json)
+Add MemoryViewer:
+ - It may be useful to use a table, or just use split windows

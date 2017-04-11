@@ -217,6 +217,13 @@ impl<S, H, D> Pager<S, H, D>
 
     pub fn load(&mut self, content: PagerContent<S, H, D>) {
         self.content = Some(content);
+
+        // Go back to last available line
+        let mut new_current_line = self.current_line;
+        while !self.line_exists(new_current_line) {
+            new_current_line -= 1;
+        }
+        self.current_line = new_current_line;
     }
     fn line_exists<L: Into<LineIndex>>(&mut self, line: L) -> bool {
         let line: LineIndex = line.into();

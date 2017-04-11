@@ -27,7 +27,7 @@ use ranges::{
 };
 // Starting from 0, i.e., treating LineStorage like an array of lines
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Debug, Hash)]
-pub struct LineIndex(usize);
+pub struct LineIndex(pub usize);
 impl From<usize> for LineIndex {
     fn from(index: usize) -> Self {
         LineIndex(index)
@@ -79,7 +79,7 @@ impl fmt::Display for LineIndex {
 
 // Starting from 1, i.e., treating LineStorage like lines displayed in an editor
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Debug, Hash)]
-pub struct LineNumber(usize);
+pub struct LineNumber(pub usize);
 impl From<usize> for LineNumber {
     fn from(number: usize) -> Self {
         LineNumber(number)

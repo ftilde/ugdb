@@ -1,7 +1,11 @@
-use std::ops::Range;
 use std::cmp::{
     min,
 };
+use std::cell::{
+    RefCell,
+};
+use std::fmt;
+use std::fs::File;
 use std::io;
 use std::io::{
     BufReader,
@@ -9,8 +13,6 @@ use std::io::{
     SeekFrom,
     Seek,
 };
-use std::fmt;
-use std::fs::File;
 use std::path::{
     Path,
     PathBuf,
@@ -20,6 +22,7 @@ use std::ops:: {
     AddAssign,
     Sub,
     SubAssign,
+    Range,
 };
 use ranges::{
     Bound,
@@ -132,9 +135,9 @@ impl fmt::Display for LineNumber {
 
 pub trait LineStorage {
     type Line;
-    fn view_line<'a, I: Into<LineIndex>>(&'a mut self, pos: I) -> Option<Self::Line>;
+    fn view_line<I: Into<LineIndex>>(&self, pos: I) -> Option<Self::Line>;
 
-    fn view<'a, I: Into<LineIndex>, R: RangeArgument<I>>(&'a mut self, range: R) -> Box<DoubleEndedIterator<Item=(LineIndex, Self::Line)> + 'a>
+    fn view<'a, I: Into<LineIndex>, R: RangeArgument<I>>(&'a self, range: R) -> Box<DoubleEndedIterator<Item=(LineIndex, Self::Line)> + 'a>
         where Self: ::std::marker::Sized { // Not exactly sure, why this is needed... we only store a reference?!
         let start: LineIndex = match range.start() { // Always inclusive
             Bound::Unbound => 0.into(),
@@ -166,12 +169,12 @@ pub trait LineStorage {
 }
 
 struct LineStorageIterator<'a, I: 'a, L: 'a + LineStorage<Line=I>> {
-    storage: &'a mut L,
+    storage: &'a L,
     range: Range<usize>,
 }
 
 impl<'a, I: 'a, L: 'a + LineStorage<Line=I>> LineStorageIterator<'a, I, L> {
-    fn new(storage: &'a mut L, range: Range<usize>) -> Self {
+    fn new(storage: &'a L, range: Range<usize>) -> Self {
         LineStorageIterator {
             storage: storage,
             range: range,
@@ -185,7 +188,7 @@ impl<'a, I: 'a, L: 'a + LineStorage<Line=I>> Iterator for LineStorageIterator<'a
             let item_index = self.range.start;
             self.range.start += 1;
             if let Some(line) = self.storage.view_line(item_index) {
-                Some((item_index.into(), line)) //TODO: maybe we want to treat none differently here?
+                Some((item_index.into(), line))
             } else {
                 None
             }
@@ -201,7 +204,7 @@ impl<'a, I: 'a, L: 'a + LineStorage<Line=I>> DoubleEndedIterator for LineStorage
             let item_index = self.range.end - 1;
             self.range.end -= 1;
             if let Some(line) = self.storage.view_line(item_index) {
-                Some((item_index.into(), line)) //TODO: maybe we want to treat none differently here?
+                Some((item_index.into(), line))
             } else {
                 None
             }
@@ -239,7 +242,7 @@ impl<L: Default> MemoryLineStorage<L> {
 
 impl<L: Clone> LineStorage for MemoryLineStorage<L> {
     type Line = L;
-    fn view_line<'a, I: Into<LineIndex>>(&'a mut self, pos: I) -> Option<L> {
+    fn view_line<I: Into<LineIndex>>(&self, pos: I) -> Option<L> {
         let upos: usize = pos.into().into();
         self.lines.get(upos).map(|s: &L| s.clone())
     }
@@ -263,16 +266,16 @@ impl fmt::Write for StringLineStorage {
 }
 
 pub struct FileLineStorage {
-    reader: BufReader<File>,
-    line_seek_positions: Vec<usize>,
+    reader: RefCell<BufReader<File>>,
+    line_seek_positions: RefCell<Vec<usize>>,
     file_path: PathBuf,
 }
 impl FileLineStorage {
     pub fn new<P: AsRef<Path>>(path: P) -> io::Result<Self> {
         let file = try!{File::open(path.as_ref())};
         Ok(FileLineStorage {
-            reader: BufReader::new(file),
-            line_seek_positions: vec![0],
+            reader: RefCell::new(BufReader::new(file)),
+            line_seek_positions: RefCell::new(vec![0]),
             file_path: path.as_ref().to_path_buf(),
         })
     }
@@ -281,31 +284,34 @@ impl FileLineStorage {
         &self.file_path.as_path()
     }
 
-    fn get_line(&mut self, index: usize) -> Option<String> {
+    fn get_line(&self, index: usize) -> Option<String> {
         let mut buffer = Vec::new();
 
+        let mut line_seek_positions = self.line_seek_positions.borrow_mut();
+        let mut reader = self.reader.borrow_mut();
+
         loop {
-            let current_max_index: usize = self.line_seek_positions[min(index, self.line_seek_positions.len()-1)];
-            self.reader.seek(SeekFrom::Start(current_max_index as u64)).expect("seek to line pos");
-            let n_bytes = self.reader.read_until(b'\n', &mut buffer).expect("read line");
+            let current_max_index: usize = line_seek_positions[min(index, line_seek_positions.len()-1)];
+            reader.seek(SeekFrom::Start(current_max_index as u64)).expect("seek to line pos");
+            let n_bytes = reader.read_until(b'\n', &mut buffer).expect("read line");
             if n_bytes == 0 { //We reached EOF
                 return None;
             }
-            if index < self.line_seek_positions.len() { //We found the desired line
+            if index < line_seek_positions.len() { //We found the desired line
                 let mut string = String::from_utf8_lossy(&buffer).into_owned();
                 if string.as_str().bytes().last().unwrap_or(b'_') == b'\n' {
                     string.pop();
                 }
                 return Some(string);
             }
-            self.line_seek_positions.push(current_max_index + n_bytes);
+            line_seek_positions.push(current_max_index + n_bytes);
         }
     }
 }
 
 impl LineStorage for FileLineStorage {
     type Line = String;
-    fn view_line<'a, I: Into<LineIndex>>(&'a mut self, pos: I) -> Option<String> {
+    fn view_line<I: Into<LineIndex>>(&self, pos: I) -> Option<String> {
         self.get_line(pos.into().into())
     }
 }

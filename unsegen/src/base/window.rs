@@ -141,6 +141,7 @@ pub struct Cursor<'c, 'w: 'c> {
     style_modifier: StyleModifier,
     x: i32,
     y: i32,
+    line_start_column: i32,
     tab_column_width: usize,
 }
 
@@ -152,6 +153,7 @@ impl<'c, 'w> Cursor<'c, 'w> {
             style_modifier: StyleModifier::none(),
             x: 0,
             y: 0,
+            line_start_column: 0,
             tab_column_width: 4,
         }
     }
@@ -170,17 +172,26 @@ impl<'c, 'w> Cursor<'c, 'w> {
         (self.x, self.y)
     }
 
-    pub fn set_wrapping_mode(&mut self, wm: WrappingMode) {
-        self.wrapping_mode = wm;
-    }
-
     pub fn move_by(&mut self, x: i32, y: i32) {
         self.x += x;
         self.y += y;
     }
 
+    pub fn set_wrapping_mode(&mut self, wm: WrappingMode) {
+        self.wrapping_mode = wm;
+    }
+
     pub fn wrapping_mode(mut self, wm: WrappingMode) -> Self {
         self.set_wrapping_mode(wm);
+        self
+    }
+
+    pub fn set_line_start_column(&mut self, column: i32) {
+        self.line_start_column = column;
+    }
+
+    pub fn line_start_column(mut self, column: i32) -> Self{
+        self.set_line_start_column(column);
         self
     }
 
@@ -197,7 +208,7 @@ impl<'c, 'w> Cursor<'c, 'w> {
 
     pub fn wrap_line(&mut self) {
         self.y += 1;
-        self.x = 0;
+        self.x = self.line_start_column;
     }
 
     fn write_grapheme_cluster_unchecked(&mut self, cluster: FormattedChar) {
@@ -240,8 +251,7 @@ impl<'c, 'w> Cursor<'c, 'w> {
                     Cow::Borrowed(grapheme_cluster_ref)
                 };
                 if self.wrapping_mode == WrappingMode::Wrap && (self.x as u32) >= self.window.get_width() {
-                    self.y += 1;
-                    self.x = 0;
+                    self.wrap_line();
                 }
                 if     0 <= self.x && (self.x as u32) < self.window.get_width()
                     && 0 <= self.y && (self.y as u32) < self.window.get_height() {

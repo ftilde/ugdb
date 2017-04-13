@@ -10,7 +10,7 @@ use ndarray::{
 };
 use std::cmp::max;
 use std::borrow::Cow;
-use ranges::{
+use base::ranges::{
     Bound,
     RangeArgument,
 };

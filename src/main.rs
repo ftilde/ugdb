@@ -35,6 +35,11 @@ use gdbmi::output::{
     OutOfBandRecord,
 };
 
+use unsegen::base::{
+    Terminal,
+    TextAttribute,
+};
+
 fn pty_output_loop(sink: Sender<Vec<u8>>, mut reader: pty::PTYOutput) {
     use ::std::io::Read;
 
@@ -92,12 +97,12 @@ fn main() {
     let stdout = std::io::stdout();
     {
 
-        let mut terminal = unsegen::Terminal::new(stdout.lock());
+        let mut terminal = Terminal::new(stdout.lock());
         let theme_set = syntect::highlighting::ThemeSet::load_defaults();
         let mut tui = tui::Tui::new(pty_input, &theme_set.themes["base16-ocean.dark"]);
         tui.add_debug_message(&ptyname);
 
-        tui.draw(terminal.create_root_window(unsegen::TextAttribute::default()));
+        tui.draw(terminal.create_root_window(TextAttribute::default()));
         terminal.present();
 
         loop {
@@ -130,7 +135,7 @@ fn main() {
                     }
                 }
             }
-            tui.draw(terminal.create_root_window(unsegen::TextAttribute::default()));
+            tui.draw(terminal.create_root_window(TextAttribute::default()));
             terminal.present();
         }
     }

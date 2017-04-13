@@ -1,19 +1,21 @@
 use super::super::{
     Demand,
     HorizontalLayout,
-    Scrollable,
     SeparatingStyle,
     Widget,
+};
+use base::{
     Window,
 };
 use super::{
     LineEdit,
     LineLabel,
 };
-use super::super::input::{
+use input::{
     Editable,
     Navigatable,
     Writable,
+    Scrollable,
 };
 
 pub struct PromptLine {

@@ -1,4 +1,4 @@
-use super::{
+use base::{
     Window,
 };
 use std::cmp::max;

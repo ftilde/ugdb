@@ -1,10 +1,15 @@
-use unsegen;
-
-use unsegen::{
+use unsegen::base::{
+    Window,
+};
+use unsegen::input::{
+    Writable,
+};
+use unsegen::widget::{
     Demand,
     Widget,
-    Window,
-    Writable,
+};
+use unsegen::widget::widgets::{
+    LogViewer,
 };
 // Terminal ---------------------------------------------------------------------------------------
 use pty;
@@ -12,7 +17,7 @@ pub struct PseudoTerminal {
     //width: u32,
     //height: u32,
     pty: pty::PTYInput,
-    display: unsegen::widgets::LogViewer,
+    display: LogViewer,
     //prompt_line: unsegen::widgets::PromptLine,
     //layout: unsegen::VerticalLayout,
 
@@ -23,7 +28,7 @@ impl PseudoTerminal {
     pub fn new(pty: pty::PTYInput) -> Self {
         PseudoTerminal {
             pty: pty,
-            display: unsegen::widgets::LogViewer::new(),
+            display: LogViewer::new(),
             //prompt_line: unsegen::widgets::PromptLine::with_prompt("".into()),
             //layout: unsegen::VerticalLayout::new(unsegen::SeparatingStyle::Draw('=')),
             input_buffer: Vec::new(),

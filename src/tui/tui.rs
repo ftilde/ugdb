@@ -1,8 +1,15 @@
-use unsegen::{
+use unsegen::base::{
+    Color,
+    Style,
+    TextAttribute,
+    Window,
+};
+use unsegen::widget::{
     SeparatingStyle,
     VerticalLayout,
     Widget,
-    Window,
+};
+use unsegen::input::{
     WriteBehavior,
 };
 use input::{
@@ -85,7 +92,6 @@ impl<'a> Tui<'a> {
     }
 
     pub fn draw(&mut self, window: Window) {
-        use unsegen::{TextAttribute, Color, Style};
         let split_pos = window.get_width()/2-1;
         let (window_l, rest) = window.split_h(split_pos);
 

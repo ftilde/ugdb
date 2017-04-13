@@ -1,22 +1,27 @@
 use unsegen;
 use gdbmi;
 
-use unsegen::{
-    Demand,
+use unsegen::base::{
+    Window,
+};
+use unsegen::input::{
     EditBehavior,
     Event,
     Input,
     Key,
     ScrollBehavior,
+};
+use unsegen::widget::{
+    Demand,
     SeparatingStyle,
     VerticalLayout,
     Widget,
-    Window,
 };
-use unsegen::widgets::{
+use unsegen::widget::widgets::{
     LogViewer,
     PromptLine,
 };
+
 use input::{
     ConsoleEvent,
 };
@@ -84,7 +89,7 @@ impl Console {
         }
     }
 
-    fn handle_raw_input(&mut self, input: unsegen::Input, gdb: &mut gdbmi::GDB) { //TODO more console events
+    fn handle_raw_input(&mut self, input: unsegen::input::Input, gdb: &mut gdbmi::GDB) { //TODO more console events
         if input.event == Event::Key(Key::Char('\n')) {
             let line = if self.prompt_line.active_line().is_empty() {
                 self.prompt_line.previous_line(1).unwrap_or("").to_owned()

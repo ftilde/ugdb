@@ -1,6 +1,8 @@
 use super::{
     Demand,
     Widget,
+};
+use base::{
     Window,
 };
 use std::cmp::{max, min};

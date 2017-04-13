@@ -1,7 +1,9 @@
 use super::super::{
-    Cursor,
     Demand,
     Widget,
+};
+use base::{
+    Cursor,
     Window,
 };
 use super::{

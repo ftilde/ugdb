@@ -1,22 +1,27 @@
-use unsegen::{
+use unsegen::base::{
     Cursor,
     Color,
-    Demand,
-    Event,
-    FileLineStorage,
-    HorizontalLayout,
-    Key,
-    LineNumber,
-    LineIndex,
-    MemoryLineStorage,
-    ScrollBehavior,
-    SeparatingStyle,
     Style,
     TextAttribute,
-    Widget,
     Window,
 };
-use unsegen::widgets::{
+use unsegen::input::{
+    Event,
+    Key,
+    ScrollBehavior,
+};
+use unsegen::widget::{
+    Demand,
+    FileLineStorage,
+    HorizontalLayout,
+    LineNumber,
+    LineIndex,
+    LineStorage,
+    MemoryLineStorage,
+    SeparatingStyle,
+    Widget,
+};
+use unsegen::widget::widgets::{
     LineDecorator,
     Pager,
     PagerContent,
@@ -227,7 +232,6 @@ impl<'a> AssemblyView<'a> {
 
     fn update_decoration<'b, I: Iterator<Item=&'b BreakPoint>>(&mut self, breakpoints: I) {
         if let Some(ref mut content) = self.pager.content {
-            use unsegen::LineStorage;
             if let Some(first_line) = content.storage.view_line(LineIndex(0)) {
                 let min_address = first_line.address;
                 let max_address = content.storage.view(0..).last().expect("we know we have at least one line").1.address;

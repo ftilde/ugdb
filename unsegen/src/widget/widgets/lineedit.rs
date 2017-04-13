@@ -1,7 +1,9 @@
 use super::super::{
-    Cursor,
     Demand,
     Widget,
+};
+use base::{
+    Cursor,
     Window,
     Style,
     TextAttribute,
@@ -9,7 +11,7 @@ use super::super::{
 use super::{
     count_grapheme_clusters,
 };
-use super::super::input::{
+use input::{
     Editable,
     Navigatable,
     Writable,

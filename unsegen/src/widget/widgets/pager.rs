@@ -1,19 +1,21 @@
 use super::super::{
-    Color,
-    Cursor,
     Demand,
     layout_linearly,
     LineIndex,
     LineNumber,
     LineStorage,
+    Widget,
+};
+use base::{
+    Color,
+    Cursor,
     Style,
     TextAttribute,
-    Widget,
     Window,
     WrappingDirection,
     WrappingMode,
 };
-use super::super::input::{
+use input::{
     Scrollable,
 };
 

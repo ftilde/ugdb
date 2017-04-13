@@ -1,14 +1,16 @@
 use super::super::{
-    Cursor,
     Demand,
     LineStorage,
     MemoryLineStorage,
     Widget,
+};
+use base::{
+    Cursor,
     Window,
     WrappingDirection,
     WrappingMode,
 };
-use super::super::input::{
+use input::{
     Scrollable,
 };
 

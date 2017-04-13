@@ -24,7 +24,7 @@ use std::ops:: {
     SubAssign,
     Range,
 };
-use ranges::{
+use base::ranges::{
     Bound,
     RangeArgument,
 };

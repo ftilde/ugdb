@@ -1,7 +1,6 @@
 Finish up CodeWindow:
  - Breakpoint handling
 Fix Cursor:
- - Remove Seldomly used WrappingDirection. Handle special case in logviewer seperately
  - Properly deal with width > 1 grapheme clusters and tabs
 Add WatchTable (?):
  - Implement table widget, JsonObjectViewer

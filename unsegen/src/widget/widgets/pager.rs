@@ -12,7 +12,6 @@ use base::{
     StyleModifier,
     TextFormat,
     Window,
-    WrappingDirection,
     WrappingMode,
 };
 use input::{
@@ -291,7 +290,6 @@ impl<S, H, D> Widget for Pager<S, H, D>
 
             let mut cursor = Cursor::new(&mut content_window)
                 .position(0, 0)
-                .wrapping_direction(WrappingDirection::Down)
                 .wrapping_mode(WrappingMode::Wrap);
 
             let num_line_wraps_until_current_line = {

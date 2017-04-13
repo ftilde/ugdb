@@ -129,12 +129,6 @@ impl<'w> Window<'w> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum WrappingDirection {
-    Down,
-    Up,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum WrappingMode {
     Wrap,
     NoWrap,
@@ -143,7 +137,6 @@ pub enum WrappingMode {
 
 pub struct Cursor<'c, 'w: 'c> {
     window: &'c mut Window<'w>,
-    wrapping_direction: WrappingDirection,
     wrapping_mode: WrappingMode,
     style_modifier: StyleModifier,
     x: i32,
@@ -155,7 +148,6 @@ impl<'c, 'w> Cursor<'c, 'w> {
     pub fn new(window: &'c mut Window<'w>) -> Self {
         Cursor {
             window: window,
-            wrapping_direction: WrappingDirection::Down,
             wrapping_mode: WrappingMode::NoWrap,
             style_modifier: StyleModifier::none(),
             x: 0,
@@ -178,17 +170,13 @@ impl<'c, 'w> Cursor<'c, 'w> {
         (self.x, self.y)
     }
 
-    pub fn set_wrapping_direction(&mut self, wrapping_direction: WrappingDirection) {
-        self.wrapping_direction = wrapping_direction;
-    }
-
-    pub fn wrapping_direction(mut self, wrapping_direction: WrappingDirection) -> Self {
-        self.set_wrapping_direction(wrapping_direction);
-        self
-    }
-
     pub fn set_wrapping_mode(&mut self, wm: WrappingMode) {
         self.wrapping_mode = wm;
+    }
+
+    pub fn move_by(&mut self, x: i32, y: i32) {
+        self.x += x;
+        self.y += y;
     }
 
     pub fn wrapping_mode(mut self, wm: WrappingMode) -> Self {
@@ -208,14 +196,7 @@ impl<'c, 'w> Cursor<'c, 'w> {
     }
 
     pub fn wrap_line(&mut self) {
-        match self.wrapping_direction {
-            WrappingDirection::Down => {
-                self.y += 1;
-            },
-            WrappingDirection::Up => {
-                self.y -= 1;
-            },
-        }
+        self.y += 1;
         self.x = 0;
     }
 
@@ -250,11 +231,6 @@ impl<'c, 'w> Cursor<'c, 'w> {
 
         let mut line_it = text.lines().peekable();
         while let Some(line) = line_it.next() {
-            let num_auto_wraps = self.num_expected_wraps(line) as i32;
-
-            if self.wrapping_direction == WrappingDirection::Up {
-                self.y -= num_auto_wraps; // reserve space for auto wraps
-            }
             for grapheme_cluster_ref in ::unicode_segmentation::UnicodeSegmentation::graphemes(line, true) {
                 let grapheme_cluster = if grapheme_cluster_ref == "\t" {
                     use std::iter::FromIterator;
@@ -284,9 +260,6 @@ impl<'c, 'w> Cursor<'c, 'w> {
                         self.x += 1;
                     }
                 }
-            }
-            if self.wrapping_direction == WrappingDirection::Up {
-                self.y -= num_auto_wraps; // Jump back to first line
             }
             if line_it.peek().is_some() {
                 self.wrap_line();

@@ -9,8 +9,8 @@ use super::super::{
 use base::{
     Color,
     Cursor,
-    Style,
-    TextAttribute,
+    StyleModifier,
+    TextFormat,
     Window,
     WrappingDirection,
     WrappingMode,
@@ -43,14 +43,14 @@ impl PagerLine for String {
 // Highlighter --------------------------------------------------------------------------------------------
 
 pub trait HighLighter {
-    fn highlight<'a>(&mut self, line: &'a str) -> Box<Iterator<Item=(TextAttribute, &'a str)> + 'a>;
+    fn highlight<'a>(&mut self, line: &'a str) -> Box<Iterator<Item=(StyleModifier, &'a str)> + 'a>;
 }
 
 pub struct NoHighLighter;
 
 impl HighLighter for NoHighLighter {
-    fn highlight<'a>(&mut self, line: &'a str) -> Box<Iterator<Item=(TextAttribute, &'a str)> + 'a> {
-        Box::new(Some((TextAttribute::plain(), line)).into_iter())
+    fn highlight<'a>(&mut self, line: &'a str) -> Box<Iterator<Item=(StyleModifier, &'a str)> + 'a> {
+        Box::new(Some((StyleModifier::none(), line)).into_iter())
     }
 }
 
@@ -67,7 +67,7 @@ impl<'a> SyntectHighLighter<'a> {
 }
 
 impl<'b> HighLighter for SyntectHighLighter<'b> {
-    fn highlight<'a>(&mut self, line: &'a str) -> Box<Iterator<Item=(TextAttribute, &'a str)> + 'a> {
+    fn highlight<'a>(&mut self, line: &'a str) -> Box<Iterator<Item=(StyleModifier, &'a str)> + 'a> {
         Box::new(
             self.highlighter.highlight(line).into_iter().map(|(h, s)| (to_text_attribute(&h), s))
             )
@@ -77,16 +77,16 @@ impl<'b> HighLighter for SyntectHighLighter<'b> {
 fn to_unsegen_color(color: &highlighting::Color) -> Color {
     Color::new(color.r, color.g, color.b)
 }
-fn to_unsegen_style(style: &highlighting::FontStyle) -> Style {
-    Style {
+fn to_unsegen_text_format(style: &highlighting::FontStyle) -> TextFormat {
+    TextFormat {
         bold: style.contains(highlighting::FONT_STYLE_BOLD),
         italic: style.contains(highlighting::FONT_STYLE_ITALIC),
         invert: false,
         underline: style.contains(highlighting::FONT_STYLE_UNDERLINE),
     }
 }
-fn to_text_attribute(style: &highlighting::Style) -> TextAttribute {
-    TextAttribute::new(to_unsegen_color(&style.foreground), to_unsegen_color(&style.background), to_unsegen_style(&style.font_style))
+fn to_text_attribute(style: &highlighting::Style) -> StyleModifier {
+    StyleModifier::new().fg_color(to_unsegen_color(&style.foreground)).bg_color(to_unsegen_color(&style.background)).format(to_unsegen_text_format(&style.font_style))
 }
 
 // LineDecorator ------------------------------------------------------------------------------------------
@@ -285,8 +285,8 @@ impl<S, H, D> Widget for Pager<S, H, D>
             let (mut decoration_window, mut content_window) = window.split_h(split_pos); //TODO: make splitting work for zero width windows!
 
             // Fill background with correct color
-            let (style, _) = content.highlighter.highlight(" ").next().expect("exactly one formatted space");
-            content_window.set_default_format(style);
+            let (bg_style, _) = content.highlighter.highlight(" ").next().expect("exactly one formatted space");
+            content_window.set_default_style(bg_style.apply_to_default());
             content_window.fill(' ');
 
             let mut cursor = Cursor::new(&mut content_window)
@@ -319,17 +319,17 @@ impl<S, H, D> Widget for Pager<S, H, D>
 
             for (line_index, line) in content.storage.view(min_line..max_line) {
                 let base_style = if line_index == self.current_line {
-                    TextAttribute::new(None, None, Style::new().invert().bold()).or(&style)
+                    StyleModifier::new().format(TextFormat::new().invert().bold())
                 } else {
-                    TextAttribute::default()
+                    StyleModifier::none()
                 };
 
                 let (_, start_y) = cursor.get_position();
                 for (style, region) in content.highlighter.highlight(line.get_content()) {
-                    cursor.set_text_attribute(base_style.or(&style));
+                    cursor.set_style_modifier(base_style.or(&style));
                     cursor.write(&region);
                 }
-                cursor.set_text_attribute(base_style);
+                cursor.set_style_modifier(base_style);
                 cursor.fill_and_wrap_line();
                 let (_, end_y) = cursor.get_position();
 

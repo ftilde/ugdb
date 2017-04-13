@@ -1,7 +1,7 @@
 use unsegen::base::{
     Color,
     Style,
-    TextAttribute,
+    TextFormat,
     Window,
 };
 use unsegen::widget::{
@@ -97,7 +97,7 @@ impl<'a> Tui<'a> {
 
         let (mut separator, window_r) = rest.split_h(2);
 
-        separator.set_default_format(TextAttribute::new(Color::green(), Color::blue(), Style::new().bold().italic().underline()));
+        separator.set_default_style(Style::new(Color::green(), Color::blue(), TextFormat::new().bold().italic().underline()));
         separator.fill('|');
 
         let mut left_widgets: Vec<&mut Widget> = vec![&mut self.src_view, &mut self.console];

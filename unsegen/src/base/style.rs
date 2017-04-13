@@ -1,16 +1,16 @@
 use termion;
 use termion::raw::RawTerminal;
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct Style {
+pub struct TextFormat {
     pub bold: bool,
     pub italic: bool,
     pub invert: bool,
     pub underline: bool,
 }
 
-impl Style {
+impl TextFormat {
     pub fn new() -> Self {
-        Style {
+        TextFormat {
             bold: false,
             italic: false,
             invert: false,
@@ -33,14 +33,16 @@ impl Style {
         self.underline = true;
         self
     }
+    /*
     pub fn or(&self, other: &Self) -> Self {
-        Style {
+        TextFormat {
             bold: self.bold || other.bold,
             italic: self.italic || other.italic,
             invert: self.invert || other.invert,
             underline: self.underline || other.underline,
         }
     }
+    */
     fn set_terminal_attributes(&self, terminal: &mut RawTerminal<::std::io::StdoutLock>) {
         use std::io::Write;
 
@@ -70,9 +72,9 @@ impl Style {
     }
 }
 
-impl Default for Style {
+impl Default for TextFormat {
     fn default() -> Self {
-        Style::new()
+        TextFormat::new()
     }
 }
 
@@ -114,64 +116,109 @@ impl Color {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct TextAttribute {
-    fg_color: Option<Color>,
-    bg_color: Option<Color>,
-    style: Style,
-    // for all members: None :<=> Don't care
+pub struct Style {
+    fg_color: Color,
+    bg_color: Color,
+    format: TextFormat,
 }
 
-impl Default for TextAttribute {
+impl Default for Style {
     fn default() -> Self {
-        TextAttribute {
-            fg_color: None,
-            bg_color: None,
-            style: Style::default(),
+        Style {
+            fg_color: Color::white(),
+            bg_color: Color::black(),
+            format: TextFormat::default(),
         }
     }
 }
 
-impl TextAttribute {
-    pub fn new<T: Into<Option<Style>>, C1: Into<Option<Color>>, C2: Into<Option<Color>>>(fg: C1, bg: C2, style: T) -> TextAttribute {
-        TextAttribute {
-            fg_color: fg.into(),
-            bg_color: bg.into(),
-            style: style.into().unwrap_or(Style::default()),
+impl Style {
+    pub fn new(fg_color: Color, bg_color: Color, format: TextFormat) -> Self {
+        Style {
+            fg_color: fg_color,
+            bg_color: bg_color,
+            format: format
         }
     }
 
-
-    pub fn plain() -> TextAttribute {
-        TextAttribute {
-            fg_color: None,
-            bg_color: None,
-            style: Style::default(),
-        }
+    pub fn plain() -> Self {
+        Self::default()
     }
-
-    pub fn or(&self, other: &TextAttribute) -> TextAttribute {
-        TextAttribute {
-            fg_color: self.fg_color.or(other.fg_color),
-            bg_color: self.bg_color.or(other.bg_color),
-            style: self.style.or(&other.style),
-        }
-    }
-
 
     pub fn set_terminal_attributes(&self, terminal: &mut RawTerminal<::std::io::StdoutLock>) {
         use std::io::Write;
 
-        if let Some(color) = self.fg_color {
-            write!(terminal, "{}", termion::color::Fg(color.to_termion_color())).expect("write fgcolor");
-        } else {
-            write!(terminal, "{}", termion::color::Fg(termion::color::Reset)).expect("write fg reset");
-        }
-        if let Some(color) = self.bg_color {
-            write!(terminal, "{}", termion::color::Bg(color.to_termion_color())).expect("write bgcolor");
-        } else {
-            write!(terminal, "{}", termion::color::Bg(termion::color::Reset)).expect("write bg reset");
-        }
+        write!(terminal, "{}", termion::color::Fg(self.fg_color.to_termion_color())).expect("write fgcolor");
+        write!(terminal, "{}", termion::color::Bg(self.bg_color.to_termion_color())).expect("write bgcolor");
 
-        self.style.set_terminal_attributes(terminal);
+        self.format.set_terminal_attributes(terminal);
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct StyleModifier {
+    fg_color: Option<Color>,
+    bg_color: Option<Color>,
+    format: Option<TextFormat>,
+}
+
+impl StyleModifier {
+    pub fn none() -> Self {
+        StyleModifier {
+            fg_color: None,
+            bg_color: None,
+            format: None,
+        }
+    }
+
+    pub fn new() -> Self {
+        Self::none()
+    }
+
+    pub fn fg_color(mut self, fg_color: Color) -> Self {
+        self.fg_color = Some(fg_color);
+        self
+    }
+
+    pub fn bg_color(mut self, bg_color: Color) -> Self {
+        self.bg_color = Some(bg_color);
+        self
+    }
+
+    pub fn format(mut self, format: TextFormat) -> Self {
+        self.format = Some(format);
+        self
+    }
+
+    pub fn or(&self, other: &StyleModifier) -> Self {
+        StyleModifier {
+            fg_color: self.fg_color.or(other.fg_color),
+            bg_color: self.bg_color.or(other.bg_color),
+            format: self.format.or(other.format),
+        }
+    }
+
+    pub fn apply_to_default(&self) -> Style {
+        let mut style = Style::default();
+        self.modify(&mut style);
+        style
+    }
+
+    pub fn apply(&self, style: &Style) -> Style {
+        let mut style = style.clone();
+        self.modify(&mut style);
+        style
+    }
+
+    pub fn modify(&self, style: &mut Style) {
+        if let Some(fg) = self.fg_color {
+            style.fg_color = fg;
+        }
+        if let Some(bg) = self.bg_color {
+            style.bg_color = bg;
+        }
+        if let Some(format) = self.format {
+            style.format = format;
+        }
     }
 }

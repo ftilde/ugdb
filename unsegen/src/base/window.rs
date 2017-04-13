@@ -1,6 +1,7 @@
 use super::{
     FormattedChar,
-    TextAttribute,
+    Style,
+    StyleModifier,
 };
 use ndarray::{
     ArrayViewMut,
@@ -19,15 +20,15 @@ use ::unicode_segmentation::UnicodeSegmentation;
 type CharMatrixView<'w> = ArrayViewMut<'w, FormattedChar, Ix2>;
 pub struct Window<'w> {
     values: CharMatrixView<'w>,
-    default_format: TextAttribute,
+    default_style: Style,
 }
 
 
 impl<'w> Window<'w> {
-    pub fn new(values: CharMatrixView<'w>, default_format: TextAttribute) -> Self {
+    pub fn new(values: CharMatrixView<'w>, default_style: Style) -> Self {
         Window {
             values: values,
-            default_format: default_format,
+            default_style: default_style,
         }
     }
 
@@ -43,7 +44,7 @@ impl<'w> Window<'w> {
         let mat_view_clone = self.values.view_mut();
         Window {
             values: mat_view_clone,
-            default_format: self.default_format,
+            default_style: self.default_style,
         }
     }
 
@@ -76,7 +77,7 @@ impl<'w> Window<'w> {
         let sub_mat = self.values.slice_mut(s![y_range_start as isize..y_range_end as isize, x_range_start as isize..x_range_end as isize]);
         Window {
             values: sub_mat,
-            default_format: self.default_format,
+            default_style: self.default_style,
         }
     }
 
@@ -86,11 +87,11 @@ impl<'w> Window<'w> {
         let (first_mat, second_mat) = self.values.split_at(Axis(0), split_pos as Ix);
         let w_u = Window {
             values: first_mat,
-            default_format: self.default_format,
+            default_style: self.default_style,
         };
         let w_d = Window {
             values: second_mat,
-            default_format: self.default_format,
+            default_style: self.default_style,
         };
         (w_u, w_d)
     }
@@ -101,11 +102,11 @@ impl<'w> Window<'w> {
         let (first_mat, second_mat) = self.values.split_at(Axis(1), split_pos as Ix);
         let w_l = Window {
             values: first_mat,
-            default_format: self.default_format,
+            default_style: self.default_style,
         };
         let w_r = Window {
             values: second_mat,
-            default_format: self.default_format,
+            default_style: self.default_style,
         };
         (w_l, w_r)
     }
@@ -122,8 +123,8 @@ impl<'w> Window<'w> {
         }
     }
 
-    pub fn set_default_format(&mut self, format: TextAttribute) {
-        self.default_format = format;
+    pub fn set_default_style(&mut self, style: Style) {
+        self.default_style = style;
     }
 }
 
@@ -144,7 +145,7 @@ pub struct Cursor<'c, 'w: 'c> {
     window: &'c mut Window<'w>,
     wrapping_direction: WrappingDirection,
     wrapping_mode: WrappingMode,
-    text_attribute: Option<TextAttribute>,
+    style_modifier: StyleModifier,
     x: i32,
     y: i32,
     tab_column_width: usize,
@@ -156,7 +157,7 @@ impl<'c, 'w> Cursor<'c, 'w> {
             window: window,
             wrapping_direction: WrappingDirection::Down,
             wrapping_mode: WrappingMode::NoWrap,
-            text_attribute: None,
+            style_modifier: StyleModifier::none(),
             x: 0,
             y: 0,
             tab_column_width: 4,
@@ -195,16 +196,10 @@ impl<'c, 'w> Cursor<'c, 'w> {
         self
     }
 
-    pub fn set_text_attribute(&mut self, ta: TextAttribute) {
-        self.text_attribute = Some(ta)
+    pub fn set_style_modifier(&mut self, style_modifier: StyleModifier) {
+        self.style_modifier = style_modifier;
     }
 
-    /*
-    pub fn text_attribute(mut self, ta: TextAttribute) -> Self {
-        self.set_text_attribute(ta);
-        self
-    }
-    */
     pub fn fill_and_wrap_line(&mut self) {
         while self.x < self.window.get_width() as i32 {
             self.write(" ");
@@ -228,12 +223,8 @@ impl<'c, 'w> Cursor<'c, 'w> {
         *self.window.values.get_mut((self.y as Ix, self.x as Ix)).expect("in bounds") = cluster;
     }
 
-    fn active_text_attribute(&self) -> TextAttribute {
-        if let Some(attr) = self.text_attribute {
-            attr.or(&self.window.default_format)
-        } else {
-            self.window.default_format.clone()
-        }
+    fn active_style(&self) -> Style {
+        self.style_modifier.apply(&self.window.default_style)
     }
 
     pub fn num_expected_wraps(&self, line: &str) -> u32 {
@@ -279,16 +270,16 @@ impl<'c, 'w> Cursor<'c, 'w> {
                 if     0 <= self.x && (self.x as u32) < self.window.get_width()
                     && 0 <= self.y && (self.y as u32) < self.window.get_height() {
 
-                    let text_attribute = self.active_text_attribute();
-                    self.write_grapheme_cluster_unchecked(FormattedChar::new(grapheme_cluster.as_ref(), text_attribute));
+                    let style = self.active_style();
+                    self.write_grapheme_cluster_unchecked(FormattedChar::new(grapheme_cluster.as_ref(), style));
                 }
                 let cluster_width = self.current_cluster_width(grapheme_cluster.as_ref());
                 self.x += 1;
                 if cluster_width > 1 && 0 <= self.y && (self.y as u32) < self.window.get_height() {
-                    let text_attribute = self.active_text_attribute();
+                    let style = self.active_style();
                     for _ in 1..cluster_width {
                         if 0 <= self.x && (self.x as u32) < self.window.get_width() {
-                            self.write_grapheme_cluster_unchecked(FormattedChar::new("", text_attribute.clone()));
+                            self.write_grapheme_cluster_unchecked(FormattedChar::new("", style.clone()));
                         }
                         self.x += 1;
                     }

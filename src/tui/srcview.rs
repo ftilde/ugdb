@@ -1,8 +1,8 @@
 use unsegen::base::{
     Cursor,
     Color,
-    Style,
-    TextAttribute,
+    StyleModifier,
+    TextFormat,
     Window,
 };
 use unsegen::input::{
@@ -174,14 +174,14 @@ impl LineDecorator for AssemblyDecorator {
         } else {
             ' '
         };
-        let style = if self.breakpoint_addresses.contains(&line.address) {
-            TextAttribute::new(Color::red(), None, None)
-        } else if at_stop_position {
-            TextAttribute::new(Color::green(), None, Style::new().bold())
-        } else {
-            TextAttribute::plain()
-        };
-        cursor.set_text_attribute(style);
+        let mut style_modifier = StyleModifier::none();
+        if self.breakpoint_addresses.contains(&line.address) {
+            style_modifier = style_modifier.or(&StyleModifier::new().fg_color(Color::red()));
+        }
+        if at_stop_position {
+            style_modifier = style_modifier.or(&StyleModifier::new().fg_color(Color::green()).format(TextFormat::new().bold()));
+        }
+        cursor.set_style_modifier(style_modifier);
         write!(cursor, " 0x{:0>width$x}{}", line.address.0, right_border, width=width).unwrap();
     }
 }
@@ -328,14 +328,14 @@ impl LineDecorator for SourceDecorator {
             ' '
         };
 
-        let style = if self.breakpoint_lines.contains(&index.into()) {
-            TextAttribute::new(Color::red(), None, None)
-        } else if at_stop_position {
-            TextAttribute::new(Color::green(), None, Style::new().bold())
-        } else {
-            TextAttribute::plain()
-        };
-        cursor.set_text_attribute(style);
+        let mut style_modifier = StyleModifier::none();
+        if self.breakpoint_lines.contains(&index.into()) {
+            style_modifier = style_modifier.or(&StyleModifier::new().fg_color(Color::red()));
+        }
+        if at_stop_position {
+            style_modifier = style_modifier.or(&StyleModifier::new().fg_color(Color::green()).format(TextFormat::new().bold()));
+        }
+        cursor.set_style_modifier(style_modifier);
 
         use std::fmt::Write;
         write!(cursor, " {:width$}{}", line_number, right_border, width = width).unwrap();

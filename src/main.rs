@@ -36,8 +36,8 @@ use gdbmi::output::{
 };
 
 use unsegen::base::{
+    Style,
     Terminal,
-    TextAttribute,
 };
 
 fn pty_output_loop(sink: Sender<Vec<u8>>, mut reader: pty::PTYOutput) {
@@ -102,7 +102,7 @@ fn main() {
         let mut tui = tui::Tui::new(pty_input, &theme_set.themes["base16-ocean.dark"]);
         tui.add_debug_message(&ptyname);
 
-        tui.draw(terminal.create_root_window(TextAttribute::default()));
+        tui.draw(terminal.create_root_window(Style::default()));
         terminal.present();
 
         loop {
@@ -135,7 +135,7 @@ fn main() {
                     }
                 }
             }
-            tui.draw(terminal.create_root_window(TextAttribute::default()));
+            tui.draw(terminal.create_root_window(Style::default()));
             terminal.present();
         }
     }

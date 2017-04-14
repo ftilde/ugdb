@@ -23,9 +23,15 @@ use std::cmp::{
     max,
 };
 
-use syntect::parsing::syntax_definition::SyntaxDefinition;
+use syntect::parsing::{
+    ScopeStack,
+    ParseState,
+    SyntaxDefinition,
+};
 use syntect::highlighting;
-use syntect::easy::{HighlightLines};
+use syntect::highlighting::{
+    Theme,
+};
 
 // PagerLine ----------------------------------------------------------------------------------------------
 
@@ -41,35 +47,83 @@ impl PagerLine for String {
 
 // Highlighter --------------------------------------------------------------------------------------------
 
-pub trait HighLighter {
-    fn highlight<'a>(&mut self, line: &'a str) -> Box<Iterator<Item=(StyleModifier, &'a str)> + 'a>;
+pub trait Highlighter {
+    type Instance: HighlightingInstance;
+    fn create_instance(&self) -> Self::Instance;
 }
 
-pub struct NoHighLighter;
+pub trait HighlightingInstance {
+    fn highlight<'a>(&mut self, line: &'a str) -> Box<Iterator<Item=(StyleModifier, &'a str)> + 'a>;
+    fn default_style(&self) -> StyleModifier;
+}
 
-impl HighLighter for NoHighLighter {
-    fn highlight<'a>(&mut self, line: &'a str) -> Box<Iterator<Item=(StyleModifier, &'a str)> + 'a> {
-        Box::new(Some((StyleModifier::none(), line)).into_iter())
+pub struct NoHighlighter;
+
+impl Highlighter for NoHighlighter {
+    type Instance = NoopHighlightingInstance;
+    fn create_instance(&self) -> Self::Instance {
+        NoopHighlightingInstance
     }
 }
 
-pub struct SyntectHighLighter<'a> {
-    highlighter: HighlightLines<'a>,
+pub struct NoopHighlightingInstance;
+
+impl HighlightingInstance for NoopHighlightingInstance {
+    fn highlight<'a>(&mut self, line: &'a str) -> Box<Iterator<Item=(StyleModifier, &'a str)> + 'a> {
+        Box::new(Some((StyleModifier::none(), line)).into_iter())
+    }
+    fn default_style(&self) -> StyleModifier {
+        StyleModifier::none()
+    }
 }
 
-impl<'a> SyntectHighLighter<'a> {
+pub struct SyntectHighlighter<'a> {
+    base_syntax: ParseState,
+    theme: &'a Theme,
+}
+
+impl<'a> SyntectHighlighter<'a> {
     pub fn new(syntax: &SyntaxDefinition, theme: &'a highlighting::Theme) -> Self {
-        SyntectHighLighter {
-            highlighter: HighlightLines::new(syntax, theme),
+        SyntectHighlighter {
+            base_syntax: ParseState::new(syntax),
+            theme: theme,
         }
     }
 }
 
-impl<'b> HighLighter for SyntectHighLighter<'b> {
+impl<'a> Highlighter for SyntectHighlighter<'a> {
+    type Instance = SyntectHighlightingInstance<'a>;
+    fn create_instance(&self) -> Self::Instance {
+        SyntectHighlightingInstance::new(self.base_syntax.clone(), self.theme)
+    }
+}
+
+pub struct SyntectHighlightingInstance<'a> {
+    highlighter: highlighting::Highlighter<'a>,
+    parse_state: ParseState,
+    highlight_state: highlighting::HighlightState,
+}
+
+impl<'a> SyntectHighlightingInstance<'a> {
+    fn new(base_state: ParseState, theme: &'a highlighting::Theme) -> Self {
+        let highlighter = highlighting::Highlighter::new(theme);
+        let hstate = highlighting::HighlightState::new(&highlighter, ScopeStack::new());
+        SyntectHighlightingInstance {
+            highlighter: highlighter,
+            parse_state: base_state,
+            highlight_state: hstate,
+        }
+    }
+}
+
+impl<'b> HighlightingInstance for SyntectHighlightingInstance<'b> {
     fn highlight<'a>(&mut self, line: &'a str) -> Box<Iterator<Item=(StyleModifier, &'a str)> + 'a> {
-        Box::new(
-            self.highlighter.highlight(line).into_iter().map(|(h, s)| (to_text_attribute(&h), s))
-            )
+        let ops = self.parse_state.parse_line(line);
+        let iter: Vec<(highlighting::Style, &'a str)> = highlighting::HighlightIterator::new(&mut self.highlight_state, &ops[..], line, &self.highlighter).collect();
+        Box::new(iter.into_iter().map(|(style, line)| (to_unsegen_style_modifier(&style), line)))
+    }
+    fn default_style(&self) -> StyleModifier {
+        to_unsegen_style_modifier(&self.highlighter.get_default())
     }
 }
 
@@ -84,7 +138,7 @@ fn to_unsegen_text_format(style: &highlighting::FontStyle) -> TextFormat {
         underline: style.contains(highlighting::FONT_STYLE_UNDERLINE),
     }
 }
-fn to_text_attribute(style: &highlighting::Style) -> StyleModifier {
+fn to_unsegen_style_modifier(style: &highlighting::Style) -> StyleModifier {
     StyleModifier::new().fg_color(to_unsegen_color(&style.foreground)).bg_color(to_unsegen_color(&style.background)).format(to_unsegen_text_format(&style.font_style))
 }
 
@@ -150,28 +204,28 @@ impl<L: PagerLine> LineDecorator for LineNumberDecorator<L> {
 
 // PagerContent -------------------------------------------------------------------------------------------
 
-pub struct PagerContent<S: LineStorage, H: HighLighter, D: LineDecorator> {
+pub struct PagerContent<S: LineStorage, H: Highlighter, D: LineDecorator> {
     pub storage: S,
     highlighter: H,
     pub decorator: D,
 }
 
-impl <S> PagerContent<S, NoHighLighter, NoDecorator<S::Line>>
+impl <S> PagerContent<S, NoHighlighter, NoDecorator<S::Line>>
     where S: LineStorage, S::Line: PagerLine {
 
     pub fn create(storage: S) -> Self {
         PagerContent {
             storage: storage,
-            highlighter: NoHighLighter,
+            highlighter: NoHighlighter,
             decorator: NoDecorator::default(),
         }
     }
 }
 
-impl <S, D> PagerContent<S, NoHighLighter, D>
+impl <S, D> PagerContent<S, NoHighlighter, D>
     where S: LineStorage, S::Line: PagerLine, D: LineDecorator<Line=S::Line> {
 
-    pub fn with_highlighter<HN: HighLighter>(self, highlighter: HN) -> PagerContent<S, HN, D> {
+    pub fn with_highlighter<HN: Highlighter>(self, highlighter: HN) -> PagerContent<S, HN, D> {
         PagerContent {
             storage: self.storage,
             highlighter: highlighter,
@@ -181,7 +235,7 @@ impl <S, D> PagerContent<S, NoHighLighter, D>
 }
 
 impl <S, H> PagerContent<S, H, NoDecorator<S::Line>>
-    where S: LineStorage, S::Line: PagerLine, H: HighLighter {
+    where S: LineStorage, S::Line: PagerLine, H: Highlighter {
 
     pub fn with_decorator<DN: LineDecorator<Line=S::Line>>(self, decorator: DN) -> PagerContent<S, H, DN> {
         PagerContent {
@@ -199,15 +253,15 @@ pub enum PagerError {
 
 // Pager --------------------------------------------------------------------------------------------------
 
-pub struct Pager<S, H = NoHighLighter, D = NoDecorator<<S as LineStorage>::Line>>
-    where S: LineStorage, D: LineDecorator , H: HighLighter {
+pub struct Pager<S, H = NoHighlighter, D = NoDecorator<<S as LineStorage>::Line>>
+    where S: LineStorage, D: LineDecorator , H: Highlighter {
 
     pub content: Option<PagerContent<S,H,D>>,
     current_line: LineIndex,
 }
 
 impl<S, H, D> Pager<S, H, D>
-    where S: LineStorage, S::Line: PagerLine, D: LineDecorator<Line=S::Line>, H: HighLighter {
+    where S: LineStorage, S::Line: PagerLine, D: LineDecorator<Line=S::Line>, H: Highlighter {
 
     pub fn new() -> Self {
         Pager {
@@ -260,13 +314,14 @@ impl<S, H, D> Pager<S, H, D>
 }
 
 impl<S, H, D> Widget for Pager<S, H, D>
-    where S: LineStorage, S::Line: PagerLine, H: HighLighter, D: LineDecorator<Line=S::Line> {
+    where S: LineStorage, S::Line: PagerLine, H: Highlighter, D: LineDecorator<Line=S::Line> {
 
     fn space_demand(&self) -> (Demand, Demand) {
         (Demand::at_least(1), Demand::at_least(1))
     }
     fn draw(&mut self, window: Window) {
         if let Some(ref mut content) = self.content {
+            let mut highlighter = content.highlighter.create_instance();
             let height = window.get_height() as usize;
             // The highlighter might need a minimum number of lines to figure out the syntax:
             // TODO: make this configurable?
@@ -284,7 +339,7 @@ impl<S, H, D> Widget for Pager<S, H, D>
             let (mut decoration_window, mut content_window) = window.split_h(split_pos); //TODO: make splitting work for zero width windows!
 
             // Fill background with correct color
-            let (bg_style, _) = content.highlighter.highlight(" ").next().expect("exactly one formatted space");
+            let bg_style = highlighter.default_style();
             content_window.set_default_style(bg_style.apply_to_default());
             content_window.fill(' ');
 
@@ -323,7 +378,7 @@ impl<S, H, D> Widget for Pager<S, H, D>
                 };
 
                 let (_, start_y) = cursor.get_position();
-                for (style, region) in content.highlighter.highlight(line.get_content()) {
+                for (style, region) in highlighter.highlight(line.get_content()) {
                     cursor.set_style_modifier(base_style.or(&style));
                     cursor.write(&region);
                 }
@@ -340,7 +395,7 @@ impl<S, H, D> Widget for Pager<S, H, D>
     }
 }
 impl<S, H, D> Scrollable for Pager<S, H, D>
-    where S: LineStorage, S::Line: PagerLine, H: HighLighter, D: LineDecorator<Line=S::Line> {
+    where S: LineStorage, S::Line: PagerLine, H: Highlighter, D: LineDecorator<Line=S::Line> {
 
     fn scroll_backwards(&mut self) {
         if self.current_line > 0.into() {

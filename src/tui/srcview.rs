@@ -27,7 +27,7 @@ use unsegen::widget::widgets::{
     PagerContent,
     PagerError,
     PagerLine,
-    SyntectHighLighter,
+    SyntectHighlighter,
 };
 use input::{
     Input,
@@ -189,7 +189,7 @@ impl LineDecorator for AssemblyDecorator {
 pub struct AssemblyView<'a> {
     highlighting_theme: &'a Theme,
     syntax_set: SyntaxSet,
-    pager: Pager<MemoryLineStorage<AssemblyLine>, SyntectHighLighter<'a>, AssemblyDecorator>,
+    pager: Pager<MemoryLineStorage<AssemblyLine>, SyntectHighlighter<'a>, AssemblyDecorator>,
     last_stop_position: Option<Address>,
 }
 
@@ -259,7 +259,7 @@ impl<'a> AssemblyView<'a> {
                 .unwrap_or(self.syntax_set.find_syntax_plain_text());
             self.pager.load(
                 PagerContent::create(asm_storage)
-                .with_highlighter(SyntectHighLighter::new(syntax, self.highlighting_theme))
+                .with_highlighter(SyntectHighlighter::new(syntax, self.highlighting_theme))
                 .with_decorator(AssemblyDecorator::new(min_address..max_address, self.last_stop_position, breakpoints)));
             Ok(())
         } else {
@@ -345,7 +345,7 @@ impl LineDecorator for SourceDecorator {
 pub struct SourceView<'a> {
     highlighting_theme: &'a Theme,
     syntax_set: SyntaxSet,
-    pager: Pager<FileLineStorage, SyntectHighLighter<'a>, SourceDecorator>,
+    pager: Pager<FileLineStorage, SyntectHighlighter<'a>, SourceDecorator>,
     last_stop_position: Option<SrcPosition>,
 }
 
@@ -437,7 +437,7 @@ impl<'a> SourceView<'a> {
         let last_line_number = self.get_last_line_number_for(path.as_ref());
         self.pager.load(
             PagerContent::create(file_storage)
-            .with_highlighter(SyntectHighLighter::new(syntax, self.highlighting_theme))
+            .with_highlighter(SyntectHighlighter::new(syntax, self.highlighting_theme))
             .with_decorator(SourceDecorator::new(path.as_ref(), last_line_number, breakpoints))
             );
         Ok(())

@@ -3,10 +3,12 @@ name = "ugdb"
 version = "0.1.0"
 authors = ["ftilde <ftilde@protonmail.com>"]
 
-
 [[bin]]
 doc = false
 name = "ugdb"
+
+[profile.release]
+debug = true
 
 [dependencies]
 chan = "^0.1"

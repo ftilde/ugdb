@@ -2,6 +2,7 @@ use unsegen;
 use gdbmi;
 
 use unsegen::base::{
+    GraphemeCluster,
     Window,
 };
 use unsegen::input::{
@@ -46,7 +47,7 @@ impl Console {
             gdb_log: LogViewer::new(),
             active_log: ActiveLog::Gdb,
             prompt_line: PromptLine::with_prompt("(gdb) ".into()),
-            layout: VerticalLayout::new(SeparatingStyle::Draw('=')),
+            layout: VerticalLayout::new(SeparatingStyle::Draw(GraphemeCluster::try_from('=').unwrap())),
         }
     }
 

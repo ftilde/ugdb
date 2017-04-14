@@ -9,6 +9,7 @@ use super::super::{
 use base::{
     Color,
     Cursor,
+    GraphemeCluster,
     StyleModifier,
     TextFormat,
     Window,
@@ -78,14 +79,14 @@ impl HighlightingInstance for NoopHighlightingInstance {
 }
 
 pub struct SyntectHighlighter<'a> {
-    base_syntax: ParseState,
+    base_state: ParseState,
     theme: &'a Theme,
 }
 
 impl<'a> SyntectHighlighter<'a> {
     pub fn new(syntax: &SyntaxDefinition, theme: &'a highlighting::Theme) -> Self {
         SyntectHighlighter {
-            base_syntax: ParseState::new(syntax),
+            base_state: ParseState::new(syntax),
             theme: theme,
         }
     }
@@ -94,7 +95,7 @@ impl<'a> SyntectHighlighter<'a> {
 impl<'a> Highlighter for SyntectHighlighter<'a> {
     type Instance = SyntectHighlightingInstance<'a>;
     fn create_instance(&self) -> Self::Instance {
-        SyntectHighlightingInstance::new(self.base_syntax.clone(), self.theme)
+        SyntectHighlightingInstance::new(self.base_state.clone(), self.theme)
     }
 }
 
@@ -341,7 +342,7 @@ impl<S, H, D> Widget for Pager<S, H, D>
             // Fill background with correct color
             let bg_style = highlighter.default_style();
             content_window.set_default_style(bg_style.apply_to_default());
-            content_window.fill(' ');
+            content_window.fill(GraphemeCluster::space());
 
             let mut cursor = Cursor::new(&mut content_window)
                 .position(0, 0)

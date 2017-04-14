@@ -1,6 +1,7 @@
 use unsegen::base::{
     Cursor,
     Color,
+    GraphemeCluster,
     StyleModifier,
     TextFormat,
     Window,
@@ -517,7 +518,7 @@ impl<'a> CodeWindow<'a> {
         CodeWindow {
             src_view: SourceView::new(highlighting_theme),
             asm_view: AssemblyView::new(highlighting_theme),
-            layout: HorizontalLayout::new(SeparatingStyle::Draw('|')),
+            layout: HorizontalLayout::new(SeparatingStyle::Draw(GraphemeCluster::try_from('|').unwrap())),
             mode: CodeWindowMode::Source,
             breakpoints: HashMap::new(),
         }

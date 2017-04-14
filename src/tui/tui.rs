@@ -1,5 +1,6 @@
 use unsegen::base::{
     Color,
+    GraphemeCluster,
     Style,
     TextFormat,
     Window,
@@ -48,8 +49,8 @@ impl<'a> Tui<'a> {
             console: Console::new(),
             process_pty: PseudoTerminal::new(process_pty),
             src_view: CodeWindow::new(highlighting_theme),
-            left_layout: VerticalLayout::new(SeparatingStyle::Draw('=')),
-            right_layout: VerticalLayout::new(SeparatingStyle::Draw('=')),
+            left_layout: VerticalLayout::new(SeparatingStyle::Draw(GraphemeCluster::try_from('=').unwrap())),
+            right_layout: VerticalLayout::new(SeparatingStyle::Draw(GraphemeCluster::try_from('=').unwrap())),
         }
     }
 
@@ -98,7 +99,7 @@ impl<'a> Tui<'a> {
         let (mut separator, window_r) = rest.split_h(2);
 
         separator.set_default_style(Style::new(Color::green(), Color::blue(), TextFormat::new().bold().italic().underline()));
-        separator.fill('|');
+        separator.fill(GraphemeCluster::try_from('山').unwrap());
 
         let mut left_widgets: Vec<&mut Widget> = vec![&mut self.src_view, &mut self.console];
         self.left_layout.draw(window_l, &mut left_widgets);

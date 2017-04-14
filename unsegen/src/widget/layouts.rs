@@ -4,14 +4,15 @@ use super::{
 };
 use base::{
     Window,
+    GraphemeCluster,
 };
 use std::cmp::{max, min};
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub enum SeparatingStyle {
     None,
     //AlternateStyle(TextAttribute),
-    Draw(char)
+    Draw(GraphemeCluster)
 }
 pub fn layout_linearly(mut available_space: u32, separator_width: u32, demands: &[Demand]) -> Box<[u32]>
 {
@@ -118,11 +119,11 @@ impl HorizontalLayout {
             let (window, r) = rest_window.split_h(pos);
             rest_window = r;
             w.draw(window);
-            if let (Some(_), SeparatingStyle::Draw(c)) = (iter.peek(), self.separating_style) {
+            if let (Some(_), &SeparatingStyle::Draw(ref c)) = (iter.peek(), &self.separating_style) {
                 if rest_window.get_width() > 0 {
                     let (mut window, r) = rest_window.split_h(1);
                     rest_window = r;
-                    window.fill(c);
+                    window.fill(c.clone());
                 }
             }
         }
@@ -170,11 +171,11 @@ impl VerticalLayout {
             let (window, r) = rest_window.split_v(pos);
             rest_window = r;
             w.draw(window);
-            if let (Some(_), SeparatingStyle::Draw(c)) = (iter.peek(), self.separating_style) {
+            if let (Some(_), &SeparatingStyle::Draw(ref c)) = (iter.peek(), &self.separating_style) {
                 if rest_window.get_height() > 0 {
                     let (mut window, r) = rest_window.split_v(1);
                     rest_window = r;
-                    window.fill(c);
+                    window.fill(c.clone());
                 }
             }
         }
@@ -183,60 +184,8 @@ impl VerticalLayout {
 
 #[cfg(test)]
 mod test {
+    use base::test::FakeTerminal;
     use super::*;
-    use super::super::{
-        CharMatrix,
-        Event,
-        FormattedChar,
-        TextAttribute,
-    };
-    use ndarray::{
-        Ix,
-    };
-
-    #[derive(PartialEq)]
-    struct FakeTerminal {
-        values: CharMatrix,
-    }
-    impl FakeTerminal {
-        fn with_size((w, h): (Ix, Ix)) -> Self {
-            FakeTerminal {
-                values: CharMatrix::default((h, w)),
-            }
-        }
-
-        fn create_root_window(&mut self) -> Window {
-            Window::new(self.values.view_mut(), TextAttribute::plain())
-        }
-
-        fn from_str((w, h): (Ix, Ix), description: &str) -> Result<Self, ::ndarray::ShapeError>{
-            let mut tiles = Vec::<FormattedChar>::new();
-            for c in description.chars() {
-                if c.is_whitespace() {
-                    continue;
-                }
-                tiles.push(FormattedChar::new(&c.to_string(), TextAttribute::plain()));
-            }
-            Ok(FakeTerminal {
-                values: try!{::ndarray::Array2::from_shape_vec((h, w), tiles)},
-            })
-        }
-    }
-
-
-    impl ::std::fmt::Debug for FakeTerminal {
-        fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-            for r in 0..self.values.dim().0 {
-                try!{write!(f, "[")};
-                for c in 0..self.values.dim().1 {
-                    let c = self.values.get((r, c)).expect("debug: in bounds");
-                    try!{write!(f, "{:?}, ", c.grapheme_cluster_as_str())};
-                }
-                try!{write!(f, "]\n")};
-            }
-            Ok(())
-        }
-    }
 
 
     struct FakeWidget {
@@ -263,9 +212,6 @@ mod test {
         }
         fn draw(&mut self, mut window: Window) {
             window.fill(self.fill_char);
-        }
-        fn input(&mut self, _: Event) {
-            //Noop
         }
     }
 

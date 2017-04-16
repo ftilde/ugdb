@@ -31,11 +31,13 @@ use base::ranges::{
 // Starting from 0, i.e., treating LineStorage like an array of lines
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Debug, Hash)]
 pub struct LineIndex(pub usize);
-impl From<usize> for LineIndex {
-    fn from(index: usize) -> Self {
-        LineIndex(index)
+impl LineIndex {
+    pub fn checked_sub(&self, rhs: usize) -> Option<LineIndex> {
+        let index = self.0;
+        index.checked_sub(rhs).map(LineIndex)
     }
 }
+
 impl Into<usize> for LineIndex {
     fn into(self) -> usize {
         let LineIndex(index) = self;
@@ -44,17 +46,15 @@ impl Into<usize> for LineIndex {
 }
 
 impl From<LineNumber> for LineIndex {
-    fn from(number: LineNumber) -> Self {
-        let raw_number: usize = number.into();
-        let raw_index = raw_number - 1;
-        raw_index.into()
+    fn from(LineNumber(raw_number): LineNumber) -> Self {
+        LineIndex(raw_number - 1)
     }
 }
 impl Add<usize> for LineIndex {
     type Output = Self;
     fn add(self, rhs: usize) -> Self {
         let raw_index: usize = self.into();
-        (raw_index + rhs).into()
+        LineIndex(raw_index + rhs)
     }
 }
 impl AddAssign<usize> for LineIndex {
@@ -66,7 +66,7 @@ impl Sub<usize> for LineIndex {
     type Output = Self;
     fn sub(self, rhs: usize) -> Self {
         let raw_index: usize = self.into();
-        (raw_index - rhs).into()
+        LineIndex(raw_index - rhs)
     }
 }
 impl SubAssign<usize> for LineIndex {
@@ -83,11 +83,13 @@ impl fmt::Display for LineIndex {
 // Starting from 1, i.e., treating LineStorage like lines displayed in an editor
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Debug, Hash)]
 pub struct LineNumber(pub usize);
-impl From<usize> for LineNumber {
-    fn from(number: usize) -> Self {
-        LineNumber(number)
+impl LineNumber {
+    pub fn checked_sub(&self, rhs: usize) -> Option<LineNumber> {
+        let index = self.0 - 1;
+        index.checked_sub(rhs).map(|i| LineNumber(i + 1))
     }
 }
+
 impl Into<usize> for LineNumber {
     fn into(self) -> usize {
         let LineNumber(number) = self;
@@ -96,17 +98,15 @@ impl Into<usize> for LineNumber {
     }
 }
 impl From<LineIndex> for LineNumber {
-    fn from(index: LineIndex) -> Self {
-        let raw_index: usize = index.into();
-        let raw_number = raw_index + 1;
-        raw_number.into()
+    fn from(LineIndex(raw_index): LineIndex) -> Self {
+        LineNumber(raw_index + 1)
     }
 }
 impl Add<usize> for LineNumber {
     type Output = Self;
     fn add(self, rhs: usize) -> Self {
         let raw_number: usize = self.into();
-        (raw_number + rhs).into()
+        LineNumber(raw_number + rhs)
     }
 }
 impl AddAssign<usize> for LineNumber {
@@ -119,7 +119,7 @@ impl Sub<usize> for LineNumber {
     fn sub(self, rhs: usize) -> Self {
         let raw_number: usize = self.into();
         debug_assert!(raw_number > rhs, "Overflowing sub on LineNumber: Result would be <= 0");
-        (raw_number - rhs).into()
+        LineNumber(raw_number - rhs)
     }
 }
 impl SubAssign<usize> for LineNumber {
@@ -140,7 +140,7 @@ pub trait LineStorage {
     fn view<'a, I: Into<LineIndex>, R: RangeArgument<I>>(&'a self, range: R) -> Box<DoubleEndedIterator<Item=(LineIndex, Self::Line)> + 'a>
         where Self: ::std::marker::Sized { // Not exactly sure, why this is needed... we only store a reference?!
         let start: LineIndex = match range.start() { // Always inclusive
-            Bound::Unbound => 0.into(),
+            Bound::Unbound => LineIndex(0),
             Bound::Inclusive(i) => i.into(),
             Bound::Exclusive(i) => i.into()+1,
         };
@@ -151,7 +151,7 @@ pub trait LineStorage {
                 let mut end = start;
                 for i in u_start.. {
                     end += 1;
-                    if self.view_line(i).is_none() {
+                    if self.view_line(LineIndex(i)).is_none() {
                         break;
                     }
                 }
@@ -187,8 +187,8 @@ impl<'a, I: 'a, L: 'a + LineStorage<Line=I>> Iterator for LineStorageIterator<'a
         if self.range.start < self.range.end {
             let item_index = self.range.start;
             self.range.start += 1;
-            if let Some(line) = self.storage.view_line(item_index) {
-                Some((item_index.into(), line))
+            if let Some(line) = self.storage.view_line(LineIndex(item_index)) {
+                Some((LineIndex(item_index), line))
             } else {
                 None
             }
@@ -203,8 +203,8 @@ impl<'a, I: 'a, L: 'a + LineStorage<Line=I>> DoubleEndedIterator for LineStorage
         if self.range.start < self.range.end {
             let item_index = self.range.end - 1;
             self.range.end -= 1;
-            if let Some(line) = self.storage.view_line(item_index) {
-                Some((item_index.into(), line))
+            if let Some(line) = self.storage.view_line(LineIndex(item_index)) {
+                Some((LineIndex(item_index), line))
             } else {
                 None
             }

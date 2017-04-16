@@ -267,7 +267,7 @@ impl<S, H, D> Pager<S, H, D>
     pub fn new() -> Self {
         Pager {
             content: None,
-            current_line: 0.into(),
+            current_line: LineIndex(0),
         }
     }
 
@@ -302,7 +302,7 @@ impl<S, H, D> Pager<S, H, D>
 
     pub fn go_to_line_if<F: Fn(LineIndex, &S::Line) -> bool>(&mut self, predicate: F) -> Result<(), PagerError> {
         let line = if let Some(ref mut content) = self.content {
-            content.storage.view(0..).find(|&(index, ref line)| predicate(index.into(), line)).ok_or(PagerError::LineDoesNotExist)
+            content.storage.view(LineIndex(0)..).find(|&(index, ref line)| predicate(index.into(), line)).ok_or(PagerError::LineDoesNotExist)
         } else {
             Err(PagerError::LineDoesNotExist)
         };
@@ -328,9 +328,8 @@ impl<S, H, D> Widget for Pager<S, H, D>
             // TODO: make this configurable?
             let min_highlight_context = 40;
             let num_adjacent_lines_to_load = max(height, min_highlight_context/2);
-            let current_line: usize = self.current_line.into();
-            let min_line = current_line.checked_sub(num_adjacent_lines_to_load).unwrap_or(0);
-            let max_line = current_line + num_adjacent_lines_to_load;
+            let min_line = self.current_line.checked_sub(num_adjacent_lines_to_load).unwrap_or(LineIndex(0));
+            let max_line = self.current_line + num_adjacent_lines_to_load;
 
 
             // Split window
@@ -350,7 +349,7 @@ impl<S, H, D> Widget for Pager<S, H, D>
 
             let num_line_wraps_until_current_line = {
                 content.storage
-                    .view(min_line..current_line)
+                    .view(min_line..self.current_line)
                     .map(|(_,line)| {
                         cursor.num_expected_wraps(line.get_content()) + 1
                     })
@@ -358,7 +357,7 @@ impl<S, H, D> Widget for Pager<S, H, D>
             };
             let num_line_wraps_from_current_line = {
                 content.storage
-                    .view(current_line..max_line)
+                    .view(self.current_line..max_line)
                     .map(|(_,line)| {
                         cursor.num_expected_wraps(line.get_content()) + 1
                     })
@@ -399,7 +398,7 @@ impl<S, H, D> Scrollable for Pager<S, H, D>
     where S: LineStorage, S::Line: PagerLine, H: Highlighter, D: LineDecorator<Line=S::Line> {
 
     fn scroll_backwards(&mut self) {
-        if self.current_line > 0.into() {
+        if self.current_line > LineIndex(0) {
             self.current_line -= 1;
         }
     }

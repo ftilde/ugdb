@@ -235,7 +235,7 @@ impl<'a> AssemblyView<'a> {
         if let Some(ref mut content) = self.pager.content {
             if let Some(first_line) = content.storage.view_line(LineIndex(0)) {
                 let min_address = first_line.address;
-                let max_address = content.storage.view(0..).last().expect("we know we have at least one line").1.address;
+                let max_address = content.storage.view(LineIndex(0)..).last().expect("we know we have at least one line").1.address;
                 content.decorator = AssemblyDecorator::new(min_address..max_address, self.last_stop_position, breakpoints)
             }
         }
@@ -489,7 +489,7 @@ impl BreakPoint {
         let enabled = bkpt["enabled"].as_str().expect("find enabled") == "y";
         let address = Address::parse(bkpt["addr"].as_str().expect("find address")).expect("Parse address");
         let file = bkpt["fullname"].as_str().expect("find full file name");
-        let line = bkpt["line"].as_str().expect("find line number").parse::<usize>().expect("Parse usize").into();
+        let line = LineNumber(bkpt["line"].as_str().expect("find line number").parse::<usize>().expect("Parse usize"));
         BreakPoint {
             number: number,
             address: address,
@@ -525,7 +525,7 @@ impl<'a> CodeWindow<'a> {
     }
     pub fn show_frame(&mut self, frame: &Object, gdb: &mut gdbmi::GDB) {
         if let Some(path) = frame["fullname"].as_str() { // File information may not be present
-            let line: LineNumber = frame["line"].as_str().expect("line present").parse::<usize>().expect("Parse usize").into();
+            let line = LineNumber(frame["line"].as_str().expect("line present").parse::<usize>().expect("Parse usize"));
             let address = Address::parse(frame["addr"].as_str().expect("address present")).expect("Parse address");
             self.src_view.set_last_stop_position(path, line);
             // GDB may give out invalid paths, so we just ignore them (at least for now)

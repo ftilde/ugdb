@@ -41,6 +41,10 @@ impl GraphemeCluster {
         }
     }
 
+    pub fn clear(&mut self) {
+        *self = Self::space();
+    }
+
     pub fn try_from(text: char) -> Result<Self, GraphemeClusterError> {
         Self::from_str(text.to_string().as_ref())
     }

@@ -211,7 +211,7 @@ mod test {
             self.space_demand
         }
         fn draw(&mut self, mut window: Window) {
-            window.fill(self.fill_char);
+            window.fill(GraphemeCluster::try_from(self.fill_char).unwrap());
         }
     }
 

@@ -15,8 +15,8 @@ use base::{
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct StyledGraphemeCluster {
-    grapheme_cluster: GraphemeCluster,
-    style: Style,
+    pub grapheme_cluster: GraphemeCluster,
+    pub style: Style,
 }
 
 impl StyledGraphemeCluster {

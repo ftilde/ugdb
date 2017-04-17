@@ -244,8 +244,43 @@ impl<'c, 'w> Cursor<'c, 'w> {
 
     fn write_grapheme_cluster_unchecked(&mut self, cluster: GraphemeCluster) {
         let style = self.active_style();
-        let current_cluster = self.window.values.get_mut((self.y as Ix, self.x as Ix)).expect("in bounds");
-        *current_cluster = StyledGraphemeCluster::new(cluster, style);
+        let target_cluster_x = self.x as Ix;
+        let y = self.y as Ix;
+        let old_target_cluster_width = {
+            let target_cluster = self.window.values.get_mut((y, target_cluster_x)).expect("in bounds");
+            let w = target_cluster.grapheme_cluster.width();
+            *target_cluster = StyledGraphemeCluster::new(cluster, style);
+            w
+        };
+        if old_target_cluster_width != 1 {
+            // Find start of wide cluster which will be (partially) overwritten
+            let mut current_x = target_cluster_x;
+            let mut current_width = old_target_cluster_width;
+            while current_width == 0 {
+                current_x -= 1;
+                current_width = self.window.values.get_mut((y, current_x)).expect("finding wide cluster start: read in bounds").grapheme_cluster.width();
+            }
+
+            // Clear all cells (except the newly written one)
+            let start_cluster_x = current_x;
+            let start_cluster_width = current_width;
+            for x_to_clear in start_cluster_x..start_cluster_x+start_cluster_width {
+                if x_to_clear != target_cluster_x {
+                    self.window.values.get_mut((y, x_to_clear)).expect("overwrite cluster cells in bounds").grapheme_cluster.clear();
+                }
+            }
+        }
+        // This should cover (almost) all cases where we overwrite wide grapheme clusters.
+        // Unfortunately, with the current design it is possible to split windows exactly at a
+        // multicell wide grapheme cluster, e.g.: [f,o,o,b,a,r] => [f,o,沐,,a,r] => [f,o,沐|,a,r]
+        // Now, when writing to to [f,o,沐| will trigger an out of bound access
+        // => "overwrite cluster cells in bounds" will fail
+        //
+        // Alternatively: writing to |,a,r] will cause an under/overflow in
+        // current_x -= 1;
+        //
+        // I will call this good for now, as these problems will likely not (or only rarely) arrise
+        // in pratice. If they do... we have to think of something...
     }
 
     fn remaining_space_in_line(&self) -> i32 {
@@ -332,7 +367,7 @@ mod test {
         let mut term = FakeTerminal::with_size(window_dim);
         {
             let mut window = term.create_root_window();
-            window.fill('_');
+            window.fill(GraphemeCluster::try_from('_').unwrap());
             let mut cursor = Cursor::new(&mut window);
             setup(&mut cursor);
             action(&mut cursor);
@@ -381,12 +416,29 @@ mod test {
 
     #[test]
     fn test_cursor_wide_cluster() {
-        test_cursor((5, 1), "沐___", |c| c.set_tab_column_width(2), |c| c.write("沐"));
-        test_cursor((5, 1), "沐沐_", |c| c.set_tab_column_width(2), |c| c.write("沐沐"));
-        test_cursor((5, 1), "沐沐 ", |c| c.set_tab_column_width(2), |c| c.write("沐沐沐"));
+        test_cursor((5, 1), "沐___", |_| {}, |c| c.write("沐"));
+        test_cursor((5, 1), "沐沐_", |_| {}, |c| c.write("沐沐"));
+        test_cursor((5, 1), "沐沐 ", |_| {}, |c| c.write("沐沐沐"));
 
-        test_cursor((3, 2), "沐_|___", |c| { c.set_tab_column_width(2); c.set_wrapping_mode(WrappingMode::Wrap); }, |c| c.write("沐"));
-        test_cursor((3, 2), "沐 |沐_", |c| { c.set_tab_column_width(2); c.set_wrapping_mode(WrappingMode::Wrap); }, |c| c.write("沐沐"));
-        test_cursor((3, 2), "沐 |沐 ", |c| { c.set_tab_column_width(2); c.set_wrapping_mode(WrappingMode::Wrap); }, |c| c.write("沐沐沐"));
+        test_cursor((3, 2), "沐_|___", |c| c.set_wrapping_mode(WrappingMode::Wrap), |c| c.write("沐"));
+        test_cursor((3, 2), "沐 |沐_", |c| c.set_wrapping_mode(WrappingMode::Wrap), |c| c.write("沐沐"));
+        test_cursor((3, 2), "沐 |沐 ", |c| c.set_wrapping_mode(WrappingMode::Wrap), |c| c.write("沐沐沐"));
+    }
+
+    #[test]
+    fn test_cursor_wide_cluster_overwrite() {
+        test_cursor((5, 1), "X ___", |_| {}, |c| { c.write("沐"); c.set_position(0,0); c.write("X"); });
+        test_cursor((5, 1), " X___", |_| {}, |c| { c.write("沐"); c.set_position(1,0); c.write("X"); });
+        test_cursor((5, 1), "XYZ _", |_| {}, |c| { c.write("沐沐"); c.set_position(0,0); c.write("XYZ"); });
+        test_cursor((5, 1), " XYZ_", |_| {}, |c| { c.write("沐沐"); c.set_position(1,0); c.write("XYZ"); });
+        test_cursor((5, 1), "沐XYZ", |_| {}, |c| { c.write("沐沐沐"); c.set_position(2,0); c.write("XYZ"); });
+    }
+
+    #[test]
+    fn test_cursor_tabs_overwrite() {
+        test_cursor((5, 1), "X   _", |c| c.set_tab_column_width(4), |c| { c.write("\t"); c.set_position(0,0); c.write("X"); });
+        test_cursor((5, 1), " X  _", |c| c.set_tab_column_width(4), |c| { c.write("\t"); c.set_position(1,0); c.write("X"); });
+        test_cursor((5, 1), "  X _", |c| c.set_tab_column_width(4), |c| { c.write("\t"); c.set_position(2,0); c.write("X"); });
+        test_cursor((5, 1), "   X_", |c| c.set_tab_column_width(4), |c| { c.write("\t"); c.set_position(3,0); c.write("X"); });
     }
 }

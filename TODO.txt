@@ -1,7 +1,5 @@
 Finish up CodeWindow:
  - Breakpoint handling
-Fix Cursor:
- - Properly deal with width > 1 grapheme clusters and tabs (fix overwriting)
 Add WatchTable (?):
  - Implement table widget, JsonObjectViewer
 Add Container management:

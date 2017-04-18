@@ -129,7 +129,7 @@ impl<'b> HighlightingInstance for SyntectHighlightingInstance<'b> {
 }
 
 fn to_unsegen_color(color: &highlighting::Color) -> Color {
-    Color::new(color.r, color.g, color.b)
+    Color::Rgb{r: color.r, g: color.g, b: color.b}
 }
 fn to_unsegen_text_format(style: &highlighting::FontStyle) -> TextFormat {
     TextFormat {

@@ -17,6 +17,12 @@ pub enum DisassembleMode {
     MixedSourceAndDisassemblyWithRawOpcodes = 5,
 }
 
+pub enum BreakPointLocation<'a> {
+    Address(usize),
+    Function(&'a Path, &'a str),
+    Line(&'a Path, usize),
+}
+
 impl MiCommand {
     pub fn write_interpreter_string<F: Write>(&self, formatter: &mut F) -> Result<(), Error> {
         try!{write!(formatter, "-{}", self.operation)};
@@ -58,6 +64,32 @@ impl MiCommand {
             operation: "data-disassemble".to_owned(),
             options: vec!["-s".to_owned(), start_addr.to_string(), "-e".to_owned(), end_addr.to_string()],
             parameters: vec![format!("{}",(mode as u8))],
+        }
+    }
+
+    pub fn insert_breakpoint(location: BreakPointLocation) -> MiCommand {
+        MiCommand {
+            operation: "break-insert".to_owned(),
+            options: match location {
+                BreakPointLocation::Address(addr) => {
+                    vec![format!("0x{:x}", addr)] //TODO: is this correct?
+                },
+                BreakPointLocation::Function(path, func_name) => {
+                    vec!["--source".to_owned(), path.to_string_lossy().into_owned(), "--function".to_owned(), func_name.to_owned()] //TODO: is this correct?
+                },
+                BreakPointLocation::Line(path, line_number) => {
+                    vec!["--source".to_owned(), path.to_string_lossy().into_owned(), "--line".to_owned(), format!("{}", line_number)] //TODO: is this correct?
+                },
+            },
+            parameters: Vec::new(),
+        }
+    }
+
+    pub fn delete_breakpoints<I: Iterator<Item=usize>>(breakpoint_numbers: I) -> MiCommand {
+        MiCommand {
+            operation: "break-delete".to_owned(),
+            options: breakpoint_numbers.map(|n| format!("{} ", n)).collect(),
+            parameters: Vec::new(),
         }
     }
 

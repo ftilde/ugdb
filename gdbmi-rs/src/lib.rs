@@ -67,12 +67,12 @@ impl GDB {
         self.is_running.load(Ordering::Relaxed) /* TODO: maybe some other ordering? */
     }
 
-    pub fn execute(&mut self, command: &input::MiCommand) -> Result<output::ResultRecord, ExecuteError> {
+    pub fn execute<C: std::borrow::Borrow<input::MiCommand>>(&mut self, command: C) -> Result<output::ResultRecord, ExecuteError> {
         if self.is_running() {
             return Err(ExecuteError::Busy)
         }
 
-        command.write_interpreter_string(&mut self.stdin).expect("write interpreter command");
+        command.borrow().write_interpreter_string(&mut self.stdin).expect("write interpreter command");
         match self.result_output.recv() {
             Ok(record) => Ok(record),
             Err(e) => {

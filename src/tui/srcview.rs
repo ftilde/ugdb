@@ -41,12 +41,14 @@ use syntect::parsing::{
 };
 use gdbmi;
 use gdbmi::output::{
-    Object,
-    JsonValue,
     BreakPointEvent,
+    JsonValue,
+    Object,
+    ResultClass,
 };
 use gdbmi::input::{
     MiCommand,
+    BreakPointLocation,
     DisassembleMode,
 };
 use std::io;
@@ -276,13 +278,25 @@ impl<'a> AssemblyView<'a> {
             return Err(());
         }
     }
-    pub fn event(&mut self, event: Input, _ /*gdb*/: &mut gdbmi::GDB) {
+    pub fn toggle_breakpoint(&self, gdb: &mut gdbmi::GDB) {
+        if let Some(line) = self.pager.current_line() {
+            gdb.execute(&MiCommand::insert_breakpoint(BreakPointLocation::Address(line.address.0))).expect("insert successful");
+        } //TODO: delete if current
+    }
+    pub fn event(&mut self, event: Input, gdb: &mut gdbmi::GDB) {
         event.chain(ScrollBehavior::new(&mut self.pager)
                     .forwards_on(Key::PageDown)
                     .forwards_on(Key::Char('j'))
                     .backwards_on(Key::PageUp)
                     .backwards_on(Key::Char('k'))
-                   );
+                   )
+            .chain(|evt| match evt {
+                Input { event: Event::Key(Key::Char(' ')) } => {
+                    self.toggle_breakpoint(gdb);
+                    None
+                }
+                e => Some(e)
+            });
     }
 }
 
@@ -465,13 +479,50 @@ impl<'a> SourceView<'a> {
         }
     }
 
-    pub fn event(&mut self, event: Input, _ /*gdb*/: &mut gdbmi::GDB) {
+    fn toggle_breakpoint(&self, gdb: &mut gdbmi::GDB, breakpoints: &mut BreakPointSet) {
+        let line = self.current_line_number();
+        if let Some(path) = self.current_file() {
+            let active_bps: Vec<usize> = breakpoints.values().filter_map(|bp| if let Some(ref src_pos) = bp.src_pos {
+                if src_pos.file == path && src_pos.line == line {
+                    Some(bp.number)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }).collect();
+            if active_bps.is_empty() {
+                let bp_result = gdb.execute(MiCommand::insert_breakpoint(BreakPointLocation::Line(path, line.into()))).expect("path-breakpoint insert successful");
+                debug_assert!(bp_result.class == ResultClass::Done, "Incorrect result class");
+                if let JsonValue::Object(ref bkpt) = bp_result.results["bkpt"] {
+                    breakpoints.update_breakpoint(BreakPoint::from_json(&bkpt))
+                } else {
+                    panic!("Result did not contain bkpt");
+                }
+            } else {
+                for &number in active_bps.iter() {
+                    breakpoints.remove_breakpoint(number);
+                }
+                let bp_result = gdb.execute(MiCommand::delete_breakpoints(active_bps.into_iter())).expect("path-breakpoint insert successful");
+                debug_assert!(bp_result.class == ResultClass::Done, "Incorrect result class");
+            }
+        }
+    }
+
+    fn event(&mut self, event: Input, gdb: &mut gdbmi::GDB, breakpoints: &mut BreakPointSet) {
         event.chain(ScrollBehavior::new(&mut self.pager)
                     .forwards_on(Key::PageDown)
                     .forwards_on(Key::Char('j'))
                     .backwards_on(Key::PageUp)
                     .backwards_on(Key::Char('k'))
-                   );
+                   )
+            .chain(|evt| match evt {
+                Input { event: Event::Key(Key::Char(' ')) } => {
+                    self.toggle_breakpoint(gdb, breakpoints);
+                    None
+                }
+                e => Some(e)
+            });
     }
 }
 
@@ -491,9 +542,11 @@ struct BreakPoint {
     src_pos: Option<SrcPosition>, // May not be present if debug information is missing!
 }
 
+
+
 impl BreakPoint {
     fn from_json(bkpt: &Object) -> Self {
-        let number = bkpt["number"].as_str().expect("find id").parse::<usize>().expect("Parse usize");
+        let number = bkpt["number"].as_str().expect("find bp number").parse::<usize>().expect("Parse usize");
         let enabled = bkpt["enabled"].as_str().expect("find enabled") == "y";
         let address = Address::parse(bkpt["addr"].as_str().expect("find address")).expect("Parse address");
         let file = bkpt["fullname"].as_str().expect("find full file name");
@@ -507,6 +560,40 @@ impl BreakPoint {
     }
 }
 
+struct BreakPointSet {
+    breakpoints: HashMap<usize, BreakPoint>,
+    changed: bool,
+}
+
+impl BreakPointSet {
+    fn new() -> Self {
+        BreakPointSet {
+            breakpoints: HashMap::new(),
+            changed: false,
+        }
+    }
+
+    fn update_breakpoint(&mut self, new_bp: BreakPoint) {
+        let _ = self.breakpoints.insert(new_bp.number, new_bp);
+        //debug_assert!(res.is_some(), "Modified non-existent breakpoint");
+        self.changed = true;
+    }
+
+    fn remove_breakpoint(&mut self, bp_num: usize) {
+        self.breakpoints.remove(&bp_num);
+        self.changed = true;
+    }
+}
+
+impl ::std::ops::Deref for BreakPointSet {
+    type Target = HashMap<usize, BreakPoint>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.breakpoints
+    }
+}
+
+
 enum CodeWindowMode {
     Source,
     Assembly,
@@ -517,7 +604,7 @@ pub struct CodeWindow<'a> {
     asm_view: AssemblyView<'a>,
     layout: HorizontalLayout,
     mode: CodeWindowMode,
-    breakpoints: HashMap<usize, BreakPoint>,
+    breakpoints: BreakPointSet,
 }
 
 impl<'a> CodeWindow<'a> {
@@ -527,7 +614,7 @@ impl<'a> CodeWindow<'a> {
             asm_view: AssemblyView::new(highlighting_theme),
             layout: HorizontalLayout::new(SeparatingStyle::Draw(GraphemeCluster::try_from('|').unwrap())),
             mode: CodeWindowMode::Source,
-            breakpoints: HashMap::new(),
+            breakpoints: BreakPointSet::new(),
         }
     }
     pub fn show_frame(&mut self, frame: &Object, gdb: &mut gdbmi::GDB) {
@@ -554,9 +641,7 @@ impl<'a> CodeWindow<'a> {
             BreakPointEvent::Created | BreakPointEvent::Modified => {
                 if let JsonValue::Object(ref bkpt) = info["bkpt"] {
                     let bp = BreakPoint::from_json(bkpt);
-                    let id = bp.number;
-                    let res = self.breakpoints.insert(id, bp);
-                    debug_assert!(bp_type != BreakPointEvent::Created || res.is_none(), "Created with existing id");
+                    self.breakpoints.update_breakpoint(bp);
                     //debug_assert!(bp_type != BreakPointEvent::Modified || res.is_some(), "Modified non-existent id");
                 } else {
                     panic!("Invalid bkpt");
@@ -564,11 +649,10 @@ impl<'a> CodeWindow<'a> {
             },
             BreakPointEvent::Deleted => {
                 let id = info["id"].as_str().expect("find id").parse::<usize>().expect("Parse usize");
-                self.breakpoints.remove(&id);
+                self.breakpoints.remove_breakpoint(id);
             },
         }
-        self.asm_view.update_decoration(self.breakpoints.values());
-        self.src_view.update_decoration(self.breakpoints.values());
+        self.synchronize_breakpoints();
     }
 
     fn toggle_mode(&mut self, gdb: &mut gdbmi::GDB) {
@@ -595,6 +679,14 @@ impl<'a> CodeWindow<'a> {
         }
     }
 
+    fn synchronize_breakpoints(&mut self) {
+        if self.breakpoints.changed {
+            self.asm_view.update_decoration(self.breakpoints.values());
+            self.src_view.update_decoration(self.breakpoints.values());
+            self.breakpoints.changed = false;
+        }
+    }
+
     pub fn event(&mut self, event: Input, gdb: &mut gdbmi::GDB) {
         event.chain(|i: Input| match i.event {
             Event::Key(Key::Char('d')) => {
@@ -611,11 +703,12 @@ impl<'a> CodeWindow<'a> {
                     }
                 },
                 CodeWindowMode::Source => {
-                    self.src_view.event(i, gdb);
+                    self.src_view.event(i, gdb, &mut self.breakpoints);
                 },
             }
             None
         });
+        self.synchronize_breakpoints();
     }
 }
 

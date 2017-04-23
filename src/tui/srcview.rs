@@ -47,6 +47,7 @@ use gdbmi::output::{
 };
 use gdbmi::input::{
     MiCommand,
+    DisassembleMode,
 };
 use std::io;
 use std::path::{
@@ -243,19 +244,25 @@ impl<'a> AssemblyView<'a> {
 
     fn show<'b, P: AsRef<Path>, L: Into<LineNumber>, I: Iterator<Item=&'b BreakPoint>>(&mut self, file: P, line: L, breakpoints: I, gdb: &mut gdbmi::GDB) -> Result<(), () /* Disassembly unsuccessful */> {
         let line_u: usize = line.into().into();
-        let ref disass_object = gdb.execute(&MiCommand::data_disassemble_file(file, line_u, None)).expect("disassembly successful").results["asm_insns"];
-        if let &JsonValue::Array(ref members) = disass_object {
+        let ref disass_object = gdb.execute(&MiCommand::data_disassemble_file(file, line_u, None, DisassembleMode::MixedSourceAndDisassembly)).expect("disassembly successful").results["asm_insns"];
+        if let &JsonValue::Array(ref line_objs) = disass_object {
             let mut asm_storage = MemoryLineStorage::<AssemblyLine>::new();
-            //TODO use inline assembly mode and keep track of SrcPosition for each instruction!
-            for tuple in members.iter() {
-                let instruction = tuple["inst"].as_str().expect("No instruction in disassembly object");
-                let address_str = tuple["address"].as_str().expect("No address in disassembly object");
-                let address = Address::parse(address_str).expect("Parse address");
-                asm_storage.lines.push(AssemblyLine::new(instruction.to_owned(), address, None /*TODO!*/));
+            for line_obj in line_objs {
+                let line = LineNumber(line_obj["line"].as_str().expect("line present").parse::<usize>().expect("parse line"));
+                let file = line_obj["fullname"].as_str().expect("full name present");
+                let src_pos = Some(SrcPosition::new(PathBuf::from(file), line));
+                for tuple in line_obj["line_asm_insn"].members() {
+                    let instruction = tuple["inst"].as_str().expect("No instruction in disassembly object");
+                    let address_str = tuple["address"].as_str().expect("No address in disassembly object");
+                    let address = Address::parse(address_str).expect("Parse address");
+                    asm_storage.lines.push(AssemblyLine::new(instruction.to_owned(), address, src_pos.clone()));
+                }
             }
-            let min_address = Address::parse(members.first().expect("No instructions")["address"].as_str().expect("min_address not present or not a string")).expect("Parse min address");
+            asm_storage.lines.sort_by_key(|l| l.address);
+            let min_address = asm_storage.lines.first().expect("At least one instruction").address;
             //TODO: use RangeInclusive when available on stable
-            let max_address = Address::parse(members.last().expect("No instructions")["address"].as_str().expect("max_address not present or not a string")).expect("Parse max address") + 1;
+            let max_address = asm_storage.lines.last().expect("At least one instruction").address + 1;
+
             let syntax = self.syntax_set.find_syntax_by_extension("s")
                 .unwrap_or(self.syntax_set.find_syntax_plain_text());
             self.pager.load(
@@ -296,11 +303,13 @@ struct SourceDecorator {
 impl SourceDecorator {
     fn new<'a, I: Iterator<Item=&'a BreakPoint>>(file: &Path, stop_position: Option<LineNumber>, breakpoints: I) -> Self {
         let addresses = breakpoints.filter_map(|bp| {
-            if bp.file == file && bp.enabled {
-                Some(bp.line)
-            } else {
-                None
-            }
+            bp.src_pos.clone().and_then(|pos| {
+                if bp.enabled && pos.file == file {
+                    Some(pos.line)
+                } else {
+                    None
+                }
+            })
         }).collect();
         SourceDecorator {
             stop_position: stop_position,
@@ -444,8 +453,8 @@ impl<'a> SourceView<'a> {
         Ok(())
     }
 
-    fn current_line(&self) -> LineNumber {
-        self.pager.current_line().into()
+    fn current_line_number(&self) -> LineNumber {
+        self.pager.current_line_index().into()
     }
 
     fn current_file(&self) -> Option<&Path> {
@@ -479,8 +488,7 @@ struct BreakPoint {
     number: usize,
     address: Address,
     enabled: bool,
-    file: PathBuf,    // TODO: Might be optional if no debug info is present!
-    line: LineNumber, //  ''
+    src_pos: Option<SrcPosition>, // May not be present if debug information is missing!
 }
 
 impl BreakPoint {
@@ -494,8 +502,7 @@ impl BreakPoint {
             number: number,
             address: address,
             enabled: enabled,
-            file: PathBuf::from(file),
-            line: line,
+            src_pos: Some(SrcPosition::new(PathBuf::from(file), line))
         }
     }
 }
@@ -571,11 +578,11 @@ impl<'a> CodeWindow<'a> {
             },
             CodeWindowMode::Source => {
                 if let Some(path) = self.src_view.current_file() {
-                    if self.asm_view.show(path, self.src_view.current_line(), self.breakpoints.values(), gdb).is_ok() {
+                    if self.asm_view.show(path, self.src_view.current_line_number(), self.breakpoints.values(), gdb).is_ok() {
 
                         // The current line may not have associated assembly!
                         // TODO: Maybe we want to try the next line or something...
-                        let _ = self.asm_view.go_to_first_applicable_line(path, self.src_view.current_line());
+                        let _ = self.asm_view.go_to_first_applicable_line(path, self.src_view.current_line_number());
 
                         CodeWindowMode::Assembly
                     } else {
@@ -597,8 +604,15 @@ impl<'a> CodeWindow<'a> {
             _ => Some(i),
         }).chain(|i: Input| {
             match self.mode {
-                CodeWindowMode::Assembly => self.asm_view.event(i, gdb), //TODO: update src view and jump to current line
-                CodeWindowMode::Source => self.src_view.event(i, gdb),
+                CodeWindowMode::Assembly => {
+                    self.asm_view.event(i, gdb);
+                    if let Some(src_pos) = self.asm_view.pager.current_line().and_then(|line| line.src_position) {
+                        let _  = self.src_view.show(src_pos.file, src_pos.line, self.breakpoints.values());
+                    }
+                },
+                CodeWindowMode::Source => {
+                    self.src_view.event(i, gdb);
+                },
             }
             None
         });

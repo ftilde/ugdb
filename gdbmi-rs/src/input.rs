@@ -10,6 +10,13 @@ pub struct MiCommand {
     parameters: Vec<String>,
 }
 
+pub enum DisassembleMode {
+    DissassemblyOnly = 0,
+    DissassemblyWithRawOpcodes = 1,
+    MixedSourceAndDisassembly = 4,
+    MixedSourceAndDisassemblyWithRawOpcodes = 5,
+}
+
 impl MiCommand {
     pub fn write_interpreter_string<F: Write>(&self, formatter: &mut F) -> Result<(), Error> {
         try!{write!(formatter, "-{}", self.operation)};
@@ -38,26 +45,24 @@ impl MiCommand {
         Self::interpreter_exec("console".to_owned(), format!("\"{}\"", command))
     }
 
-    pub fn data_disassemble_file<P: AsRef<Path>>(file: P, linenum: usize, lines: Option<usize>) -> MiCommand {
+    pub fn data_disassemble_file<P: AsRef<Path>>(file: P, linenum: usize, lines: Option<usize>, mode: DisassembleMode) -> MiCommand {
         MiCommand {
             operation: "data-disassemble".to_owned(),
             options: vec!["-f".to_owned(), file.as_ref().to_string_lossy().to_string(), "-l".to_owned(), linenum.to_string(), "-n".to_owned(), lines.map(|l| l as isize).unwrap_or(-1).to_string()],
-            parameters: vec!["0".to_owned()], //TODO: as parameter?
+            parameters: vec![format!("{}",(mode as u8))],
         }
     }
 
-    #[allow(dead_code)]
-    pub fn data_disassemble_address(start_addr: usize, end_addr: usize) -> MiCommand {
+    pub fn data_disassemble_address(start_addr: usize, end_addr: usize, mode: DisassembleMode) -> MiCommand {
         MiCommand {
             operation: "data-disassemble".to_owned(),
             options: vec!["-s".to_owned(), start_addr.to_string(), "-e".to_owned(), end_addr.to_string()],
-            parameters: vec!["0".to_owned()], //TODO: as parameter?
+            parameters: vec![format!("{}",(mode as u8))],
         }
     }
 
     // Be aware: This does not seem to always interrupt execution.
     // Use gdb.interrupt_execution instead.
-    #[allow(dead_code)]
     pub fn exec_interrupt(/*TODO incorporate all & threadgroup? */) -> MiCommand {
         MiCommand {
             operation: "exec-interrupt".to_owned(),

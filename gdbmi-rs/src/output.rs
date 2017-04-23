@@ -180,12 +180,19 @@ named!(
         )
     );
 
-fn to_map(v: Vec<(String, JsonValue)>) -> Object { //TODO: fix this and parse the map directly
+fn to_map(v: Vec<(String, JsonValue)>) -> Object {
+    //TODO: fix this and parse the map directly
     let mut obj = Object::new();
     for (name, value) in v {
+        debug_assert!(obj.get(&name).is_none(), "Duplicate object member!");
         obj.insert(&name, value);
     }
     obj
+}
+
+fn to_list(v: Vec<(String, JsonValue)>) -> Vec<JsonValue> { //The gdbmi-grammar is really weird...
+    //TODO: fix this and parse the map directly
+    v.into_iter().map(|(_, value)| value).collect()
 }
 
 named!(value<JsonValue>,
@@ -193,7 +200,7 @@ named!(value<JsonValue>,
            map!(string, |s| JsonValue::String(s)) |
            chain!(tag!("{") ~ results: separated_list!(tag!(","), result) ~ tag!("}"), || JsonValue::Object(to_map(results))) |
            chain!(tag!("[") ~ values: separated_list!(tag!(","), value) ~ tag!("]"), || JsonValue::Array(values)) |
-           chain!(tag!("[") ~ results: separated_list!(tag!(","), result) ~ tag!("]"), || JsonValue::Object(to_map(results)))
+           chain!(tag!("[") ~ results: separated_list!(tag!(","), result) ~ tag!("]"), || JsonValue::Array(to_list(results)))
            )
        );
 

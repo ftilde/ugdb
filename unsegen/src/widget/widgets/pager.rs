@@ -309,8 +309,16 @@ impl<S, H, D> Pager<S, H, D>
         line.and_then(|(index, _)| self.go_to_line(index))
     }
 
-    pub fn current_line(&self) -> LineIndex {
+    pub fn current_line_index(&self) -> LineIndex {
         self.current_line
+    }
+
+    pub fn current_line(&self) -> Option<S::Line> {
+        if let Some(ref content) = self.content {
+            content.storage.view_line(self.current_line_index())
+        } else {
+            None
+        }
     }
 }
 

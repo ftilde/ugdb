@@ -49,6 +49,7 @@ use gdbmi::output::{
 use gdbmi::input::{
     MiCommand,
     BreakPointLocation,
+    BreakPointNumber,
     DisassembleMode,
 };
 use std::io;
@@ -137,11 +138,12 @@ struct AssemblyDecorator {
 impl AssemblyDecorator {
     fn new<'a, I: Iterator<Item=&'a BreakPoint>>(address_range: Range<Address>, stop_position: Option<Address>, breakpoints: I) -> Self {
         let addresses = breakpoints.filter_map(|bp| {
-            if bp.enabled && address_range.start <= bp.address && bp.address < address_range.end {
-                Some(bp.address)
-            } else {
-                None
-            }
+            bp.address.and_then(|addr|
+                if bp.enabled && address_range.start <= addr && addr < address_range.end {
+                    Some(addr)
+                } else {
+                    None
+                })
         }).collect();
         let stop_position = if let Some(p) = stop_position {
             if address_range.start <= p && p < address_range.end {
@@ -482,7 +484,7 @@ impl<'a> SourceView<'a> {
     fn toggle_breakpoint(&self, gdb: &mut gdbmi::GDB, breakpoints: &mut BreakPointSet) {
         let line = self.current_line_number();
         if let Some(path) = self.current_file() {
-            let active_bps: Vec<usize> = breakpoints.values().filter_map(|bp| if let Some(ref src_pos) = bp.src_pos {
+            let active_bps: Vec<BreakPointNumber> = breakpoints.values().filter_map(|bp| if let Some(ref src_pos) = bp.src_pos {
                 if src_pos.file == path && src_pos.line == line {
                     Some(bp.number)
                 } else {
@@ -493,11 +495,19 @@ impl<'a> SourceView<'a> {
             }).collect();
             if active_bps.is_empty() {
                 let bp_result = gdb.execute(MiCommand::insert_breakpoint(BreakPointLocation::Line(path, line.into()))).expect("path-breakpoint insert successful");
-                debug_assert!(bp_result.class == ResultClass::Done, "Incorrect result class");
-                if let JsonValue::Object(ref bkpt) = bp_result.results["bkpt"] {
-                    breakpoints.update_breakpoint(BreakPoint::from_json(&bkpt))
-                } else {
-                    panic!("Result did not contain bkpt");
+                match bp_result.class {
+                    ResultClass::Done => {
+                        for bp in BreakPoint::all_from_json(&bp_result.results["bkpt"]) {
+                            breakpoints.update_breakpoint(bp)
+                        }
+                    },
+                    ResultClass::Error => {
+                        // Cannot create breakpoint
+                        // TODO: display error msg somehow?
+                    },
+                    _ => {
+                        panic!("Unexpected result class");
+                    },
                 }
             } else {
                 for &number in active_bps.iter() {
@@ -536,32 +546,58 @@ impl<'a> Widget for SourceView<'a> {
 }
 
 struct BreakPoint {
-    number: usize,
-    address: Address,
+    number: BreakPointNumber,
+    address: Option<Address>,
     enabled: bool,
     src_pos: Option<SrcPosition>, // May not be present if debug information is missing!
 }
 
 
-
 impl BreakPoint {
     fn from_json(bkpt: &Object) -> Self {
-        let number = bkpt["number"].as_str().expect("find bp number").parse::<usize>().expect("Parse usize");
+        let number = bkpt["number"].as_str().expect("find bp number").parse::<BreakPointNumber>().expect("Parse usize");
         let enabled = bkpt["enabled"].as_str().expect("find enabled") == "y";
-        let address = Address::parse(bkpt["addr"].as_str().expect("find address")).expect("Parse address");
-        let file = bkpt["fullname"].as_str().expect("find full file name");
-        let line = LineNumber(bkpt["line"].as_str().expect("find line number").parse::<usize>().expect("Parse usize"));
+        let address = bkpt["addr"].as_str().and_then(|addr| Address::parse(addr).ok()); //addr may not be present or contain
+        let src_pos = {
+            let maybe_file = bkpt["fullname"].as_str();
+            let maybe_line = bkpt["line"].as_str().map(|l_nr| LineNumber(l_nr.parse::<usize>().expect("Parse usize")));
+            if let (Some(file), Some(line)) = (maybe_file, maybe_line) {
+                Some(SrcPosition::new(PathBuf::from(file), line))
+            } else {
+                None
+            }
+        };
         BreakPoint {
             number: number,
             address: address,
             enabled: enabled,
-            src_pos: Some(SrcPosition::new(PathBuf::from(file), line))
+            src_pos: src_pos,
+        }
+    }
+
+    fn all_from_json(bkpt_obj: &JsonValue) -> Box<Iterator<Item=BreakPoint>> {
+        match bkpt_obj {
+            &JsonValue::Object(ref bp) => {
+                Box::new(Some(Self::from_json(&bp)).into_iter())
+            },
+            &JsonValue::Array(ref bp_array) => {
+                Box::new(bp_array.iter().map(|bp| {
+                    if let &JsonValue::Object(ref bp) = bp {
+                        Self::from_json(&bp)
+                    } else {
+                        panic!("Invalid breakpoint object in array");
+                    }
+                }).collect::<Vec<BreakPoint>>().into_iter())
+            },
+            _ => {
+                panic!("Invalid breakpoint object")
+            },
         }
     }
 }
 
 struct BreakPointSet {
-    breakpoints: HashMap<usize, BreakPoint>,
+    breakpoints: HashMap<BreakPointNumber, BreakPoint>,
     changed: bool,
 }
 
@@ -579,14 +615,14 @@ impl BreakPointSet {
         self.changed = true;
     }
 
-    fn remove_breakpoint(&mut self, bp_num: usize) {
+    fn remove_breakpoint(&mut self, bp_num: BreakPointNumber) {
         self.breakpoints.remove(&bp_num);
         self.changed = true;
     }
 }
 
 impl ::std::ops::Deref for BreakPointSet {
-    type Target = HashMap<usize, BreakPoint>;
+    type Target = HashMap<BreakPointNumber, BreakPoint>;
 
     fn deref(&self) -> &Self::Target {
         &self.breakpoints
@@ -648,7 +684,7 @@ impl<'a> CodeWindow<'a> {
                 }
             },
             BreakPointEvent::Deleted => {
-                let id = info["id"].as_str().expect("find id").parse::<usize>().expect("Parse usize");
+                let id = info["id"].as_str().expect("find id").parse::<BreakPointNumber>().expect("Parse usize");
                 self.breakpoints.remove_breakpoint(id);
             },
         }

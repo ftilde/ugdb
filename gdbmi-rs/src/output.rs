@@ -132,7 +132,7 @@ pub fn process_output<T: Read, S: OutOfBandRecordSink>(output: T, result_pipe: S
 
 impl Output {
     fn parse(line: &str) -> Self {
-        match output(line.as_bytes() /* TODO str parsing? */) {
+        match output(line.as_bytes()) {
             IResult::Done(_, c) => { return c; },
             IResult::Incomplete(e) => { panic!("parsing line: incomplete {:?}", e) }, //Is it okay to read the next bytes then?
             IResult::Error(e) => { panic!("parse error: {}", e) }
@@ -151,7 +151,7 @@ named!(
         )
     );
 
-fn not_bla(input: &[u8]) -> IResult<&[u8], u8> {
+fn non_quote_byte(input: &[u8]) -> IResult<&[u8], u8> {
     let byte = input[0];
     if byte == b'\"' {
         IResult::Error(::nom::ErrorKind::Custom(1)) //what are we supposed to return here??
@@ -166,7 +166,7 @@ named!(
         value!(b'\n', tag!("\\n")) |
         value!(b'\t', tag!("\\t")) |
         value!(b'\"', tag!("\\\"")) |
-        not_bla
+        non_quote_byte
         )
     );
 
@@ -204,12 +204,24 @@ named!(value<JsonValue>,
            )
        );
 
+// Don't even ask... Against its spec, gdb(mi) sometimes emits multiple values for a single tuple
+// in a comma separated list.
+named!(buggy_gdb_list_in_result<JsonValue>,
+       map!(separated_list!(tag!(","), value), |values: Vec<JsonValue>| {
+           if values.len() == 1 {
+               values.into_iter().next().expect("len == 1 => first element is guaranteed")
+           } else {
+               JsonValue::Array(values)
+           }
+       })
+       );
+
 named!(
     result<(String, JsonValue)>,
     chain!(
-        var: is_not!("=") ~
+        var: is_not!("={" /* Disallowing '{' should detect bugs */) ~
         tag!("=") ~
-        val: value,
+        val: buggy_gdb_list_in_result,
         || (String::from_utf8_lossy(var).into_owned(), val))
     );
 
@@ -324,20 +336,24 @@ fn debug_line(i: &[u8]) -> IResult<&[u8], Output> {
 }
 
 // Ends all records, but can probably ignored
-//named!(
-//    nl,
-//    alt!(
-//        tag!("\n") |
-//        tag!("\r\n")
-//        )
-//    );
+named!(
+    nl,
+    alt!(
+        tag!("\n") |
+        tag!("\r\n")
+        )
+    );
 
 named!(
     output<Output>,
-        alt!(
-            result_record |
-            out_of_band_record |
-            gdb_line |
-            debug_line
+        chain!(
+            output: alt!(
+                result_record |
+                out_of_band_record |
+                gdb_line |
+                debug_line
+                ) ~
+            nl,
+            || output
             )
     );

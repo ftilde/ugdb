@@ -44,9 +44,9 @@ impl GDB {
         let is_running = Arc::new(AtomicBool::new(false));
         let is_running_for_thread = is_running.clone();
         let (result_input, result_output) = mpsc::channel();
-        /*let outputThread = */ thread::spawn(move || {
+        /*let outputThread = */ thread::Builder::new().name("gdbmi parser".to_owned()).spawn(move || {
             output::process_output(stdout, result_input, oob_sink, is_running_for_thread);
-        });
+        }).expect("Spawn gdbmi parser thread");
         Ok(
             GDB {
                 process: child,

@@ -2,6 +2,7 @@ use std::io::{Write, Error};
 use std::path::{
     Path,
 };
+use std::fmt;
 
 #[derive(Debug)]
 pub struct MiCommand {
@@ -21,6 +22,46 @@ pub enum BreakPointLocation<'a> {
     Address(usize),
     Function(&'a Path, &'a str),
     Line(&'a Path, usize),
+}
+
+#[derive(Copy, Clone, Hash, PartialEq, Eq)]
+pub struct BreakPointNumber {
+    pub major: usize,
+    pub minor: Option<usize>,
+}
+
+impl ::std::str::FromStr for BreakPointNumber {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        use std::error::Error;
+
+        if let Some(dot_pos) = s.find(".") {
+            let major = try!{s[.. dot_pos].parse::<usize>().map_err(|e| e.description().to_string())};
+            let minor = try!{s[dot_pos+1 ..].parse::<usize>().map_err(|e| e.description().to_string())};
+            Ok(BreakPointNumber {
+                major: major,
+                minor: Some(minor),
+            })
+        } else {
+            match s.parse::<usize>() {
+                Ok(val) => Ok(BreakPointNumber {
+                    major: val,
+                    minor: None
+                }),
+                Err(e) => Err(e.description().to_string()),
+            }
+        }
+    }
+}
+
+impl fmt::Display for BreakPointNumber {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(minor) = self.minor {
+            write!(f, "{}.{}", self.major, minor)
+        } else {
+            write!(f, "{}", self.major)
+        }
+    }
 }
 
 impl MiCommand {
@@ -85,10 +126,15 @@ impl MiCommand {
         }
     }
 
-    pub fn delete_breakpoints<I: Iterator<Item=usize>>(breakpoint_numbers: I) -> MiCommand {
+    pub fn delete_breakpoints<I: Iterator<Item=BreakPointNumber>>(breakpoint_numbers: I) -> MiCommand {
+        //let options = options: breakpoint_numbers.map(|n| format!("{} ", n)).collect(),
+        //GDB is broken: see http://sourceware-org.1504.n7.nabble.com/Bug-breakpoints-20133-New-unable-to-delete-a-sub-breakpoint-td396197.html
+        let mut options = breakpoint_numbers.map(|n| format!("{} ", n.major)).collect::<Vec<String>>();
+        options.sort();
+        options.dedup();
         MiCommand {
             operation: "break-delete".to_owned(),
-            options: breakpoint_numbers.map(|n| format!("{} ", n)).collect(),
+            options: options,
             parameters: Vec::new(),
         }
     }

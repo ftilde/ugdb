@@ -113,13 +113,13 @@ impl MiCommand {
             operation: "break-insert".to_owned(),
             options: match location {
                 BreakPointLocation::Address(addr) => {
-                    vec![format!("0x{:x}", addr)] //TODO: is this correct?
+                    vec![format!("*0x{:x}", addr)] //TODO: is this correct?
                 },
                 BreakPointLocation::Function(path, func_name) => {
                     vec!["--source".to_owned(), path.to_string_lossy().into_owned(), "--function".to_owned(), func_name.to_owned()] //TODO: is this correct?
                 },
                 BreakPointLocation::Line(path, line_number) => {
-                    vec!["--source".to_owned(), path.to_string_lossy().into_owned(), "--line".to_owned(), format!("{}", line_number)] //TODO: is this correct?
+                    vec!["--source".to_owned(), path.to_string_lossy().into_owned(), "--line".to_owned(), format!("{}", line_number)]
                 },
             },
             parameters: Vec::new(),

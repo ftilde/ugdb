@@ -1,5 +1,3 @@
-Finish up CodeWindow:
- - Breakpoint handling
 Add WatchTable (?):
  - Implement table widget, JsonObjectViewer
 Add Container management:

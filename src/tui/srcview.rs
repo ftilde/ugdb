@@ -280,12 +280,43 @@ impl<'a> AssemblyView<'a> {
             return Err(());
         }
     }
-    pub fn toggle_breakpoint(&self, gdb: &mut gdbmi::GDB) {
+    fn toggle_breakpoint(&self, gdb: &mut gdbmi::GDB, breakpoints: &mut BreakPointSet) {
         if let Some(line) = self.pager.current_line() {
-            gdb.execute(&MiCommand::insert_breakpoint(BreakPointLocation::Address(line.address.0))).expect("insert successful");
-        } //TODO: delete if current
+            let active_bps: Vec<BreakPointNumber> = breakpoints.values().filter_map(|bp| if let Some(ref address) = bp.address {
+                if *address == line.address {
+                    Some(bp.number)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }).collect();
+            if active_bps.is_empty() {
+                let bp_result = gdb.execute(&MiCommand::insert_breakpoint(BreakPointLocation::Address(line.address.0))).expect("insert successful");
+                match bp_result.class {
+                    ResultClass::Done => {
+                        for bp in BreakPoint::all_from_json(&bp_result.results["bkpt"]) {
+                            breakpoints.update_breakpoint(bp)
+                        }
+                    },
+                    ResultClass::Error => {
+                        // Cannot create breakpoint
+                        // TODO: display error msg somehow?
+                    },
+                    _ => {
+                        panic!("Unexpected result class");
+                    },
+                }
+            } else {
+                for &number in active_bps.iter() {
+                    breakpoints.remove_breakpoint(number);
+                }
+                let bp_result = gdb.execute(MiCommand::delete_breakpoints(active_bps.into_iter())).expect("path-breakpoint insert successful");
+                debug_assert!(bp_result.class == ResultClass::Done, "Incorrect result class");
+            }
+        }
     }
-    pub fn event(&mut self, event: Input, gdb: &mut gdbmi::GDB) {
+    fn event(&mut self, event: Input, gdb: &mut gdbmi::GDB, breakpoints: &mut BreakPointSet) {
         event.chain(ScrollBehavior::new(&mut self.pager)
                     .forwards_on(Key::PageDown)
                     .forwards_on(Key::Char('j'))
@@ -294,7 +325,7 @@ impl<'a> AssemblyView<'a> {
                    )
             .chain(|evt| match evt {
                 Input { event: Event::Key(Key::Char(' ')) } => {
-                    self.toggle_breakpoint(gdb);
+                    self.toggle_breakpoint(gdb, breakpoints);
                     None
                 }
                 e => Some(e)
@@ -733,7 +764,7 @@ impl<'a> CodeWindow<'a> {
         }).chain(|i: Input| {
             match self.mode {
                 CodeWindowMode::Assembly => {
-                    self.asm_view.event(i, gdb);
+                    self.asm_view.event(i, gdb, &mut self.breakpoints);
                     if let Some(src_pos) = self.asm_view.pager.current_line().and_then(|line| line.src_position) {
                         let _  = self.src_view.show(src_pos.file, src_pos.line, self.breakpoints.values());
                     }

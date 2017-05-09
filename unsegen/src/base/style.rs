@@ -33,6 +33,12 @@ impl TextFormat {
         self.underline = true;
         self
     }
+    pub fn modify(&mut self, other: &TextFormat) {
+        self.bold = other.bold;
+        self.italic = other.italic;
+        self.invert ^= other.invert;
+        self.underline = other.underline;
+    }
     /*
     pub fn or(&self, other: &Self) -> Self {
         TextFormat {
@@ -252,7 +258,7 @@ impl StyleModifier {
             style.bg_color = bg;
         }
         if let Some(format) = self.format {
-            style.format = format;
+            style.format.modify(&format);
         }
     }
 }

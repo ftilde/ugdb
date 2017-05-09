@@ -82,7 +82,7 @@ impl<'w> Window<'w> {
     }
 
     pub fn split_v(self, split_pos: u32) -> (Self, Self) {
-        assert!(split_pos <= self.get_height(), "Invalid split_pos");
+        assert!(split_pos <= self.get_height(), "Invalid split_pos {} for window of height {}", split_pos, self.get_height());
 
         let (first_mat, second_mat) = self.values.split_at(Axis(0), split_pos as Ix);
         let w_u = Window {
@@ -97,7 +97,7 @@ impl<'w> Window<'w> {
     }
 
     pub fn split_h(self, split_pos: u32) -> (Self, Self) {
-        assert!(split_pos <= self.get_width(), "Invalid split_pos");
+        assert!(split_pos <= self.get_width(), "Invalid split_pos {} for window of width {}", split_pos, self.get_width());
 
         let (first_mat, second_mat) = self.values.split_at(Axis(1), split_pos as Ix);
         let w_l = Window {
@@ -128,8 +128,16 @@ impl<'w> Window<'w> {
         }
     }
 
+    pub fn clear(&mut self) {
+        self.fill(GraphemeCluster::space());
+    }
+
     pub fn set_default_style(&mut self, style: Style) {
         self.default_style = style;
+    }
+
+    pub fn default_style(&self) -> &Style {
+        &self.default_style
     }
 }
 

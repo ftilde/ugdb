@@ -19,6 +19,7 @@ pub enum InputEvent {
     ConsoleEvent(ConsoleEvent),
     PseudoTerminalEvent(Input),
     SourcePagerEvent(Input),
+    ExpressionTableEvent(Input),
     Quit,
 }
 
@@ -31,6 +32,7 @@ enum Mode {
     Console,
     PTY,
     SourcePager,
+    ExpressionTable,
 }
 
 pub struct ViKeyboardInput {
@@ -55,6 +57,7 @@ impl ViKeyboardInput {
                         Event::Key(Key::Esc) => { (Mode::SourcePager, None) },
                         Event::Key(Key::Char('i')) => { (Mode::Console, None) },
                         Event::Key(Key::Char('t')) => { (Mode::PTY, None) },
+                        Event::Key(Key::Char('e')) => { (Mode::ExpressionTable, None) },
                         e => { (mode, Some(InputEvent::SourcePagerEvent(Input::new(e)))) },
                     }
                 },
@@ -69,6 +72,12 @@ impl ViKeyboardInput {
                     match event {
                         Event::Key(Key::Esc) => { (Mode::SourcePager, None) },
                         e => { (mode, Some(InputEvent::PseudoTerminalEvent(Input::new(e)))) },
+                    }
+                },
+                Mode::ExpressionTable => {
+                    match event {
+                        Event::Key(Key::Esc) => { (Mode::SourcePager, None) },
+                        e => { (mode, Some(InputEvent::ExpressionTableEvent(Input::new(e)))) },
                     }
                 },
             };

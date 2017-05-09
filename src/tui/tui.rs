@@ -32,9 +32,11 @@ use gdbmi::output::{
 use super::console::Console;
 use super::srcview::CodeWindow;
 use super::pseudoterminal::PseudoTerminal;
+use super::expression_table::ExpressionTable;
 
 pub struct Tui<'a> {
     console: Console,
+    expression_table: ExpressionTable,
     process_pty: PseudoTerminal,
     src_view: CodeWindow<'a>,
 
@@ -47,6 +49,7 @@ impl<'a> Tui<'a> {
     pub fn new(process_pty: ::pty::PTYInput, highlighting_theme: &'a Theme) -> Self {
         Tui {
             console: Console::new(),
+            expression_table: ExpressionTable::new(),
             process_pty: PseudoTerminal::new(process_pty),
             src_view: CodeWindow::new(highlighting_theme),
             left_layout: VerticalLayout::new(SeparatingStyle::Draw(GraphemeCluster::try_from('=').unwrap())),
@@ -104,7 +107,7 @@ impl<'a> Tui<'a> {
         let mut left_widgets: Vec<&mut Widget> = vec![&mut self.src_view, &mut self.console];
         self.left_layout.draw(window_l, &mut left_widgets);
 
-        let mut right_widgets: Vec<&mut Widget> = vec![&mut self.process_pty];
+        let mut right_widgets: Vec<&mut Widget> = vec![&mut self.expression_table, &mut self.process_pty];
         self.right_layout.draw(window_r, &mut right_widgets);
     }
 
@@ -118,6 +121,9 @@ impl<'a> Tui<'a> {
             },
             InputEvent::SourcePagerEvent(event) => {
                 self.src_view.event(event, gdb)
+            },
+            InputEvent::ExpressionTableEvent(event) => {
+                self.expression_table.event(event, gdb)
             },
             InputEvent::Quit => {
                 unreachable!("quit should have been caught in main" )

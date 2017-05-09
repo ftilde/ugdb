@@ -27,8 +27,28 @@ impl ::std::ops::Add<Demand> for Demand {
         }
     }
 }
+impl ::std::ops::AddAssign for Demand {
+    fn add_assign(&mut self, rhs: Self) {
+        *self = *self + rhs
+    }
+}
+impl ::std::iter::Sum for Demand {
+    fn sum<I>(iter: I) -> Self where I: Iterator<Item=Self> {
+        use ::std::ops::Add;
+        iter.fold(Demand::exact(0), Demand::add)
+    }
+}
+impl<'a> ::std::iter::Sum<&'a Demand> for Demand {
+    fn sum<I>(iter: I) -> Demand where I: Iterator<Item=&'a Demand> {
+        iter.fold(Demand::zero(), |d1: Demand, d2: &Demand| d1 + *d2)
+    }
+}
+
 
 impl Demand {
+    pub fn zero() -> Self {
+        Self::exact(0)
+    }
     pub fn exact(size: u32) -> Self {
         Demand {
             min: size,

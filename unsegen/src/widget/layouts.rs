@@ -14,6 +14,20 @@ pub enum SeparatingStyle {
     //AlternateStyle(TextAttribute),
     Draw(GraphemeCluster)
 }
+impl SeparatingStyle {
+    pub fn width(&self) -> u32 {
+        match self {
+            &SeparatingStyle::None => 0,
+            &SeparatingStyle::Draw(ref cluster) => cluster.width() as u32,
+        }
+    }
+    pub fn height(&self) -> u32 {
+        match self {
+            &SeparatingStyle::None => 0,
+            &SeparatingStyle::Draw(_) => 1,
+        }
+    }
+}
 pub fn layout_linearly(mut available_space: u32, separator_width: u32, demands: &[Demand]) -> Box<[u32]>
 {
     let mut assigned_spaces = vec![0; demands.len()].into_boxed_slice();
@@ -107,7 +121,7 @@ impl HorizontalLayout {
 
     pub fn draw(&self, window: Window, widgets: &mut [&mut Widget]) {
 
-        let separator_width = if let SeparatingStyle::Draw(_) = self.separating_style { 1 } else { 0 };
+        let separator_width = self.separating_style.width();
         let horizontal_demands: Vec<Demand> = widgets.iter().map(|w| w.space_demand().0.clone()).collect();
         let assigned_spaces = layout_linearly(window.get_width(), separator_width, horizontal_demands.as_slice());
 
@@ -121,7 +135,7 @@ impl HorizontalLayout {
             w.draw(window);
             if let (Some(_), &SeparatingStyle::Draw(ref c)) = (iter.peek(), &self.separating_style) {
                 if rest_window.get_width() > 0 {
-                    let (mut window, r) = rest_window.split_h(1);
+                    let (mut window, r) = rest_window.split_h(c.width() as u32);
                     rest_window = r;
                     window.fill(c.clone());
                 }
@@ -159,7 +173,7 @@ impl VerticalLayout {
 
     pub fn draw(&self, window: Window, widgets: &mut [&mut Widget]) {
 
-        let separator_width = if let SeparatingStyle::Draw(_) = self.separating_style { 1 } else { 0 };
+        let separator_width = self.separating_style.height();
         let vertical_demands: Vec<Demand> = widgets.iter().map(|w| w.space_demand().1.clone()).collect();
         let assigned_spaces = layout_linearly(window.get_height(), separator_width, vertical_demands.as_slice());
 

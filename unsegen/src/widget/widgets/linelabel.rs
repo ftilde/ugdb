@@ -14,17 +14,15 @@ pub struct LineLabel {
     text: String,
 }
 impl LineLabel {
-    pub fn new(text: String) -> Self {
+    pub fn new<S: Into<String>>(text: S) -> Self {
         LineLabel {
-            text: text,
+            text: text.into(),
         }
     }
 
-    /*
-    pub fn set(&mut self, text: String) {
-        self.text = text
+    pub fn set<S: Into<String>>(&mut self, text: S) {
+        self.text = text.into();
     }
-    */
 }
 
 impl Widget for LineLabel {

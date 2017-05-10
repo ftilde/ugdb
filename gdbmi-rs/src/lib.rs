@@ -11,6 +11,7 @@ use std::thread;
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::ffi::OsStr;
 
 pub struct GDB {
     pub process: Child,
@@ -31,11 +32,14 @@ pub enum ExecuteError {
 }
 
 impl GDB {
-    pub fn spawn<S>(executable_path: &str, process_tty_name: &str, oob_sink: S) -> Result<GDB, ::std::io::Error> where S: OutOfBandRecordSink + 'static{
+    pub fn spawn_with_executable<S>(executable_path: &str, process_tty_name: &str, oob_sink: S) -> Result<GDB, ::std::io::Error> where S: OutOfBandRecordSink + 'static {
+        Self::spawn(&[executable_path], process_tty_name, oob_sink)
+    }
+    pub fn spawn<S, A: AsRef<OsStr>>(arguments: &[A], process_tty_name: &str, oob_sink: S) -> Result<GDB, ::std::io::Error> where S: OutOfBandRecordSink + 'static {
         let mut child = try!{Command::new("/bin/gdb")
             .arg("--interpreter=mi")
             .arg(format!("--tty={}", process_tty_name))
-            .arg(executable_path)
+            .args(arguments)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()};

@@ -22,6 +22,7 @@ mod tui;
 mod input;
 
 use std::thread;
+use ::std::ffi::OsString;
 
 use chan::Sender;
 use chan_signal::Signal;
@@ -66,7 +67,6 @@ fn main() {
     let signal_event_source = chan_signal::notify(&[Signal::WINCH]);
 
     let process_pty = pty::PTY::open().expect("Could not create pty.");
-    let executable_path = "/home/dominik/gdbmi-test/test";
 
     //println!("PTY: {}", process_pty.name());
     let ptyname = process_pty.name().to_owned();
@@ -80,7 +80,12 @@ fn main() {
 
     // Start gdb and setup output event piping
     let (oob_sink, oob_source) = chan::async();
-    let mut gdb = GDB::spawn(executable_path, process_pty.name(), MpscOobRecordSink(oob_sink)).expect("spawn gdb");
+
+    //let executable_path = "/home/dominik/gdbmi-test/test";
+    //let mut gdb = GDB::spawn_with_executable(executable_path, process_pty.name(), MpscOobRecordSink(oob_sink)).expect("spawn gdb");
+    let all_args: Vec<OsString> = ::std::env::args_os().collect();
+    let gdb_arguments = &all_args[1..];
+    let mut gdb = GDB::spawn(gdb_arguments, process_pty.name(), MpscOobRecordSink(oob_sink)).expect("spawn gdb");
 
     // Setup pty piping
     let (pty_input, pty_output) = process_pty.split_io();

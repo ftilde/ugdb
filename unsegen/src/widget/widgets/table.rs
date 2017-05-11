@@ -2,7 +2,6 @@ use base::{
     GraphemeCluster,
     Window,
     StyleModifier,
-    TextFormat,
 };
 use input::{
     Navigatable,
@@ -98,7 +97,7 @@ impl<R: TableRow + 'static> Widget for Table<R> {
     }
     fn draw(&mut self, window: Window) {
         let column_widths = self.layout_columns(&window);
-        let focused_style = StyleModifier::new().format(TextFormat::new().invert()).apply(window.default_style());
+        let focused_style = StyleModifier::new().invert().apply(window.default_style());
 
         let mut window = window;
         let mut row_iter = self.rows.iter_mut().enumerate().peekable();

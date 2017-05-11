@@ -6,7 +6,6 @@ use base::{
     Cursor,
     Window,
     StyleModifier,
-    TextFormat,
 };
 use super::{
     count_grapheme_clusters,
@@ -29,7 +28,7 @@ impl LineEdit {
         LineEdit {
             text: String::new(),
             cursor_pos: 0,
-            cursor_style: StyleModifier::new().format(TextFormat::new().invert()),
+            cursor_style: StyleModifier::new().invert(),
         }
     }
 
@@ -46,12 +45,9 @@ impl LineEdit {
         self.cursor_pos = count_grapheme_clusters(&self.text) as usize;
     }
 
-    /*
     pub fn move_cursor_to_beginning_of_line(&mut self) {
         self.cursor_pos = 0;
     }
-    */
-
 
     pub fn move_cursor_right(&mut self) {
         self.cursor_pos = ::std::cmp::min(self.cursor_pos + 1, count_grapheme_clusters(&self.text) as usize);
@@ -102,27 +98,27 @@ impl Widget for LineEdit {
         let right_padding = 2;
         let cursor_start_pos = ::std::cmp::min(0, window.get_width() as i32 - num_graphemes as i32 - right_padding);
 
-        let text_style = StyleModifier::none();
         let mut cursor = Cursor::new(&mut window).position(cursor_start_pos, 0);
         if let Some(cursor_pos_offset) = maybe_cursor_pos_offset {
             let (until_cursor, from_cursor) = self.text.split_at(cursor_pos_offset);
-            cursor.set_style_modifier(text_style);
             cursor.write(until_cursor);
             if let Some(after_cursor_offset) = maybe_after_cursor_offset {
                 let (cursor_str, after_cursor) = from_cursor.split_at(after_cursor_offset - cursor_pos_offset);
-                cursor.set_style_modifier(self.cursor_style);
-                cursor.write(cursor_str);
-                cursor.set_style_modifier(text_style);
+                {
+                    let mut cursor = cursor.push_style(self.cursor_style);
+                    cursor.write(cursor_str);
+                }
                 cursor.write(after_cursor);
             } else {
-                cursor.set_style_modifier(self.cursor_style);
+                let mut cursor = cursor.push_style(self.cursor_style);
                 cursor.write(from_cursor);
             }
         } else {
-            cursor.set_style_modifier(text_style);
             cursor.write(&self.text);
-            cursor.set_style_modifier(self.cursor_style);
-            cursor.write(" ");
+            {
+                let mut cursor = cursor.push_style(self.cursor_style);
+                cursor.write(" ");
+            }
         }
     }
 }

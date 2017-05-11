@@ -101,7 +101,7 @@ impl<'a> Tui<'a> {
 
         let (mut separator, window_r) = rest.split_h(2);
 
-        separator.set_default_style(Style::new(Color::Green, Color::Blue, TextFormat::new().bold().italic().underline()));
+        separator.set_default_style(Style::new(Color::Green, Color::Blue, TextFormat{ bold: true, underline: true, invert: false, italic: true }));
         separator.fill(GraphemeCluster::try_from('山').unwrap());
 
         let mut left_widgets: Vec<&mut Widget> = vec![&mut self.src_view, &mut self.console];

@@ -9,46 +9,6 @@ pub struct TextFormat {
 }
 
 impl TextFormat {
-    pub fn new() -> Self {
-        TextFormat {
-            bold: false,
-            italic: false,
-            invert: false,
-            underline: false,
-        }
-    }
-    pub fn bold(mut self) -> Self {
-        self.bold = true;
-        self
-    }
-    pub fn italic(mut self) -> Self {
-        self.italic = true;
-        self
-    }
-    pub fn invert(mut self) -> Self {
-        self.invert = true;
-        self
-    }
-    pub fn underline(mut self) -> Self {
-        self.underline = true;
-        self
-    }
-    pub fn modify(&mut self, other: &TextFormat) {
-        self.bold = other.bold;
-        self.italic = other.italic;
-        self.invert ^= other.invert;
-        self.underline = other.underline;
-    }
-    /*
-    pub fn or(&self, other: &Self) -> Self {
-        TextFormat {
-            bold: self.bold || other.bold,
-            italic: self.italic || other.italic,
-            invert: self.invert || other.invert,
-            underline: self.underline || other.underline,
-        }
-    }
-    */
     fn set_terminal_attributes(&self, terminal: &mut RawTerminal<::std::io::StdoutLock>) {
         use std::io::Write;
 
@@ -80,7 +40,74 @@ impl TextFormat {
 
 impl Default for TextFormat {
     fn default() -> Self {
-        TextFormat::new()
+        TextFormat {
+            bold: false,
+            italic: false,
+            invert: false,
+            underline: false,
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct TextFormatModifier {
+    pub bold: Option<bool>,
+    pub italic: Option<bool>,
+    pub invert: bool, //not optional, but false by default, as it will toggle
+    pub underline: Option<bool>,
+}
+
+impl TextFormatModifier {
+    pub fn new() -> Self {
+        TextFormatModifier {
+            bold: None,
+            italic: None,
+            invert: false,
+            underline: None,
+        }
+    }
+    pub fn bold(mut self, val: bool) -> Self {
+        self.bold = Some(val);
+        self
+    }
+    pub fn italic(mut self, val: bool) -> Self {
+        self.italic = Some(val);
+        self
+    }
+    pub fn invert(mut self) -> Self {
+        self.invert ^= true;
+        self
+    }
+    pub fn underline(mut self, val: bool) -> Self {
+        self.underline = Some(val);
+        self
+    }
+    fn or(&self, other: &TextFormatModifier) -> Self {
+        TextFormatModifier {
+            bold: self.bold.or(other.bold),
+            italic: self.italic.or(other.italic),
+            invert: self.invert ^ other.invert,
+            underline: self.underline.or(other.underline),
+        }
+    }
+
+    fn modify(&self, format: &mut TextFormat) {
+        if let Some(bold) = self.bold {
+            format.bold = bold;
+        }
+        if let Some(italic) = self.italic {
+            format.italic = italic;
+        }
+        format.invert ^= self.invert;
+        if let Some(underline) = self.underline {
+            format.underline = underline;
+        }
+    }
+}
+
+impl Default for TextFormatModifier {
+    fn default() -> Self {
+        TextFormatModifier::new()
     }
 }
 
@@ -199,7 +226,7 @@ impl Style {
 pub struct StyleModifier {
     fg_color: Option<Color>,
     bg_color: Option<Color>,
-    format: Option<TextFormat>,
+    format: TextFormatModifier,
 }
 
 impl StyleModifier {
@@ -207,7 +234,7 @@ impl StyleModifier {
         StyleModifier {
             fg_color: None,
             bg_color: None,
-            format: None,
+            format: TextFormatModifier::new(),
         }
     }
 
@@ -225,8 +252,26 @@ impl StyleModifier {
         self
     }
 
-    pub fn format(mut self, format: TextFormat) -> Self {
-        self.format = Some(format);
+    pub fn format(mut self, format: TextFormatModifier) -> Self {
+        self.format = format;
+        self
+    }
+
+    // Convenience functions to access text format
+    pub fn bold(mut self, val: bool) -> Self {
+        self.format.bold = Some(val);
+        self
+    }
+    pub fn italic(mut self, val: bool) -> Self {
+        self.format.italic = Some(val);
+        self
+    }
+    pub fn invert(mut self) -> Self {
+        self.format.invert ^= true;
+        self
+    }
+    pub fn underline(mut self, val: bool) -> Self {
+        self.format.underline = Some(val);
         self
     }
 
@@ -234,8 +279,12 @@ impl StyleModifier {
         StyleModifier {
             fg_color: self.fg_color.or(other.fg_color),
             bg_color: self.bg_color.or(other.bg_color),
-            format: self.format.or(other.format),
+            format: self.format.or(&other.format),
         }
+    }
+
+    pub fn if_not(&self, other: StyleModifier) -> Self {
+        other.or(&self)
     }
 
     pub fn apply_to_default(&self) -> Style {
@@ -257,8 +306,6 @@ impl StyleModifier {
         if let Some(bg) = self.bg_color {
             style.bg_color = bg;
         }
-        if let Some(format) = self.format {
-            style.format.modify(&format);
-        }
+        self.format.modify(&mut style.format);
     }
 }

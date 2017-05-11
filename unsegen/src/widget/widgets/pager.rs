@@ -11,7 +11,7 @@ use base::{
     Cursor,
     GraphemeCluster,
     StyleModifier,
-    TextFormat,
+    TextFormatModifier,
     Window,
     WrappingMode,
 };
@@ -131,12 +131,12 @@ impl<'b> HighlightingInstance for SyntectHighlightingInstance<'b> {
 fn to_unsegen_color(color: &highlighting::Color) -> Color {
     Color::Rgb{r: color.r, g: color.g, b: color.b}
 }
-fn to_unsegen_text_format(style: &highlighting::FontStyle) -> TextFormat {
-    TextFormat {
-        bold: style.contains(highlighting::FONT_STYLE_BOLD),
-        italic: style.contains(highlighting::FONT_STYLE_ITALIC),
+fn to_unsegen_text_format(style: &highlighting::FontStyle) -> TextFormatModifier {
+    TextFormatModifier {
+        bold: Some(style.contains(highlighting::FONT_STYLE_BOLD)), //TODO: maybe we want none here?
+        italic: Some(style.contains(highlighting::FONT_STYLE_ITALIC)),
         invert: false,
-        underline: style.contains(highlighting::FONT_STYLE_UNDERLINE),
+        underline: Some(style.contains(highlighting::FONT_STYLE_UNDERLINE)),
     }
 }
 fn to_unsegen_style_modifier(style: &highlighting::Style) -> StyleModifier {
@@ -380,7 +380,7 @@ impl<S, H, D> Widget for Pager<S, H, D>
 
             for (line_index, line) in content.storage.view(min_line..max_line) {
                 let base_style = if line_index == self.current_line {
-                    StyleModifier::new().format(TextFormat::new().invert().bold())
+                    StyleModifier::new().invert().bold(true)
                 } else {
                     StyleModifier::none()
                 };

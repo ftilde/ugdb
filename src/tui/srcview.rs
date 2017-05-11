@@ -3,7 +3,6 @@ use unsegen::base::{
     Color,
     GraphemeCluster,
     StyleModifier,
-    TextFormat,
     Window,
 };
 use unsegen::input::{
@@ -185,7 +184,7 @@ impl LineDecorator for AssemblyDecorator {
             style_modifier = style_modifier.or(&StyleModifier::new().fg_color(Color::Red));
         }
         if at_stop_position {
-            style_modifier = style_modifier.or(&StyleModifier::new().fg_color(Color::Green).format(TextFormat::new().bold()));
+            style_modifier = style_modifier.or(&StyleModifier::new().fg_color(Color::Green).bold(true));
         }
         cursor.set_style_modifier(style_modifier);
         write!(cursor, " 0x{:0>width$x}{}", line.address.0, right_border, width=width).unwrap();
@@ -390,7 +389,7 @@ impl LineDecorator for SourceDecorator {
             style_modifier = style_modifier.or(&StyleModifier::new().fg_color(Color::Red));
         }
         if at_stop_position {
-            style_modifier = style_modifier.or(&StyleModifier::new().fg_color(Color::Green).format(TextFormat::new().bold()));
+            style_modifier = style_modifier.or(&StyleModifier::new().fg_color(Color::Green).bold(true));
         }
         cursor.set_style_modifier(style_modifier);
 

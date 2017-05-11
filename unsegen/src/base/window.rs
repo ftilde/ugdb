@@ -357,6 +357,9 @@ impl<'c, 'w> Cursor<'c, 'w> {
         self.wrap_line();
     }
 
+    pub fn push_style<'a>(&'a mut self, style_modifier: StyleModifier) -> CursorStyleStack<'a, 'c, 'w> {
+        CursorStyleStack::new(self, style_modifier)
+    }
 }
 
 impl<'c, 'w> ::std::fmt::Write for Cursor<'c, 'w> {
@@ -365,6 +368,44 @@ impl<'c, 'w> ::std::fmt::Write for Cursor<'c, 'w> {
         Ok(())
     }
 }
+
+pub struct CursorStyleStack<'a, 'c: 'a, 'w: 'c> {
+    cursor: &'a mut Cursor<'c, 'w>,
+    previous_style_modifier: StyleModifier,
+}
+
+impl<'a, 'c: 'a, 'w: 'c> CursorStyleStack<'a, 'c, 'w> {
+    pub fn new(cursor: &'a mut Cursor<'c, 'w>, pushed_style_modifier: StyleModifier) -> Self {
+        let current_style_modifier = cursor.style_modifier;
+        let combined_style_modifier = current_style_modifier.if_not(pushed_style_modifier);
+        cursor.style_modifier = combined_style_modifier;
+        CursorStyleStack {
+            cursor: cursor,
+            previous_style_modifier: current_style_modifier,
+        }
+    }
+}
+
+impl<'a, 'c: 'a, 'w: 'c> ::std::ops::Drop for CursorStyleStack<'a, 'c, 'w> {
+    fn drop(&mut self) {
+        self.cursor.style_modifier = self.previous_style_modifier;
+    }
+}
+
+impl<'a, 'c: 'a, 'w: 'c> ::std::ops::DerefMut for CursorStyleStack<'a, 'c, 'w> {
+    fn deref_mut(&mut self) -> &mut Cursor<'c, 'w> {
+        &mut self.cursor
+    }
+}
+
+
+impl<'a, 'c: 'a, 'w: 'c> ::std::ops::Deref for CursorStyleStack<'a, 'c, 'w> {
+    type Target = Cursor<'c, 'w>;
+    fn deref(&self) -> &Cursor<'c, 'w> {
+        &self.cursor
+    }
+}
+
 
 #[cfg(test)]
 mod test {

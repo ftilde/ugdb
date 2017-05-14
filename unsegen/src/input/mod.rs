@@ -36,6 +36,10 @@ impl InputChain {
             }
         }
     }
+
+    pub fn finish(self) -> Option<Input> {
+        self.input
+    }
 }
 
 pub trait ToEvent {

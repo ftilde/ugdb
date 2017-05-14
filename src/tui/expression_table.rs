@@ -1,6 +1,5 @@
 use unsegen::widget::widgets::{
-    ColumnAccessor,
-    ColumnAccessorMut,
+    Column,
     LineEdit,
     LineLabel,
     Table,
@@ -15,6 +14,7 @@ use unsegen::base::{
 };
 use unsegen::input::{
     NavigateBehavior,
+    EditBehavior,
     Key,
 };
 use input::{
@@ -42,6 +42,18 @@ impl ExpressionRow {
         &mut self.expression
     }
 
+    fn pass_event_to_expression(&mut self, input: Input) -> Option<Input>{
+        input.chain(EditBehavior::new(&mut self.expression)
+                    .left_on(Key::Left)
+                    .right_on(Key::Right)
+                    .up_on(Key::Up)
+                    .down_on(Key::Down)
+                    .delete_symbol_on(Key::Delete)
+                    .remove_symbol_on(Key::Backspace)
+                    .clear_on(Key::Ctrl('c'))
+                    ).finish()
+    }
+
     fn get_result_as_widget(&self) -> &Widget {
         &self.result
     }
@@ -49,14 +61,26 @@ impl ExpressionRow {
     fn get_result_as_widget_mut(&mut self) -> &mut Widget {
         &mut self.result
     }
+
+    fn pass_event_to_result(&mut self, input: Input) -> Option<Input> {
+        //TODO
+        Some(input)
+    }
 }
 impl TableRow for ExpressionRow {
-    fn column_accessors() -> &'static [ColumnAccessor<ExpressionRow>] {
-        const W: &'static [ColumnAccessor<ExpressionRow>] = &[ExpressionRow::get_expression_as_widget, ExpressionRow::get_result_as_widget];
-        W
-    }
-    fn column_accessors_mut() -> &'static [ColumnAccessorMut<ExpressionRow>] {
-        const W: &'static [ColumnAccessorMut<ExpressionRow>] = &[ExpressionRow::get_expression_as_widget_mut, ExpressionRow::get_result_as_widget_mut];
+    fn columns() -> &'static [Column<ExpressionRow>] {
+        const W: &'static [Column<ExpressionRow>] = &[
+            Column {
+                access: ExpressionRow::get_expression_as_widget,
+                access_mut: ExpressionRow::get_expression_as_widget_mut,
+                behavior: ExpressionRow::pass_event_to_expression,
+            },
+            Column {
+                access: ExpressionRow::get_result_as_widget,
+                access_mut: ExpressionRow::get_result_as_widget_mut,
+                behavior: ExpressionRow::pass_event_to_result,
+            },
+        ];
         W
     }
 }
@@ -74,10 +98,13 @@ impl ExpressionTable {
             table: table,
         }
     }
-    pub fn event(&mut self, event: Input, gdb: &mut gdbmi::GDB) {
-        event.chain(|i: Input| match i.event {
+    pub fn event(&mut self, event: Input, _: &mut gdbmi::GDB) {
+        event
+            .chain(|i: Input| match i.event {
             _ => Some(i),
-        }).chain(NavigateBehavior::new(&mut self.table)
+        })
+            .chain(self.table.current_cell_behavior())
+            .chain(NavigateBehavior::new(&mut self.table)
                  .up_on(Key::Up)
                  .down_on(Key::Down)
                  .left_on(Key::Left)

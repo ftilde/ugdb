@@ -4,6 +4,7 @@ use base::{
     StyleModifier,
 };
 use input::{
+    Behavior,
     Navigatable,
 };
 use widget::{
@@ -12,25 +13,32 @@ use widget::{
     Widget,
     layout_linearly,
 };
+use input::{
+    Input,
+};
 use std::cmp::{
     min,
 };
 
-pub type ColumnAccessor<T> = fn(&T) -> &Widget;
-pub type ColumnAccessorMut<T> = fn(&mut T) -> &mut Widget;
+pub struct Column<T: ?Sized> {
+    // This will be SO much more convenient to implement once this is stablized:
+    // https://github.com/rust-lang/rust/issues/39817
+    pub access: fn(&T) -> &Widget,
+    pub access_mut: fn(&mut T) -> &mut Widget,
+    pub behavior: fn(&mut T, Input) -> Option<Input>,
+}
 
 pub trait TableRow {
-    fn column_accessors() -> &'static [ColumnAccessor<Self>];
-    fn column_accessors_mut() -> &'static [ColumnAccessorMut<Self>];
+    fn columns() -> &'static [Column<Self>];
 
     fn num_columns() -> usize where Self: 'static {
-        Self::column_accessors().len()
+        Self::columns().len()
     }
 
     fn height_demand(&self) -> Demand where Self: 'static {
         let mut y_demand = Demand::zero();
-        for  accessor in Self::column_accessors().iter() {
-            let (_, y) = accessor(self).space_demand();
+        for col in Self::columns().iter() {
+            let (_, y) = (col.access)(self).space_demand();
             y_demand.max_assign(y);
         }
         y_demand
@@ -59,8 +67,8 @@ impl<R: TableRow + 'static> Table<R> {
     fn layout_columns(&self, window: &Window) -> Box<[u32]> {
         let mut x_demands = vec![Demand::zero(); R::num_columns()];
         for row in self.rows.iter() {
-            for (col_num, accessor) in R::column_accessors().iter().enumerate() {
-                let (x, _) = accessor(row).space_demand();
+            for (col_num, col) in R::columns().iter().enumerate() {
+                let (x, _) = (col.access)(row).space_demand();
                 x_demands[col_num].max_assign(x);
             }
         }
@@ -69,6 +77,39 @@ impl<R: TableRow + 'static> Table<R> {
     }
     fn ensure_valid_row_pos(&mut self) {
         self.row_pos = min(self.row_pos, (self.rows.len() as u32).checked_sub(1).unwrap_or(0));
+    }
+
+    pub fn current_row_mut(&mut self) -> Option<&mut R> {
+        self.rows.get_mut(self.row_pos as usize)
+    }
+
+    pub fn current_col(&self) -> &'static Column<R> {
+        &R::columns()[self.col_pos as usize]
+    }
+
+    fn pass_event_to_current_cell(&mut self, i: Input) -> Option<Input> {
+        let col_behavior = self.current_col().behavior;
+        if let Some(row) = self.current_row_mut() {
+            col_behavior(row, i)
+        } else {
+            Some(i)
+        }
+    }
+
+    pub fn current_cell_behavior<'a>(&'a mut self) -> CurrentCellBehavior<'a, R> {
+        CurrentCellBehavior {
+            table: self,
+        }
+    }
+}
+
+pub struct CurrentCellBehavior<'a, R: TableRow + 'static> {
+    table: &'a mut Table<R>,
+}
+
+impl<'a, R: TableRow + 'static> Behavior for CurrentCellBehavior<'a, R> {
+    fn input(self, i: Input) -> Option<Input> {
+        self.table.pass_event_to_current_cell(i)
     }
 }
 
@@ -80,8 +121,8 @@ impl<R: TableRow + 'static> Widget for Table<R> {
         let mut row_iter = self.rows.iter().peekable();
         while let Some(row) = row_iter.next() {
             let mut row_max_y = Demand::exact(0);
-            for (col_num, accessor) in R::column_accessors().iter().enumerate() {
-                let (x, y) = accessor(row).space_demand();
+            for (col_num, col) in R::columns().iter().enumerate() {
+                let (x, y) = (col.access)(row).space_demand();
                 x_demands[col_num].max_assign(x);
                 row_max_y.max_assign(y)
             }
@@ -106,15 +147,15 @@ impl<R: TableRow + 'static> Widget for Table<R> {
             let (mut row_window, rest_window) = window.split_v(height);
             window = rest_window;
 
-            let mut iter = R::column_accessors_mut().iter().zip(column_widths.iter()).enumerate().peekable();
-            while let Some((col_index, (accessor, &pos))) = iter.next() {
+            let mut iter = R::columns().iter().zip(column_widths.iter()).enumerate().peekable();
+            while let Some((col_index, (col, &pos))) = iter.next() {
                 let (mut cell_window, r) = row_window.split_h(pos);
                 row_window = r;
                 if row_index as u32 == self.row_pos && col_index as u32 == self.col_pos {
                     cell_window.set_default_style(focused_style);
                     cell_window.clear();
                 }
-                accessor(row).draw(cell_window);
+                (col.access_mut)(row).draw(cell_window);
                 if let (Some(_), &SeparatingStyle::Draw(ref c)) = (iter.peek(), &self.col_sep_style) {
                     if row_window.get_width() > 0 {
                         let (mut sep_window, r) = row_window.split_h(c.width() as u32);

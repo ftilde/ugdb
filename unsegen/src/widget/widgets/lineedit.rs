@@ -14,6 +14,7 @@ use input::{
     Editable,
     Navigatable,
     Writable,
+    OperationResult,
 };
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -49,13 +50,22 @@ impl LineEdit {
         self.cursor_pos = 0;
     }
 
-    pub fn move_cursor_right(&mut self) {
-        self.cursor_pos = ::std::cmp::min(self.cursor_pos + 1, count_grapheme_clusters(&self.text) as usize);
+    pub fn move_cursor_right(&mut self) -> Result<(), ()> {
+        let new_pos = self.cursor_pos + 1;
+        if new_pos <= count_grapheme_clusters(&self.text) as usize {
+            self.cursor_pos = new_pos;
+            Ok(())
+        } else {
+            Err(())
+        }
     }
 
-    pub fn move_cursor_left(&mut self) {
+    pub fn move_cursor_left(&mut self) -> Result<(), ()> {
         if self.cursor_pos > 0 {
             self.cursor_pos -= 1;
+            Ok(())
+        } else {
+            Err(())
         }
     }
 
@@ -67,17 +77,21 @@ impl LineEdit {
                 .chain(grapheme_iter.skip(self.cursor_pos))
                 .collect()
         };
-        self.move_cursor_right();
     }
 
-    fn erase_symbol_at(&mut self, pos: usize) {
-        self.text = self.text.graphemes(true).enumerate().filter_map(
+    fn erase_symbol_at(&mut self, pos: usize) -> Result<(),()> {
+        if pos < self.text.len() {
+            self.text = self.text.graphemes(true).enumerate().filter_map(
                 |(i, s)|  if i != pos {
                     Some(s)
                 } else {
                     None
                 }
-            ).collect();
+                ).collect();
+            Ok(())
+        } else {
+            Err(())
+        }
     }
 
 
@@ -124,38 +138,50 @@ impl Widget for LineEdit {
 }
 
 impl Navigatable for LineEdit {
-    fn move_up(&mut self) {
+    fn move_up(&mut self) -> OperationResult {
+        Err(())
     }
-    fn move_down(&mut self) {
+    fn move_down(&mut self) -> OperationResult {
+        Err(())
     }
-    fn move_left(&mut self) {
-        self.move_cursor_left();
+    fn move_left(&mut self) -> OperationResult {
+        self.move_cursor_left()
     }
-    fn move_right(&mut self) {
-        self.move_cursor_right();
+    fn move_right(&mut self) -> OperationResult {
+        self.move_cursor_right()
     }
 }
 
 impl Writable for LineEdit {
-    fn write(&mut self, c: char) {
+    fn write(&mut self, c: char) -> OperationResult {
         self.insert(&c.to_string());
+        let _ = self.move_cursor_right();
+        Ok(())
     }
 }
 
 impl Editable for LineEdit {
-    fn delete_symbol(&mut self) { //i.e., "del" key
+    fn delete_symbol(&mut self) -> OperationResult { //i.e., "del" key
         let to_erase = self.cursor_pos;
-        self.erase_symbol_at(to_erase);
+        self.erase_symbol_at(to_erase)
     }
-    fn remove_symbol(&mut self) { //i.e., "backspace"
+    fn remove_symbol(&mut self) -> OperationResult { //i.e., "backspace"
         if self.cursor_pos > 0 {
             let to_erase = self.cursor_pos - 1;
-            self.erase_symbol_at(to_erase);
-            self.move_cursor_left();
+            let _ = self.erase_symbol_at(to_erase);
+            let _ = self.move_cursor_left();
+            Ok(())
+        } else {
+            Err(())
         }
     }
-    fn clear(&mut self) {
-        self.text.clear();
-        self.cursor_pos = 0;
+    fn clear(&mut self) -> OperationResult {
+        if self.text.is_empty() {
+            Err(())
+        } else {
+            self.text.clear();
+            self.cursor_pos = 0;
+            Ok(())
+        }
     }
 }

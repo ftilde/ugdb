@@ -5,19 +5,15 @@ use base::{
 };
 use input::{
     Behavior,
+    Input,
     Navigatable,
+    OperationResult,
 };
 use widget::{
     Demand,
     SeparatingStyle,
     Widget,
     layout_linearly,
-};
-use input::{
-    Input,
-};
-use std::cmp::{
-    min,
 };
 
 pub struct Column<T: ?Sized> {
@@ -75,8 +71,25 @@ impl<R: TableRow + 'static> Table<R> {
         let separator_width = self.col_sep_style.width();
         layout_linearly(window.get_width(), separator_width, &x_demands)
     }
-    fn ensure_valid_row_pos(&mut self) {
-        self.row_pos = min(self.row_pos, (self.rows.len() as u32).checked_sub(1).unwrap_or(0));
+
+    fn validate_row_pos(&mut self) -> Result<(),()> {
+        let max_pos = (self.rows.len() as u32).checked_sub(1).unwrap_or(0);
+        if self.row_pos > max_pos {
+            self.row_pos = max_pos;
+            Err(())
+        } else {
+            Ok(())
+        }
+    }
+
+    fn validate_col_pos(&mut self) -> Result<(),()> {
+        let max_pos = R::num_columns() as u32 - 1;
+        if self.col_pos > max_pos {
+            self.col_pos = max_pos;
+            Err(())
+        } else {
+            Ok(())
+        }
     }
 
     pub fn current_row_mut(&mut self) -> Option<&mut R> {
@@ -174,17 +187,28 @@ impl<R: TableRow + 'static> Widget for Table<R> {
 }
 
 impl<R: TableRow + 'static> Navigatable for Table<R> {
-    fn move_up(&mut self) {
-        self.row_pos = self.row_pos.checked_sub(1).unwrap_or(0);
+    fn move_up(&mut self) -> OperationResult {
+        if self.row_pos > 0 {
+            self.row_pos -= 1;
+            Ok(())
+        } else {
+            Err(())
+        }
     }
-    fn move_down(&mut self) {
+    fn move_down(&mut self) -> OperationResult {
         self.row_pos += 1;
-        self.ensure_valid_row_pos();
+        self.validate_row_pos()
     }
-    fn move_left(&mut self) {
-        self.col_pos = self.col_pos.checked_sub(1).unwrap_or(0);
+    fn move_left(&mut self) -> OperationResult {
+        if self.col_pos != 0 {
+            self.col_pos -= 1;
+            Ok(())
+        } else {
+            Err(())
+        }
     }
-    fn move_right(&mut self) {
-        self.col_pos = min(self.col_pos+1, R::num_columns() as u32 -1);
+    fn move_right(&mut self) -> OperationResult {
+        self.col_pos += 1;
+        self.validate_col_pos()
     }
 }

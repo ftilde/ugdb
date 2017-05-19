@@ -16,6 +16,7 @@ use input::{
     Navigatable,
     Writable,
     Scrollable,
+    OperationResult,
 };
 
 pub struct PromptLine {
@@ -63,7 +64,7 @@ impl PromptLine {
         if self.history.is_empty() || self.line.get() != self.history.last().expect("history is not empty").as_str() {
             self.history.push(self.line.get().to_owned());
         }
-        self.line.clear();
+        let _ = self.line.clear();
         &self.history[self.history.len()-1]
     }
 
@@ -87,8 +88,10 @@ impl Widget for PromptLine {
 }
 
 impl Scrollable for PromptLine {
-    fn scroll_forwards(&mut self) {
+    fn scroll_forwards(&mut self) -> OperationResult {
+        let op_result;
         self.history_scroll_position = if let Some(mut state) = self.history_scroll_position.take() {
+            op_result = Ok(());
             if state.pos+1 < self.history.len() {
                 state.pos += 1;
                 Some(state)
@@ -97,11 +100,13 @@ impl Scrollable for PromptLine {
                 None
             }
         } else {
+            op_result = Err(());
             None
         };
         self.sync_line_to_history_scroll_position();
+        op_result
     }
-    fn scroll_backwards(&mut self) {
+    fn scroll_backwards(&mut self) -> OperationResult {
         self.history_scroll_position = if let Some(mut state) = self.history_scroll_position.take() {
             if state.pos > 0 {
                 state.pos -= 1;
@@ -115,41 +120,58 @@ impl Scrollable for PromptLine {
             }
         };
         self.sync_line_to_history_scroll_position();
+        if self.history_scroll_position .is_some() {
+            Ok(())
+        } else {
+            Err(())
+        }
     }
 }
 impl Navigatable for PromptLine {
-    fn move_up(&mut self) {
-        self.scroll_backwards();
+    fn move_up(&mut self) -> OperationResult {
+        self.scroll_backwards()
     }
-    fn move_down(&mut self) {
-        self.scroll_forwards();
+    fn move_down(&mut self) -> OperationResult {
+        self.scroll_forwards()
     }
-    fn move_left(&mut self) {
-        self.line.move_cursor_left();
+    fn move_left(&mut self) -> OperationResult {
+        self.line.move_left()
     }
-    fn move_right(&mut self) {
-        self.line.move_cursor_right();
+    fn move_right(&mut self) -> OperationResult {
+        self.line.move_right()
     }
 }
 
 impl Writable for PromptLine {
-    fn write(&mut self, c: char) {
-        self.line.insert(&c.to_string());
-        self.history_scroll_position = None;
+    fn write(&mut self, c: char) -> OperationResult {
+        let op_res = self.line.write(c);
+        if op_res.is_ok() {
+            self.history_scroll_position = None;
+        }
+        op_res
     }
 }
 
 impl Editable for PromptLine {
-    fn delete_symbol(&mut self) {
-        self.line.delete_symbol();
-        self.history_scroll_position = None;
+    fn delete_symbol(&mut self) -> OperationResult {
+        let op_res = self.line.delete_symbol();
+        if op_res.is_ok() {
+            self.history_scroll_position = None;
+        }
+        op_res
     }
-    fn remove_symbol(&mut self) {
-        self.line.remove_symbol();
-        self.history_scroll_position = None;
+    fn remove_symbol(&mut self) -> OperationResult {
+        let op_res = self.line.remove_symbol();
+        if op_res.is_ok() {
+            self.history_scroll_position = None;
+        }
+        op_res
     }
-    fn clear(&mut self) {
-        self.line.clear();
-        self.history_scroll_position = None;
+    fn clear(&mut self) -> OperationResult {
+        let op_res = self.line.clear();
+        if op_res.is_ok() {
+            self.history_scroll_position = None;
+        }
+        op_res
     }
 }

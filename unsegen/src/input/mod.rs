@@ -92,6 +92,15 @@ impl<F: FnOnce(Input)->Option<Input>> Behavior for F {
     }
 }
 
+pub type OperationResult = Result<(), ()>;
+fn pass_on_if_err(res: OperationResult, input: Input) -> Option<Input> {
+    if res.is_err() {
+        Some(input)
+    } else {
+        None
+    }
+}
+
 // ScrollableBehavior -----------------------------------------------
 
 pub struct ScrollBehavior<'a, S: Scrollable + 'a> {
@@ -122,11 +131,9 @@ impl<'a, S: Scrollable> ScrollBehavior<'a, S> {
 impl<'a, S: Scrollable> Behavior for ScrollBehavior<'a, S> {
     fn input(mut self, input: Input) -> Option<Input> {
         if self.forwards_on.contains(&input.event) {
-            self.scrollable.scroll_forwards();
-            None
+            pass_on_if_err(self.scrollable.scroll_forwards(), input)
         } else if self.backwards_on.contains(&input.event) {
-            self.scrollable.scroll_backwards();
-            None
+            pass_on_if_err(self.scrollable.scroll_backwards(), input)
         } else {
             Some(input)
         }
@@ -134,8 +141,8 @@ impl<'a, S: Scrollable> Behavior for ScrollBehavior<'a, S> {
 }
 
 pub trait Scrollable {
-    fn scroll_backwards(&mut self);
-    fn scroll_forwards(&mut self);
+    fn scroll_backwards(&mut self) -> OperationResult;
+    fn scroll_forwards(&mut self) -> OperationResult;
 }
 
 // WriteBehavior ------------------------------------------
@@ -154,8 +161,7 @@ impl<'a, W: Writable + 'a> WriteBehavior<'a, W> {
 impl<'a, W: Writable + 'a> Behavior for WriteBehavior<'a, W> {
     fn input(mut self, input: Input) -> Option<Input> {
         if let Event::Key(Key::Char(c)) = input.event {
-            self.writable.write(c);
-            None
+            pass_on_if_err(self.writable.write(c), input)
         } else {
             Some(input)
         }
@@ -163,7 +169,7 @@ impl<'a, W: Writable + 'a> Behavior for WriteBehavior<'a, W> {
 }
 
 pub trait Writable {
-    fn write(&mut self, c: char);
+    fn write(&mut self, c: char) -> OperationResult;
 }
 
 // NavigateBehavior ------------------------------------------------
@@ -208,17 +214,13 @@ impl<'a, N: Navigatable + 'a> NavigateBehavior<'a, N> {
 impl<'a, N: Navigatable + 'a> Behavior for NavigateBehavior<'a, N> {
     fn input(mut self, input: Input) -> Option<Input> {
         if self.up_on.contains(&input.event) {
-            self.navigatable.move_up();
-            None
+            pass_on_if_err(self.navigatable.move_up(), input)
         } else if self.down_on.contains(&input.event) {
-            self.navigatable.move_down();
-            None
+            pass_on_if_err(self.navigatable.move_down(), input)
         } else if self.left_on.contains(&input.event) {
-            self.navigatable.move_left();
-            None
+            pass_on_if_err(self.navigatable.move_left(), input)
         } else if self.right_on.contains(&input.event) {
-            self.navigatable.move_right();
-            None
+            pass_on_if_err(self.navigatable.move_right(), input)
         } else {
             Some(input)
         }
@@ -226,10 +228,10 @@ impl<'a, N: Navigatable + 'a> Behavior for NavigateBehavior<'a, N> {
 }
 
 pub trait Navigatable {
-    fn move_up(&mut self);
-    fn move_down(&mut self);
-    fn move_left(&mut self);
-    fn move_right(&mut self);
+    fn move_up(&mut self) -> OperationResult;
+    fn move_down(&mut self) -> OperationResult;
+    fn move_left(&mut self) -> OperationResult;
+    fn move_right(&mut self) -> OperationResult;
 }
 
 // EditBehavior ---------------------------------------------------------
@@ -292,29 +294,21 @@ impl<'a, E: Editable> EditBehavior<'a, E> {
 impl<'a, E: Editable> Behavior for EditBehavior<'a, E> {
     fn input(mut self, input: Input) -> Option<Input> {
         if self.up_on.contains(&input.event) {
-            self.editable.move_up();
-            None
+            pass_on_if_err(self.editable.move_up(), input)
         } else if self.down_on.contains(&input.event) {
-            self.editable.move_down();
-            None
+            pass_on_if_err(self.editable.move_down(), input)
         } else if self.left_on.contains(&input.event) {
-            self.editable.move_left();
-            None
+            pass_on_if_err(self.editable.move_left(), input)
         } else if self.right_on.contains(&input.event) {
-            self.editable.move_right();
-            None
+            pass_on_if_err(self.editable.move_right(), input)
         } else if self.delete_symbol_on.contains(&input.event) {
-            self.editable.delete_symbol();
-            None
+            pass_on_if_err(self.editable.delete_symbol(), input)
         } else if self.remove_symbol_on.contains(&input.event) {
-            self.editable.remove_symbol();
-            None
+            pass_on_if_err(self.editable.remove_symbol(), input)
         } else if self.clear_on.contains(&input.event) {
-            self.editable.clear();
-            None
+            pass_on_if_err(self.editable.clear(), input)
         } else if let Event::Key(Key::Char(c)) = input.event {
-            self.editable.write(c);
-            None
+            pass_on_if_err(self.editable.write(c), input)
         } else {
             Some(input)
         }
@@ -322,7 +316,7 @@ impl<'a, E: Editable> Behavior for EditBehavior<'a, E> {
 }
 
 pub trait Editable: Navigatable + Writable {
-    fn delete_symbol(&mut self);
-    fn remove_symbol(&mut self);
-    fn clear(&mut self);
+    fn delete_symbol(&mut self) -> OperationResult;
+    fn remove_symbol(&mut self) -> OperationResult;
+    fn clear(&mut self) -> OperationResult;
 }

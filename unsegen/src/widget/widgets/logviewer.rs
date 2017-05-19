@@ -12,6 +12,7 @@ use base::{
 };
 use input::{
     Scrollable,
+    OperationResult,
 };
 
 pub struct LogViewer {
@@ -61,17 +62,28 @@ impl Widget for LogViewer {
 }
 
 impl Scrollable for LogViewer {
-    fn scroll_forwards(&mut self) {
+    fn scroll_forwards(&mut self) -> OperationResult {
         let current = self.current_line();
         let candidate = current + self.scroll_step;
         self.scrollback_position = if candidate < self.storage.num_lines_stored() {
             Some(candidate)
         } else {
             None
+        };
+        if self.scrollback_position.is_some() {
+            Ok(())
+        } else {
+            Err(())
         }
     }
-    fn scroll_backwards(&mut self) {
+    fn scroll_backwards(&mut self) -> OperationResult {
         let current = self.current_line();
+        let op_res = if current != 0 {
+            Ok(())
+        } else {
+            Err(())
+        };
         self.scrollback_position = Some(current.checked_sub(self.scroll_step).unwrap_or(0));
+        op_res
     }
 }

@@ -2,6 +2,7 @@ use unsegen::base::{
     Window,
 };
 use unsegen::input::{
+    OperationResult,
     Writable,
 };
 use unsegen::widget::{
@@ -61,8 +62,9 @@ impl Widget for PseudoTerminal {
 }
 
 impl Writable for PseudoTerminal {
-    fn write(&mut self, c: char) {
+    fn write(&mut self, c: char) -> OperationResult {
         use std::io::Write;
         write!(self.pty, "{}", c).expect("Write key to terminal");
+        Ok(())
     }
 }

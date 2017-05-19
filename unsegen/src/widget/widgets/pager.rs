@@ -17,6 +17,7 @@ use base::{
 };
 use input::{
     Scrollable,
+    OperationResult,
 };
 
 use std::cmp::{
@@ -405,13 +406,16 @@ impl<S, H, D> Widget for Pager<S, H, D>
 impl<S, H, D> Scrollable for Pager<S, H, D>
     where S: LineStorage, S::Line: PagerLine, H: Highlighter, D: LineDecorator<Line=S::Line> {
 
-    fn scroll_backwards(&mut self) {
+    fn scroll_backwards(&mut self) -> OperationResult {
         if self.current_line > LineIndex(0) {
             self.current_line -= 1;
+            Ok(())
+        } else {
+            Err(())
         }
     }
-    fn scroll_forwards(&mut self) {
+    fn scroll_forwards(&mut self) -> OperationResult {
         let new_line = self.current_line + 1;
-        let _ = self.go_to_line(new_line);
+        self.go_to_line(new_line).map_err(|_| ())
     }
 }

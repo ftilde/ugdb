@@ -119,14 +119,7 @@ impl Console {
                 },
             }
         } else {
-            let _ = input.chain(
-                    |i: Input| if let (&Event::Key(Key::Ctrl('c')), true) = (&i.event, self.prompt_line.line.get().is_empty()) {
-                        gdb.interrupt_execution().expect("interrupted gdb");
-                        None
-                    } else {
-                        Some(i)
-                    }
-                    )
+            let _ = input
                 .chain(
                     EditBehavior::new(&mut self.prompt_line)
                         .left_on(Key::Left)
@@ -136,6 +129,14 @@ impl Console {
                         .delete_symbol_on(Key::Delete)
                         .remove_symbol_on(Key::Backspace)
                         .clear_on(Key::Ctrl('c'))
+                    )
+                .chain(
+                    |i: Input| if let Event::Key(Key::Ctrl('c')) = i.event {
+                        gdb.interrupt_execution().expect("interrupted gdb");
+                        None
+                    } else {
+                        Some(i)
+                    }
                     )
                 .chain(
                     ScrollBehavior::new(self.get_active_log_viewer_mut())

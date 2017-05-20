@@ -111,7 +111,7 @@ impl MiCommand {
     pub fn data_evaluate_expression(expression: String) -> MiCommand {
         MiCommand {
             operation: "data-evaluate-expression".to_owned(),
-            options: vec![expression],
+            options: vec![format!("\"{}\"", expression)], //TODO: maybe we need to quote existing " in expression. Is this even possible?
             parameters: vec![],
         }
     }

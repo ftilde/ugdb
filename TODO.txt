@@ -1,8 +1,14 @@
 Add WatchTable (?):
- - Implement table widget, JsonObjectViewer
+ - JsonObjectViewer
 Add Container management:
  - Top level layouting as a tree of containers (cf. i3)
  - Different kinds of containers (hsplit, vsplit, widget (or extension), grid?
  - Configurable by layout file (json)
 Add MemoryViewer:
  - It may be useful to use a table, or just use split windows
+
+Fix bugs:
+ - Insert breakpoint when running results in crash
+ - Invalid breakpoint when setting bp in function which is inlined (maybe?). There may be other similar bugs.
+ - show portion of code code when frame changes
+ - support showing code when only assembly is available

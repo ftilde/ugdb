@@ -109,7 +109,7 @@ impl Widget for LineEdit {
             (cursor_cluster.map(|c: (usize, &str)| c.0), next_cluster.map(|c: (usize, &str)| c.0))
         };
         let num_graphemes = count_grapheme_clusters(&self.text);
-        let right_padding = 2;
+        let right_padding = 1;
         let cursor_start_pos = ::std::cmp::min(0, window.get_width() as i32 - num_graphemes as i32 - right_padding);
 
         let mut cursor = Cursor::new(&mut window).position(cursor_start_pos, 0);

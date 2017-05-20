@@ -247,7 +247,7 @@ impl<'a> AssemblyView<'a> {
 
     fn show<'b, P: AsRef<Path>, L: Into<LineNumber>, I: Iterator<Item=&'b BreakPoint>>(&mut self, file: P, line: L, breakpoints: I, gdb: &mut gdbmi::GDB) -> Result<(), () /* Disassembly unsuccessful */> {
         let line_u: usize = line.into().into();
-        let ref disass_object = gdb.execute(&MiCommand::data_disassemble_file(file, line_u, None, DisassembleMode::MixedSourceAndDisassembly)).expect("disassembly successful").results["asm_insns"];
+        let ref disass_object = gdb.execute(MiCommand::data_disassemble_file(file, line_u, None, DisassembleMode::MixedSourceAndDisassembly)).expect("disassembly successful").results["asm_insns"];
         if let &JsonValue::Array(ref line_objs) = disass_object {
             let mut asm_storage = MemoryLineStorage::<AssemblyLine>::new();
             for line_obj in line_objs {

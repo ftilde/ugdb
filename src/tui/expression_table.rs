@@ -21,6 +21,12 @@ use input::{
     Input,
 };
 use gdbmi;
+use gdbmi::input::{
+    MiCommand,
+};
+use gdbmi::output::{
+    ResultClass,
+};
 
 pub struct ExpressionRow {
     expression: LineEdit,
@@ -30,7 +36,7 @@ impl ExpressionRow {
     fn new() -> Self {
         ExpressionRow {
             expression: LineEdit::new(),
-            result: LineLabel::new("<RESULT>"),
+            result: LineLabel::new(""),
         }
     }
 
@@ -98,7 +104,7 @@ impl ExpressionTable {
             table: table,
         }
     }
-    pub fn event(&mut self, event: Input, _: &mut gdbmi::GDB) {
+    pub fn event(&mut self, event: Input, gdb: &mut gdbmi::GDB) {
         event
             .chain(|i: Input| match i.event {
             _ => Some(i),
@@ -110,6 +116,31 @@ impl ExpressionTable {
                  .left_on(Key::Left)
                  .right_on(Key::Right)
                  .left_on(Key::Left));
+
+        self.update_results(gdb);
+    }
+
+    pub fn update_results(&mut self, gdb: &mut gdbmi::GDB) {
+        for row in self.table.rows.iter_mut() {
+            let expr = row.expression.get().to_owned();
+            let res_text = if expr.is_empty() {
+                "".to_owned()
+            } else {
+                let res = gdb.execute(MiCommand::data_evaluate_expression(expr)).expect("expression evaluation successful");
+                match res.class {
+                    ResultClass::Error => {
+                        format!("<Err: {}>", res.results["msg"].as_str().expect("msg present"))
+                    },
+                    ResultClass::Done => {
+                        format!("{}", res.results["value"].as_str().expect("value present"))
+                    }
+                    other => {
+                        panic!("unexpected result class: {:?}", other)
+                    }
+                }
+            };
+            row.result.set(res_text);
+        }
     }
 }
 

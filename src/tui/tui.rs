@@ -64,6 +64,7 @@ impl<'a> Tui<'a> {
                 if let JsonValue::Object(ref frame) = results["frame"] {
                     self.src_view.show_frame(frame, gdb);
                 }
+                self.expression_table.update_results(gdb);
             },
             (AsyncKind::Notify, AsyncClass::BreakPoint(event)) => {
                 self.console.add_debug_message(format!("bkpoint {:?}: {}", event, JsonValue::Object(results.clone()).pretty(2)));

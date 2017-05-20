@@ -56,7 +56,7 @@ impl<R: TableRow + 'static> Table<R> {
             row_sep_style: SeparatingStyle::Draw(GraphemeCluster::try_from('─').unwrap()),
             col_sep_style: SeparatingStyle::Draw(GraphemeCluster::try_from('│').unwrap()),
             row_pos: 0,
-            col_pos: 1,
+            col_pos: 0,
         }
     }
 

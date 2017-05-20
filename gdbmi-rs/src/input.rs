@@ -108,6 +108,14 @@ impl MiCommand {
         }
     }
 
+    pub fn data_evaluate_expression(expression: String) -> MiCommand {
+        MiCommand {
+            operation: "data-evaluate-expression".to_owned(),
+            options: vec![expression],
+            parameters: vec![],
+        }
+    }
+
     pub fn insert_breakpoint(location: BreakPointLocation) -> MiCommand {
         MiCommand {
             operation: "break-insert".to_owned(),

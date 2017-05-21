@@ -44,6 +44,10 @@ impl ExpressionRow {
         }
     }
 
+    fn is_empty(&self) -> bool {
+        self.expression.get().is_empty()
+    }
+
     fn get_expression_as_widget(&self) -> &Widget {
         &self.expression
     }
@@ -124,7 +128,23 @@ impl ExpressionTable {
                  .left_on(Key::Left)
                  );
 
+        self.shrink_to_fit();
         self.update_results(gdb);
+    }
+
+    fn shrink_to_fit(&mut self) {
+        let begin_of_empty_range = {
+            let iter = self.table.rows().iter().enumerate().rev();
+            let mut without_trailing_empty_rows = iter.skip_while(|&(_, r)| r.is_empty());
+            if let Some((i,_)) = without_trailing_empty_rows.next() {
+                i+1
+            } else {
+                0
+            }
+        };
+        let mut rows = self.table.rows_mut();
+        rows.drain(begin_of_empty_range..);
+        rows.push(ExpressionRow::new());
     }
 
     pub fn update_results(&mut self, gdb: &mut gdbmi::GDB) {

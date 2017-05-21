@@ -1,7 +1,7 @@
 use unsegen::widget::widgets::{
     Column,
+    JsonViewer,
     LineEdit,
-    LineLabel,
     Table,
     TableRow,
 };
@@ -34,13 +34,13 @@ use gdbmi::output::{
 
 pub struct ExpressionRow {
     expression: LineEdit,
-    result: LineLabel,
+    result: JsonViewer,
 }
 impl ExpressionRow {
     fn new() -> Self {
         ExpressionRow {
             expression: LineEdit::new(),
-            result: LineLabel::new(""),
+            result: JsonViewer::new(""),
         }
     }
 

@@ -1,3 +1,4 @@
+pub mod jsonviewer;
 pub mod linelabel;
 pub mod lineedit;
 pub mod promptline;
@@ -5,6 +6,7 @@ pub mod logviewer;
 pub mod pager;
 pub mod table;
 
+pub use self::jsonviewer::*;
 pub use self::linelabel::*;
 pub use self::lineedit::*;
 pub use self::promptline::*;

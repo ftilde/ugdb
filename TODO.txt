@@ -10,5 +10,6 @@ Add MemoryViewer:
 Fix bugs:
  - Insert breakpoint when running results in crash
  - Invalid breakpoint when setting bp in function which is inlined (maybe?). There may be other similar bugs.
- - show portion of code code when frame changes
- - support showing code when only assembly is available
+ - Show portion of code code when frame changes
+ - Support showing code when only assembly is available
+ - Detect changes in active file and reload if needed

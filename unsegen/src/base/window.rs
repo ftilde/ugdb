@@ -136,6 +136,10 @@ impl<'w> Window<'w> {
         self.default_style = style;
     }
 
+    pub fn modify_default_style(&mut self, modifier: &StyleModifier) {
+        modifier.modify(&mut self.default_style);
+    }
+
     pub fn default_style(&self) -> &Style {
         &self.default_style
     }

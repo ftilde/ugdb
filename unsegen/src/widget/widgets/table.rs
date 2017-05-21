@@ -1,5 +1,4 @@
 use base::{
-    GraphemeCluster,
     Window,
     StyleModifier,
 };
@@ -43,18 +42,20 @@ pub trait TableRow {
 
 pub struct Table<R: TableRow> {
     pub rows: Vec<R>,
-    pub row_sep_style: SeparatingStyle,
-    pub col_sep_style: SeparatingStyle,
+    row_sep_style: SeparatingStyle,
+    col_sep_style: SeparatingStyle,
+    focused_style: StyleModifier,
     row_pos: u32,
     col_pos: u32,
 }
 
 impl<R: TableRow + 'static> Table<R> {
-    pub fn new() -> Self {
+    pub fn new(row_sep_style: SeparatingStyle, col_sep_style: SeparatingStyle, focused_style: StyleModifier) -> Self {
         Table {
             rows: Vec::new(),
-            row_sep_style: SeparatingStyle::Draw(GraphemeCluster::try_from('─').unwrap()),
-            col_sep_style: SeparatingStyle::Draw(GraphemeCluster::try_from('│').unwrap()),
+            row_sep_style: row_sep_style,
+            col_sep_style: col_sep_style,
+            focused_style: focused_style,
             row_pos: 0,
             col_pos: 0,
         }
@@ -151,7 +152,6 @@ impl<R: TableRow + 'static> Widget for Table<R> {
     }
     fn draw(&mut self, window: Window) {
         let column_widths = self.layout_columns(&window);
-        let focused_style = StyleModifier::new().invert().apply(window.default_style());
 
         let mut window = window;
         let mut row_iter = self.rows.iter_mut().enumerate().peekable();
@@ -160,14 +160,24 @@ impl<R: TableRow + 'static> Widget for Table<R> {
             let (mut row_window, rest_window) = window.split_v(height);
             window = rest_window;
 
+            if let (1, &SeparatingStyle::AlternatingStyle(modifier)) = (row_index%2, &self.row_sep_style) {
+                row_window.modify_default_style(&modifier);
+            }
+
             let mut iter = R::columns().iter().zip(column_widths.iter()).enumerate().peekable();
             while let Some((col_index, (col, &pos))) = iter.next() {
                 let (mut cell_window, r) = row_window.split_h(pos);
                 row_window = r;
-                if row_index as u32 == self.row_pos && col_index as u32 == self.col_pos {
-                    cell_window.set_default_style(focused_style);
-                    cell_window.clear();
+
+                if let (1, &SeparatingStyle::AlternatingStyle(modifier)) = (col_index%2, &self.col_sep_style) {
+                    cell_window.modify_default_style(&modifier);
                 }
+
+                if row_index as u32 == self.row_pos && col_index as u32 == self.col_pos {
+                    cell_window.modify_default_style(&self.focused_style);
+                }
+
+                cell_window.clear(); // Fill background using new style
                 (col.access_mut)(row).draw(cell_window);
                 if let (Some(_), &SeparatingStyle::Draw(ref c)) = (iter.peek(), &self.col_sep_style) {
                     if row_window.get_width() > 0 {

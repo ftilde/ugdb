@@ -7,9 +7,13 @@ use unsegen::widget::widgets::{
 };
 use unsegen::widget::{
     Demand,
+    SeparatingStyle,
     Widget,
 };
 use unsegen::base::{
+    Color,
+    GraphemeCluster,
+    StyleModifier,
     Window,
 };
 use unsegen::input::{
@@ -97,7 +101,10 @@ pub struct ExpressionTable {
 
 impl ExpressionTable {
     pub fn new() -> Self {
-        let mut table = Table::new();
+        let row_sep_style = SeparatingStyle::AlternatingStyle(StyleModifier::new().bg_color(Color::Yellow));
+        let col_sep_style = SeparatingStyle::Draw(GraphemeCluster::try_from('│').unwrap());
+        let focused_style = StyleModifier::new().bold(true).underline(true);
+        let mut table = Table::new(row_sep_style, col_sep_style, focused_style);
         table.rows.push(ExpressionRow::new());
         table.rows.push(ExpressionRow::new());
         ExpressionTable {

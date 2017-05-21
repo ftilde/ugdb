@@ -5,25 +5,28 @@ use super::{
 use base::{
     Window,
     GraphemeCluster,
+    StyleModifier,
 };
 use std::cmp::{max, min};
 
 #[derive(Clone)]
 pub enum SeparatingStyle {
     None,
-    //AlternateStyle(TextAttribute),
+    AlternatingStyle(StyleModifier),
     Draw(GraphemeCluster)
 }
 impl SeparatingStyle {
     pub fn width(&self) -> u32 {
         match self {
             &SeparatingStyle::None => 0,
+            &SeparatingStyle::AlternatingStyle(_) => 0,
             &SeparatingStyle::Draw(ref cluster) => cluster.width() as u32,
         }
     }
     pub fn height(&self) -> u32 {
         match self {
             &SeparatingStyle::None => 0,
+            &SeparatingStyle::AlternatingStyle(_) => 0,
             &SeparatingStyle::Draw(_) => 1,
         }
     }
@@ -128,10 +131,14 @@ impl HorizontalLayout {
         debug_assert!(widgets.len() == assigned_spaces.len(), "widgets and spaces len mismatch");
 
         let mut rest_window = window;
-        let mut iter = widgets.iter_mut().zip(assigned_spaces.iter()).peekable();
-        while let Some((&mut ref mut w, &pos)) = iter.next() {
-            let (window, r) = rest_window.split_h(pos);
+        let mut iter = widgets.iter_mut().zip(assigned_spaces.iter()).enumerate().peekable();
+        while let Some((i, (&mut ref mut w, &pos))) = iter.next() {
+            let (mut window, r) = rest_window.split_h(pos);
             rest_window = r;
+            if let (1, &SeparatingStyle::AlternatingStyle(modifier)) = (i%2, &self.separating_style) {
+                window.modify_default_style(&modifier);
+            }
+            window.clear(); // Fill background using new style
             w.draw(window);
             if let (Some(_), &SeparatingStyle::Draw(ref c)) = (iter.peek(), &self.separating_style) {
                 if rest_window.get_width() > 0 {
@@ -180,10 +187,14 @@ impl VerticalLayout {
         debug_assert!(widgets.len() == assigned_spaces.len(), "widgets and spaces len mismatch");
 
         let mut rest_window = window;
-        let mut iter = widgets.iter_mut().zip(assigned_spaces.iter()).peekable();
-        while let Some((&mut ref mut w, &pos)) = iter.next() {
-            let (window, r) = rest_window.split_v(pos);
+        let mut iter = widgets.iter_mut().zip(assigned_spaces.iter()).enumerate().peekable();
+        while let Some((i, (&mut ref mut w, &pos))) = iter.next() {
+            let (mut window, r) = rest_window.split_v(pos);
             rest_window = r;
+            if let (1, &SeparatingStyle::AlternatingStyle(modifier)) = (i%2, &self.separating_style) {
+                window.modify_default_style(&modifier);
+            }
+            window.clear(); // Fill background using new style
             w.draw(window);
             if let (Some(_), &SeparatingStyle::Draw(ref c)) = (iter.peek(), &self.separating_style) {
                 if rest_window.get_height() > 0 {

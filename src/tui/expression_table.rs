@@ -105,8 +105,7 @@ impl ExpressionTable {
         let col_sep_style = SeparatingStyle::Draw(GraphemeCluster::try_from('│').unwrap());
         let focused_style = StyleModifier::new().bold(true).underline(true);
         let mut table = Table::new(row_sep_style, col_sep_style, focused_style);
-        table.rows.push(ExpressionRow::new());
-        table.rows.push(ExpressionRow::new());
+        table.rows_mut().push(ExpressionRow::new()); //Invariant: always at least one line
         ExpressionTable {
             table: table,
         }
@@ -122,13 +121,14 @@ impl ExpressionTable {
                  .down_on(Key::Down)
                  .left_on(Key::Left)
                  .right_on(Key::Right)
-                 .left_on(Key::Left));
+                 .left_on(Key::Left)
+                 );
 
         self.update_results(gdb);
     }
 
     pub fn update_results(&mut self, gdb: &mut gdbmi::GDB) {
-        for row in self.table.rows.iter_mut() {
+        for row in self.table.rows_mut().iter_mut() {
             let expr = row.expression.get().to_owned();
             let res_text = if expr.is_empty() {
                 "".to_owned()

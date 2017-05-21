@@ -40,8 +40,31 @@ pub trait TableRow {
     }
 }
 
+pub struct RowsMut<'a, R: 'static + TableRow> {
+    table: &'a mut Table<R>,
+}
+
+impl<'a, R: 'static + TableRow> ::std::ops::Drop for RowsMut<'a, R> {
+    fn drop(&mut self) {
+        let _ = self.table.validate_row_pos();
+    }
+}
+
+impl<'a, R: 'static + TableRow> ::std::ops::DerefMut for RowsMut<'a, R> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.table.rows
+    }
+}
+
+impl<'a, R: 'static + TableRow> ::std::ops::Deref for RowsMut<'a, R> {
+    type Target = Vec<R>;
+    fn deref(&self) -> &Self::Target {
+        &self.table.rows
+    }
+}
+
 pub struct Table<R: TableRow> {
-    pub rows: Vec<R>,
+    rows: Vec<R>,
     row_sep_style: SeparatingStyle,
     col_sep_style: SeparatingStyle,
     focused_style: StyleModifier,
@@ -59,6 +82,16 @@ impl<R: TableRow + 'static> Table<R> {
             row_pos: 0,
             col_pos: 0,
         }
+    }
+
+    pub fn rows_mut<'a>(&'a mut self) -> RowsMut<'a, R> {
+        RowsMut {
+            table: self
+        }
+    }
+
+    pub fn rows(&mut self) -> &Vec<R> {
+        &self.rows
     }
 
     fn layout_columns(&self, window: &Window) -> Box<[u32]> {

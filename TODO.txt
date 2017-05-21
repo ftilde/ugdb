@@ -13,3 +13,4 @@ Fix bugs:
  - Show portion of code code when frame changes
  - Support showing code when only assembly is available
  - Detect changes in active file and reload if needed
+ - Hitting enter in LineEdit

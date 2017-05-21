@@ -117,15 +117,17 @@ impl ExpressionTable {
     pub fn event(&mut self, event: Input, gdb: &mut gdbmi::GDB) {
         event
             .chain(|i: Input| match i.event {
-            _ => Some(i),
-        })
+                _ => Some(i),
+            })
+            .chain(NavigateBehavior::new(&mut self.table)
+                 .down_on(Key::Char('\n'))
+                 )
             .chain(self.table.current_cell_behavior())
             .chain(NavigateBehavior::new(&mut self.table)
                  .up_on(Key::Up)
                  .down_on(Key::Down)
                  .left_on(Key::Left)
                  .right_on(Key::Right)
-                 .left_on(Key::Left)
                  );
 
         self.shrink_to_fit();

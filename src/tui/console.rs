@@ -13,9 +13,10 @@ use unsegen::input::{
     ScrollBehavior,
 };
 use unsegen::widget::{
-    Demand,
+    Demand2D,
     SeparatingStyle,
     VerticalLayout,
+    RenderingHints,
     Widget,
 };
 use unsegen::widget::widgets::{
@@ -148,18 +149,18 @@ impl Console {
 }
 
 impl Widget for Console {
-    fn space_demand(&self) -> (Demand, Demand) {
+    fn space_demand(&self) -> Demand2D {
         let widgets: Vec<&Widget> = vec![self.get_active_log_viewer(), &self.prompt_line];
         self.layout.space_demand(widgets.as_slice())
     }
-    fn draw(&mut self, window: Window) {
+    fn draw(&mut self, window: Window, hints: RenderingHints) {
         // We cannot use self.get_active_log_viewer_mut(), because it apparently borrows
         // self mutably in its entirety. TODO: Maybe there is another way?
         let active_log_viewer = match self.active_log {
             ActiveLog::Debug => &mut self.debug_log,
             ActiveLog::Gdb => &mut self.gdb_log,
         };
-        let mut widgets: Vec<&mut Widget> = vec![active_log_viewer, &mut self.prompt_line];
+        let mut widgets: Vec<(&mut Widget, RenderingHints)> = vec![(active_log_viewer, hints), (&mut self.prompt_line, hints)];
         self.layout.draw(window, &mut widgets)
     }
 }

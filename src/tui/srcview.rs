@@ -12,12 +12,14 @@ use unsegen::input::{
 };
 use unsegen::widget::{
     Demand,
+    Demand2D,
     FileLineStorage,
     HorizontalLayout,
     LineNumber,
     LineIndex,
     LineStorage,
     MemoryLineStorage,
+    RenderingHints,
     SeparatingStyle,
     Widget,
 };
@@ -333,11 +335,11 @@ impl<'a> AssemblyView<'a> {
 }
 
 impl<'a> Widget for AssemblyView<'a> {
-    fn space_demand(&self) -> (Demand, Demand) {
+    fn space_demand(&self) -> Demand2D {
         self.pager.space_demand()
     }
-    fn draw(&mut self, window: Window) {
-        self.pager.draw(window)
+    fn draw(&mut self, window: Window, hints: RenderingHints) {
+        self.pager.draw(window, hints)
     }
 }
 
@@ -567,11 +569,11 @@ impl<'a> SourceView<'a> {
 }
 
 impl<'a> Widget for SourceView<'a> {
-    fn space_demand(&self) -> (Demand, Demand) {
+    fn space_demand(&self) -> Demand2D {
         self.pager.space_demand()
     }
-    fn draw(&mut self, window: Window) {
-        self.pager.draw(window)
+    fn draw(&mut self, window: Window, hints: RenderingHints) {
+        self.pager.draw(window, hints)
     }
 }
 
@@ -779,17 +781,17 @@ impl<'a> CodeWindow<'a> {
 }
 
 impl<'a> Widget for CodeWindow<'a> {
-    fn space_demand(&self) -> (Demand, Demand) {
+    fn space_demand(&self) -> Demand2D {
         let widgets: Vec<&Widget> = match self.mode {
             CodeWindowMode::Assembly => vec![&self.asm_view, &self.src_view],
             CodeWindowMode::Source => vec![&self.src_view],
         };
         self.layout.space_demand(widgets.as_slice())
     }
-    fn draw(&mut self, window: Window) {
-        let mut widgets: Vec<&mut Widget> = match self.mode {
-            CodeWindowMode::Assembly => vec![&mut self.asm_view, &mut self.src_view],
-            CodeWindowMode::Source => vec![&mut self.src_view],
+    fn draw(&mut self, window: Window, hints: RenderingHints) {
+        let mut widgets: Vec<(&mut Widget, RenderingHints)> = match self.mode {
+            CodeWindowMode::Assembly => vec![(&mut self.asm_view, hints), (&mut self.src_view, hints)],
+            CodeWindowMode::Source => vec![(&mut self.src_view, hints)],
         };
         self.layout.draw(window, &mut widgets)
     }

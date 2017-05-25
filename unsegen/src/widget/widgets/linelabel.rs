@@ -1,5 +1,7 @@
 use super::super::{
     Demand,
+    Demand2D,
+    RenderingHints,
     Widget,
 };
 use base::{
@@ -26,10 +28,13 @@ impl LineLabel {
 }
 
 impl Widget for LineLabel {
-    fn space_demand(&self) -> (Demand, Demand) {
-        (Demand::exact(count_grapheme_clusters(&self.text)), Demand::exact(1))
+    fn space_demand(&self) -> Demand2D {
+        Demand2D {
+            width: Demand::exact(count_grapheme_clusters(&self.text)),
+            height: Demand::exact(1),
+        }
     }
-    fn draw(&mut self, mut window: Window) {
+    fn draw(&mut self, mut window: Window, _: RenderingHints) {
         let mut cursor = Cursor::new(&mut window);
         cursor.write(&self.text);
     }

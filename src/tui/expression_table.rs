@@ -6,7 +6,8 @@ use unsegen::widget::widgets::{
     TableRow,
 };
 use unsegen::widget::{
-    Demand,
+    Demand2D,
+    RenderingHints,
     SeparatingStyle,
     Widget,
 };
@@ -174,10 +175,10 @@ impl ExpressionTable {
 }
 
 impl Widget for ExpressionTable {
-    fn space_demand(&self) -> (Demand, Demand) {
+    fn space_demand(&self) -> Demand2D {
         self.table.space_demand()
     }
-    fn draw(&mut self, window: Window) {
-        self.table.draw(window);
+    fn draw(&mut self, window: Window, hints: RenderingHints) {
+        self.table.draw(window, hints);
     }
 }

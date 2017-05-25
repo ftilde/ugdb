@@ -10,7 +10,9 @@ use input::{
 };
 use widget::{
     Demand,
+    Demand2D,
     SeparatingStyle,
+    RenderingHints,
     Widget,
     layout_linearly,
 };
@@ -33,8 +35,8 @@ pub trait TableRow {
     fn height_demand(&self) -> Demand where Self: 'static {
         let mut y_demand = Demand::zero();
         for col in Self::columns().iter() {
-            let (_, y) = (col.access)(self).space_demand();
-            y_demand.max_assign(y);
+            let demand2d = (col.access)(self).space_demand();
+            y_demand.max_assign(demand2d.height);
         }
         y_demand
     }
@@ -98,8 +100,8 @@ impl<R: TableRow + 'static> Table<R> {
         let mut x_demands = vec![Demand::zero(); R::num_columns()];
         for row in self.rows.iter() {
             for (col_num, col) in R::columns().iter().enumerate() {
-                let (x, _) = (col.access)(row).space_demand();
-                x_demands[col_num].max_assign(x);
+                let demand2d = (col.access)(row).space_demand();
+                x_demands[col_num].max_assign(demand2d.width);
             }
         }
         let separator_width = self.col_sep_style.width();
@@ -161,7 +163,7 @@ impl<'a, R: TableRow + 'static> Behavior for CurrentCellBehavior<'a, R> {
 }
 
 impl<R: TableRow + 'static> Widget for Table<R> {
-    fn space_demand(&self) -> (Demand, Demand) {
+    fn space_demand(&self) -> Demand2D {
         let mut x_demands = vec![Demand::exact(0); R::num_columns()];
         let mut y_demand = Demand::zero();
 
@@ -169,9 +171,9 @@ impl<R: TableRow + 'static> Widget for Table<R> {
         while let Some(row) = row_iter.next() {
             let mut row_max_y = Demand::exact(0);
             for (col_num, col) in R::columns().iter().enumerate() {
-                let (x, y) = (col.access)(row).space_demand();
-                x_demands[col_num].max_assign(x);
-                row_max_y.max_assign(y)
+                let demand2d = (col.access)(row).space_demand();
+                x_demands[col_num].max_assign(demand2d.width);
+                row_max_y.max_assign(demand2d.height)
             }
             y_demand += row_max_y;
             if row_iter.peek().is_some() {
@@ -181,9 +183,12 @@ impl<R: TableRow + 'static> Widget for Table<R> {
 
         //Account all separators between cols
         let x_demand = x_demands.iter().sum::<Demand>() + Demand::exact((x_demands.len() as u32 -1)*self.col_sep_style.width());
-        (x_demand, y_demand)
+        Demand2D {
+            width: x_demand,
+            height: y_demand
+        }
     }
-    fn draw(&mut self, window: Window) {
+    fn draw(&mut self, window: Window, hints: RenderingHints) {
         let column_widths = self.layout_columns(&window);
 
         let mut window = window;
@@ -206,12 +211,18 @@ impl<R: TableRow + 'static> Widget for Table<R> {
                     cell_window.modify_default_style(&modifier);
                 }
 
-                if row_index as u32 == self.row_pos && col_index as u32 == self.col_pos {
+                let cell_draw_hints = if row_index as u32 == self.row_pos && col_index as u32 == self.col_pos {
                     cell_window.modify_default_style(&self.focused_style);
-                }
+                    hints
+                } else {
+                    RenderingHints {
+                        active: false,
+                        .. hints
+                    }
+                };
 
                 cell_window.clear(); // Fill background using new style
-                (col.access_mut)(row).draw(cell_window);
+                (col.access_mut)(row).draw(cell_window, cell_draw_hints);
                 if let (Some(_), &SeparatingStyle::Draw(ref c)) = (iter.peek(), &self.col_sep_style) {
                     if row_window.get_width() > 0 {
                         let (mut sep_window, r) = row_window.split_h(c.width() as u32);

@@ -1,5 +1,7 @@
 use super::{
     Demand,
+    Demand2D,
+    RenderingHints,
     Widget,
 };
 use base::{
@@ -95,6 +97,46 @@ pub fn layout_linearly(mut available_space: u32, separator_width: u32, demands: 
     assigned_spaces
 }
 
+fn draw_linearly<S, L, M, D>(window: Window,
+                          widgets: &mut [(&mut Widget, RenderingHints)],
+                          separating_style: &SeparatingStyle,
+                          split: S,
+                          window_length: L,
+                          separator_length: M,
+                          demand_dimension: D,
+                          )
+where
+    S: Fn(Window, u32) -> (Window, Window),
+    L: Fn(&Window) -> u32,
+    M: Fn(&SeparatingStyle) -> u32,
+    D: Fn(Demand2D) -> Demand
+{
+
+    let separator_length = separator_length(separating_style);
+    let horizontal_demands: Vec<Demand> = widgets.iter().map(|&(ref w,_)| demand_dimension(w.space_demand())).collect(); //TODO: rename
+    let assigned_spaces = layout_linearly(window_length(&window), separator_length, horizontal_demands.as_slice());
+
+    debug_assert!(widgets.len() == assigned_spaces.len(), "widgets and spaces len mismatch");
+
+    let mut rest_window = window;
+    let mut iter = widgets.iter_mut().zip(assigned_spaces.iter()).enumerate().peekable();
+    while let Some((i, (&mut (ref mut w, hint), &pos))) = iter.next() {
+        let (mut window, r) = split(rest_window, pos);
+        rest_window = r;
+        if let (1, &SeparatingStyle::AlternatingStyle(modifier)) = (i%2, separating_style) {
+            window.modify_default_style(&modifier);
+        }
+        window.clear(); // Fill background using new style
+        w.draw(window, hint);
+        if let (Some(_), &SeparatingStyle::Draw(ref c)) = (iter.peek(), separating_style) {
+            if window_length(&rest_window) > 0 {
+                let (mut window, r) = split(rest_window, separator_length);
+                rest_window = r;
+                window.fill(c.clone());
+            }
+        }
+    }
+}
 
 pub struct HorizontalLayout {
     separating_style: SeparatingStyle,
@@ -106,48 +148,27 @@ impl HorizontalLayout {
         }
     }
 
-    pub fn space_demand(&self, widgets: &[&Widget]) -> (Demand, Demand) {
+    pub fn space_demand(&self, widgets: &[&Widget]) -> Demand2D {
         let mut total_x = Demand::exact(0);
         let mut total_y = Demand::exact(0);
         let mut n_elements = 0;
         for w in widgets {
-            let (x, y) = w.space_demand();
-            total_x = total_x + x;
-            total_y = total_y.max(y);
+            let demand2d = w.space_demand();
+            total_x = total_x + demand2d.width;
+            total_y = total_y.max(demand2d.height);
             n_elements += 1;
         }
         if let SeparatingStyle::Draw(_) = self.separating_style {
             total_x = total_x + Demand::exact(n_elements);
         }
-        (total_x, total_y)
+        Demand2D {
+            width: total_x,
+            height: total_y,
+        }
     }
 
-    pub fn draw(&self, window: Window, widgets: &mut [&mut Widget]) {
-
-        let separator_width = self.separating_style.width();
-        let horizontal_demands: Vec<Demand> = widgets.iter().map(|w| w.space_demand().0.clone()).collect();
-        let assigned_spaces = layout_linearly(window.get_width(), separator_width, horizontal_demands.as_slice());
-
-        debug_assert!(widgets.len() == assigned_spaces.len(), "widgets and spaces len mismatch");
-
-        let mut rest_window = window;
-        let mut iter = widgets.iter_mut().zip(assigned_spaces.iter()).enumerate().peekable();
-        while let Some((i, (&mut ref mut w, &pos))) = iter.next() {
-            let (mut window, r) = rest_window.split_h(pos);
-            rest_window = r;
-            if let (1, &SeparatingStyle::AlternatingStyle(modifier)) = (i%2, &self.separating_style) {
-                window.modify_default_style(&modifier);
-            }
-            window.clear(); // Fill background using new style
-            w.draw(window);
-            if let (Some(_), &SeparatingStyle::Draw(ref c)) = (iter.peek(), &self.separating_style) {
-                if rest_window.get_width() > 0 {
-                    let (mut window, r) = rest_window.split_h(c.width() as u32);
-                    rest_window = r;
-                    window.fill(c.clone());
-                }
-            }
-        }
+    pub fn draw(&self, window: Window, widgets: &mut [(&mut Widget, RenderingHints)]) {
+        draw_linearly(window, widgets, &self.separating_style, |w, p| w.split_h(p), |w| w.get_width(), SeparatingStyle::width, |d| d.width);
     }
 }
 
@@ -162,48 +183,27 @@ impl VerticalLayout {
         }
     }
 
-    pub fn space_demand(&self, widgets: &[&Widget]) -> (Demand, Demand) {
+    pub fn space_demand(&self, widgets: &[&Widget]) -> Demand2D {
         let mut total_x = Demand::exact(0);
         let mut total_y = Demand::exact(0);
         let mut n_elements = 0;
         for w in widgets.iter() {
-            let (x, y) = w.space_demand();
-            total_x = total_x.max(x);
-            total_y = total_y + y;
+            let demand2d = w.space_demand();
+            total_x = total_x.max(demand2d.width);
+            total_y = total_y + demand2d.height;
             n_elements += 1;
         }
         if let SeparatingStyle::Draw(_) = self.separating_style {
             total_y = total_y + Demand::exact(n_elements);
         }
-        (total_x, total_y)
+        Demand2D {
+            width: total_x,
+            height: total_y,
+        }
     }
 
-    pub fn draw(&self, window: Window, widgets: &mut [&mut Widget]) {
-
-        let separator_width = self.separating_style.height();
-        let vertical_demands: Vec<Demand> = widgets.iter().map(|w| w.space_demand().1.clone()).collect();
-        let assigned_spaces = layout_linearly(window.get_height(), separator_width, vertical_demands.as_slice());
-
-        debug_assert!(widgets.len() == assigned_spaces.len(), "widgets and spaces len mismatch");
-
-        let mut rest_window = window;
-        let mut iter = widgets.iter_mut().zip(assigned_spaces.iter()).enumerate().peekable();
-        while let Some((i, (&mut ref mut w, &pos))) = iter.next() {
-            let (mut window, r) = rest_window.split_v(pos);
-            rest_window = r;
-            if let (1, &SeparatingStyle::AlternatingStyle(modifier)) = (i%2, &self.separating_style) {
-                window.modify_default_style(&modifier);
-            }
-            window.clear(); // Fill background using new style
-            w.draw(window);
-            if let (Some(_), &SeparatingStyle::Draw(ref c)) = (iter.peek(), &self.separating_style) {
-                if rest_window.get_height() > 0 {
-                    let (mut window, r) = rest_window.split_v(1);
-                    rest_window = r;
-                    window.fill(c.clone());
-                }
-            }
-        }
+    pub fn draw(&self, window: Window, widgets: &mut [(&mut Widget, RenderingHints)]) {
+        draw_linearly(window, widgets, &self.separating_style, |w, p| w.split_v(p), |w| w.get_height(), SeparatingStyle::height, |d| d.height);
     }
 }
 
@@ -214,28 +214,25 @@ mod test {
 
 
     struct FakeWidget {
-        space_demand: (Demand, Demand),
+        space_demand: Demand2D,
         fill_char: char,
     }
     impl FakeWidget {
         fn new(space_demand: (Demand, Demand)) -> Self {
-            FakeWidget {
-                space_demand: space_demand,
-                fill_char: '_',
-            }
+            Self::with_fill_char(space_demand, '_')
         }
         fn with_fill_char(space_demand: (Demand, Demand), fill_char: char) -> Self {
             FakeWidget {
-                space_demand: space_demand,
+                space_demand: Demand2D { width: space_demand.0, height: space_demand.1 },
                 fill_char: fill_char,
             }
         }
     }
     impl Widget for FakeWidget {
-        fn space_demand(&self) -> (Demand, Demand) {
+        fn space_demand(&self) -> Demand2D {
             self.space_demand
         }
-        fn draw(&mut self, mut window: Window) {
+        fn draw(&mut self, mut window: Window, _: RenderingHints) {
             window.fill(GraphemeCluster::try_from(self.fill_char).unwrap());
         }
     }
@@ -286,7 +283,11 @@ mod test {
     }
 
     fn aeq_horizontal_layout_space_demand(widgets: Vec<&Widget>, solution: (Demand, Demand)) {
-        assert_eq!(HorizontalLayout::new(SeparatingStyle::None).space_demand(widgets.as_slice()), solution);
+        let demand2d = Demand2D {
+            width: solution.0,
+            height: solution.1,
+        };
+        assert_eq!(HorizontalLayout::new(SeparatingStyle::None).space_demand(widgets.as_slice()), demand2d);
     }
     #[test]
     fn test_horizontal_layout_space_demand() {
@@ -294,9 +295,10 @@ mod test {
         aeq_horizontal_layout_space_demand(vec![&FakeWidget::new((Demand::from_to(1, 2), Demand::from_to(1, 3))), &FakeWidget::new((Demand::exact(1), Demand::exact(2)))], (Demand::from_to(2, 3), Demand::from_to(2, 3)));
         aeq_horizontal_layout_space_demand(vec![&FakeWidget::new((Demand::at_least(3), Demand::at_least(3))), &FakeWidget::new((Demand::exact(1), Demand::exact(5)))], (Demand::at_least(4), Demand::at_least(5)));
     }
-    fn aeq_horizontal_layout_draw(terminal_size: (usize, usize), mut widgets: Vec<&mut Widget>, solution: &str) {
+    fn aeq_horizontal_layout_draw(terminal_size: (usize, usize), widgets: Vec<&mut Widget>, solution: &str) {
         let mut term = FakeTerminal::with_size(terminal_size);
-        HorizontalLayout::new(SeparatingStyle::None).draw(term.create_root_window(), widgets.as_mut_slice());
+        let mut widgets_with_hints: Vec<(&mut Widget, RenderingHints)> = widgets.into_iter().map(|w| (w, RenderingHints::default())).collect();
+        HorizontalLayout::new(SeparatingStyle::None).draw(term.create_root_window(), widgets_with_hints.as_mut_slice());
         assert_eq!(term, FakeTerminal::from_str(terminal_size, solution).expect("term from str"));
     }
     #[test]
@@ -307,7 +309,11 @@ mod test {
     }
 
     fn aeq_vertical_layout_space_demand(widgets: Vec<&Widget>, solution: (Demand, Demand)) {
-        assert_eq!(VerticalLayout::new(SeparatingStyle::None).space_demand(widgets.as_slice()), solution);
+        let demand2d = Demand2D {
+            width: solution.0,
+            height: solution.1,
+        };
+        assert_eq!(VerticalLayout::new(SeparatingStyle::None).space_demand(widgets.as_slice()), demand2d);
     }
     #[test]
     fn test_vertical_layout_space_demand() {
@@ -315,9 +321,10 @@ mod test {
         aeq_vertical_layout_space_demand(vec![&FakeWidget::new((Demand::from_to(1, 3), Demand::from_to(1, 2))), &FakeWidget::new((Demand::exact(2), Demand::exact(1)))], (Demand::from_to(2, 3), Demand::from_to(2, 3)));
         aeq_vertical_layout_space_demand(vec![&FakeWidget::new((Demand::at_least(3), Demand::at_least(3))), &FakeWidget::new((Demand::exact(5), Demand::exact(1)))], (Demand::at_least(5), Demand::at_least(4)));
     }
-    fn aeq_vertical_layout_draw(terminal_size: (usize, usize), mut widgets: Vec<&mut Widget>, solution: &str) {
+    fn aeq_vertical_layout_draw(terminal_size: (usize, usize), widgets: Vec<&mut Widget>, solution: &str) {
         let mut term = FakeTerminal::with_size(terminal_size);
-        VerticalLayout::new(SeparatingStyle::None).draw(term.create_root_window(), widgets.as_mut_slice());
+        let mut widgets_with_hints: Vec<(&mut Widget, RenderingHints)> = widgets.into_iter().map(|w| (w, RenderingHints::default())).collect();
+        VerticalLayout::new(SeparatingStyle::None).draw(term.create_root_window(), widgets_with_hints.as_mut_slice());
         assert_eq!(term, FakeTerminal::from_str(terminal_size, solution).expect("term from str"));
     }
     #[test]

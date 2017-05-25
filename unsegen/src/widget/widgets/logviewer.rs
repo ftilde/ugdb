@@ -1,8 +1,10 @@
 use super::super::{
     Demand,
+    Demand2D,
     LineIndex,
     LineStorage,
     MemoryLineStorage,
+    RenderingHints,
     Widget,
 };
 use base::{
@@ -36,10 +38,13 @@ impl LogViewer {
 }
 
 impl Widget for LogViewer {
-    fn space_demand(&self) -> (Demand, Demand) {
-        return (Demand::at_least(1), Demand::at_least(1));
+    fn space_demand(&self) -> Demand2D {
+        Demand2D {
+            width: Demand::at_least(1),
+            height: Demand::at_least(1)
+        }
     }
-    fn draw(&mut self, mut window: Window) {
+    fn draw(&mut self, mut window: Window, _: RenderingHints) {
         let height = window.get_height() as usize;
 
         // TODO: This does not work well when lines are wrapped, but we may want scrolling farther

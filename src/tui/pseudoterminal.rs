@@ -6,7 +6,8 @@ use unsegen::input::{
     Writable,
 };
 use unsegen::widget::{
-    Demand,
+    Demand2D,
+    RenderingHints,
     Widget,
 };
 use unsegen::widget::widgets::{
@@ -49,15 +50,15 @@ impl PseudoTerminal {
 }
 
 impl Widget for PseudoTerminal {
-    fn space_demand(&self) -> (Demand, Demand) {
+    fn space_demand(&self) -> Demand2D {
         //let widgets: Vec<&unsegen::Widget> = vec![&self.display, &self.prompt_line];
         //self.layout.space_demand(widgets.into_iter())
-        return self.display.space_demand();
+        self.display.space_demand()
     }
-    fn draw(&mut self, window: Window) {
+    fn draw(&mut self, window: Window, hints: RenderingHints) {
         //let widgets: Vec<&unsegen::Widget> = vec![&self.display, &self.prompt_line];
         //self.layout.draw(window, &widgets)
-        self.display.draw(window);
+        self.display.draw(window, hints);
     }
 }
 

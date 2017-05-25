@@ -1,11 +1,13 @@
 use super::super::{
     Demand,
+    Demand2D,
+    RenderingHints,
     Widget,
 };
 use base::{
     Cursor,
-    Window,
     StyleModifier,
+    Window,
 };
 use super::{
     count_grapheme_clusters,
@@ -21,15 +23,21 @@ use unicode_segmentation::UnicodeSegmentation;
 pub struct LineEdit {
     text: String,
     cursor_pos: usize,
-    cursor_style: StyleModifier,
+    cursor_style_active: StyleModifier,
+    cursor_style_inactive: StyleModifier,
 }
 
 impl LineEdit {
     pub fn new() -> Self {
+        Self::with_cursor_styles(StyleModifier::new().invert(), StyleModifier::new().underline(true))
+    }
+
+    pub fn with_cursor_styles(active: StyleModifier, inactive: StyleModifier) -> Self {
         LineEdit {
             text: String::new(),
             cursor_pos: 0,
-            cursor_style: StyleModifier::new().invert(),
+            cursor_style_active: active,
+            cursor_style_inactive: inactive,
         }
     }
 
@@ -98,10 +106,13 @@ impl LineEdit {
 }
 
 impl Widget for LineEdit {
-    fn space_demand(&self) -> (Demand, Demand) {
-        (Demand::at_least((count_grapheme_clusters(&self.text) + 1) as u32), Demand::exact(1)) //TODO this is not really universal
+    fn space_demand(&self) -> Demand2D {
+        Demand2D {
+            width: Demand::at_least((count_grapheme_clusters(&self.text) + 1) as u32),
+            height: Demand::exact(1), //TODO this is not really universal
+        }
     }
-    fn draw(&mut self, mut window: Window) {
+    fn draw(&mut self, mut window: Window, hints: RenderingHints) {
         let (maybe_cursor_pos_offset, maybe_after_cursor_offset) = {
             let mut grapheme_indices = self.text.grapheme_indices(true);
             let cursor_cluster = grapheme_indices.nth(self.cursor_pos as usize);
@@ -112,6 +123,12 @@ impl Widget for LineEdit {
         let right_padding = 1;
         let cursor_start_pos = ::std::cmp::min(0, window.get_width() as i32 - num_graphemes as i32 - right_padding);
 
+        let cursor_style = if hints.active {
+            self.cursor_style_active
+        } else {
+            self.cursor_style_inactive
+        };
+
         let mut cursor = Cursor::new(&mut window).position(cursor_start_pos, 0);
         if let Some(cursor_pos_offset) = maybe_cursor_pos_offset {
             let (until_cursor, from_cursor) = self.text.split_at(cursor_pos_offset);
@@ -119,18 +136,18 @@ impl Widget for LineEdit {
             if let Some(after_cursor_offset) = maybe_after_cursor_offset {
                 let (cursor_str, after_cursor) = from_cursor.split_at(after_cursor_offset - cursor_pos_offset);
                 {
-                    let mut cursor = cursor.push_style(self.cursor_style);
+                    let mut cursor = cursor.push_style(cursor_style);
                     cursor.write(cursor_str);
                 }
                 cursor.write(after_cursor);
             } else {
-                let mut cursor = cursor.push_style(self.cursor_style);
+                let mut cursor = cursor.push_style(cursor_style);
                 cursor.write(from_cursor);
             }
         } else {
             cursor.write(&self.text);
             {
-                let mut cursor = cursor.push_style(self.cursor_style);
+                let mut cursor = cursor.push_style(cursor_style);
                 cursor.write(" ");
             }
         }

@@ -1,9 +1,11 @@
 use super::super::{
     Demand,
+    Demand2D,
     layout_linearly,
     LineIndex,
     LineNumber,
     LineStorage,
+    RenderingHints,
     Widget,
 };
 use base::{
@@ -326,10 +328,13 @@ impl<S, H, D> Pager<S, H, D>
 impl<S, H, D> Widget for Pager<S, H, D>
     where S: LineStorage, S::Line: PagerLine, H: Highlighter, D: LineDecorator<Line=S::Line> {
 
-    fn space_demand(&self) -> (Demand, Demand) {
-        (Demand::at_least(1), Demand::at_least(1))
+    fn space_demand(&self) -> Demand2D {
+        Demand2D {
+            width: Demand::at_least(1),
+            height: Demand::at_least(1)
+        }
     }
-    fn draw(&mut self, window: Window) {
+    fn draw(&mut self, window: Window, _: RenderingHints) {
         if let Some(ref mut content) = self.content {
             let mut highlighter = content.highlighter.create_instance();
             let height = window.get_height() as usize;

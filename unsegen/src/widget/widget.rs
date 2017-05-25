@@ -4,8 +4,21 @@ use base::{
 use std::cmp::max;
 
 pub trait Widget {
-    fn space_demand(&self) -> (Demand, Demand);
-    fn draw(&mut self, window: Window);
+    fn space_demand(&self) -> Demand2D;
+    fn draw(&mut self, window: Window, hints: RenderingHints);
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct RenderingHints {
+    pub active: bool,
+}
+
+impl Default for RenderingHints {
+    fn default() -> Self {
+        RenderingHints {
+            active: false,
+        }
+    }
 }
 
 #[derive(Eq, PartialEq, PartialOrd, Clone, Copy, Debug)]
@@ -42,6 +55,12 @@ impl<'a> ::std::iter::Sum<&'a Demand> for Demand {
     fn sum<I>(iter: I) -> Demand where I: Iterator<Item=&'a Demand> {
         iter.fold(Demand::zero(), |d1: Demand, d2: &Demand| d1 + *d2)
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Demand2D {
+    pub width: Demand,
+    pub height: Demand,
 }
 
 

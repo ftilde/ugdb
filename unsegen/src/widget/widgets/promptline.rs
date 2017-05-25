@@ -1,6 +1,7 @@
 use super::super::{
-    Demand,
+    Demand2D,
     HorizontalLayout,
+    RenderingHints,
     SeparatingStyle,
     Widget,
 };
@@ -77,12 +78,12 @@ impl PromptLine {
 }
 
 impl Widget for PromptLine {
-    fn space_demand(&self) -> (Demand, Demand) {
+    fn space_demand(&self) -> Demand2D {
         let widgets: Vec<&Widget> = vec![&self.prompt, &self.line];
         self.layout.space_demand(widgets.as_slice())
     }
-    fn draw(&mut self, window: Window) {
-        let mut widgets: Vec<&mut Widget> = vec![&mut self.prompt, &mut self.line];
+    fn draw(&mut self, window: Window, hints: RenderingHints) {
+        let mut widgets: Vec<(&mut Widget, RenderingHints)> = vec![(&mut self.prompt, hints), (&mut self.line, hints)];
         self.layout.draw(window, widgets.as_mut_slice());
     }
 }

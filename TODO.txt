@@ -1,9 +1,20 @@
-Add WatchTable (?):
- - JsonObjectViewer
+Add ExpressionTable:
+ - JsonViewer
+
 Add Container management:
  - Top level layouting as a tree of containers (cf. i3)
  - Different kinds of containers (hsplit, vsplit, widget (or extension), grid?
  - Configurable by layout file (json)
+
+Fully implement PseudoTerminal as a TerminalEmulator
+ - Use https://crates.io/crates/vte
+ - It should probably be moved to a separate crate
+
+Add IPC framework
+ - Should be used to (e.g.) set breakpoints, get current src position
+ - https://crates.io/crates/unix_socket
+ - Implement corresponding vim plugin
+
 Add MemoryViewer:
  - It may be useful to use a table, or just use split windows
 

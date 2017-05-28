@@ -1,5 +1,6 @@
 use unsegen::widget::widgets::{
     Column,
+    JsonValue,
     JsonViewer,
     LineEdit,
     Table,
@@ -41,7 +42,7 @@ impl ExpressionRow {
     fn new() -> Self {
         ExpressionRow {
             expression: LineEdit::new(),
-            result: JsonViewer::new(""),
+            result: JsonViewer::new(JsonValue::Null),
         }
     }
 
@@ -104,6 +105,11 @@ pub struct ExpressionTable {
     table: Table<ExpressionRow>,
 }
 
+fn parse_gdb_value(result_string: &str) -> JsonValue {
+    JsonValue::String(result_string.to_owned())
+}
+
+
 impl ExpressionTable {
     pub fn new() -> Self {
         let row_sep_style = SeparatingStyle::AlternatingStyle(StyleModifier::new().bg_color(Color::Yellow));
@@ -153,23 +159,23 @@ impl ExpressionTable {
     pub fn update_results(&mut self, gdb: &mut gdbmi::GDB) {
         for row in self.table.rows_mut().iter_mut() {
             let expr = row.expression.get().to_owned();
-            let res_text = if expr.is_empty() {
-                "".to_owned()
+            let result = if expr.is_empty() {
+                JsonValue::Null
             } else {
                 let res = gdb.execute(MiCommand::data_evaluate_expression(expr)).expect("expression evaluation successful");
                 match res.class {
                     ResultClass::Error => {
-                        format!("<Err: {}>", res.results["msg"].as_str().expect("msg present"))
+                        res.results["msg"].clone()
                     },
                     ResultClass::Done => {
-                        format!("{}", res.results["value"].as_str().expect("value present"))
-                    }
+                        parse_gdb_value(res.results["value"].as_str().expect("value present"))
+                    },
                     other => {
                         panic!("unexpected result class: {:?}", other)
-                    }
+                    },
                 }
             };
-            row.result.set(res_text);
+            row.result.reset(result);
         }
     }
 }

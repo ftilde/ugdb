@@ -151,9 +151,90 @@ pub enum WrappingMode {
     NoWrap,
 }
 
+pub trait CursorTarget {
+    fn get_width(&self) -> u32;
+    fn get_height(&self) -> u32;
+    fn get_grapheme_cluster_mut(&mut self, x: u32, y: u32) -> Option<&mut StyledGraphemeCluster>;
+    fn get_default_style(&self) -> &Style;
+}
 
-pub struct Cursor<'c, 'w: 'c> {
-    window: &'c mut Window<'w>,
+impl<'a> CursorTarget for Window<'a> {
+    fn get_width(&self) -> u32 {
+        self.get_width()
+    }
+    fn get_height(&self) -> u32 {
+        self.get_height()
+    }
+    fn get_grapheme_cluster_mut(&mut self, x: u32, y: u32) -> Option<&mut StyledGraphemeCluster> {
+        self.values.get_mut((y as usize, x as usize))
+    }
+    fn get_default_style(&self) -> &Style {
+        &self.default_style
+    }
+}
+
+pub struct ExtentEstimationWindow {
+    some_value: StyledGraphemeCluster,
+    default_style: Style,
+    width: u32,
+    extent_x: u32,
+    extent_y: u32,
+}
+
+impl ExtentEstimationWindow {
+    pub fn with_width(width: u32) -> Self {
+        let style = Style::default();
+        ExtentEstimationWindow {
+            some_value: StyledGraphemeCluster::new(GraphemeCluster::space().into(), style),
+            default_style: style,
+            width: width,
+            extent_x: 0,
+            extent_y: 0,
+        }
+    }
+
+    pub fn unbounded() -> Self {
+        Self::with_width(i32::max_value() as u32)
+    }
+
+    pub fn extent_x(&self) -> u32 {
+        self.extent_x
+    }
+
+    pub fn extent_y(&self) -> u32 {
+        self.extent_y
+    }
+
+    fn reset_value(&mut self) {
+        self.some_value = StyledGraphemeCluster::new(GraphemeCluster::space().into(), self.default_style);
+    }
+}
+
+impl CursorTarget for ExtentEstimationWindow {
+    fn get_width(&self) -> u32 {
+        self.width
+    }
+    fn get_height(&self) -> u32 {
+        i32::max_value() as u32
+    }
+    fn get_grapheme_cluster_mut(&mut self, x: u32, y: u32) -> Option<&mut StyledGraphemeCluster> {
+        self.extent_x = max(self.extent_x, x+1);
+        self.extent_y = max(self.extent_y, y+1);
+        self.reset_value();
+        if x < self.width {
+            Some(&mut self.some_value)
+        } else {
+            None
+        }
+    }
+    fn get_default_style(&self) -> &Style {
+        &self.default_style
+    }
+}
+
+pub struct Cursor<'c, 'g: 'c, T: 'c + CursorTarget = Window<'g>> {
+    window: &'c mut T,
+    _dummy: ::std::marker::PhantomData<&'g ()>,
     wrapping_mode: WrappingMode,
     style_modifier: StyleModifier,
     x: i32,
@@ -162,10 +243,11 @@ pub struct Cursor<'c, 'w: 'c> {
     tab_column_width: u32,
 }
 
-impl<'c, 'w> Cursor<'c, 'w> {
-    pub fn new(window: &'c mut Window<'w>) -> Self {
+impl<'c, 'g: 'c, T: 'c + CursorTarget> Cursor<'c, 'g, T> {
+    pub fn new(window: &'c mut T) -> Self {
         Cursor {
             window: window,
+            _dummy: ::std::marker::PhantomData::default(),
             wrapping_mode: WrappingMode::NoWrap,
             style_modifier: StyleModifier::none(),
             x: 0,
@@ -221,7 +303,8 @@ impl<'c, 'w> Cursor<'c, 'w> {
     }
 
     pub fn fill_and_wrap_line(&mut self) {
-        while self.x < self.window.get_width() as i32 {
+        let w = self.window.get_width() as i32;
+        while self.x < w {
             self.write(" ");
         }
         self.wrap_line();
@@ -234,7 +317,7 @@ impl<'c, 'w> Cursor<'c, 'w> {
 
 
     fn active_style(&self) -> Style {
-        self.style_modifier.apply(&self.window.default_style)
+        self.style_modifier.apply(self.window.get_default_style())
     }
 
     pub fn num_expected_wraps(&self, line: &str) -> u32 {
@@ -256,11 +339,11 @@ impl<'c, 'w> Cursor<'c, 'w> {
 
     fn write_grapheme_cluster_unchecked(&mut self, cluster: GraphemeCluster) {
         let style = self.active_style();
-        let target_cluster_x = self.x as Ix;
-        let y = self.y as Ix;
+        let target_cluster_x = self.x as u32;
+        let y = self.y as u32;
         let old_target_cluster_width = {
-            let target_cluster = self.window.values.get_mut((y, target_cluster_x)).expect("in bounds");
-            let w = target_cluster.grapheme_cluster.width();
+            let target_cluster = self.window.get_grapheme_cluster_mut(target_cluster_x, y).expect("in bounds");
+            let w = target_cluster.grapheme_cluster.width() as u32;
             *target_cluster = StyledGraphemeCluster::new(cluster, style);
             w
         };
@@ -270,7 +353,7 @@ impl<'c, 'w> Cursor<'c, 'w> {
             let mut current_width = old_target_cluster_width;
             while current_width == 0 {
                 current_x -= 1;
-                current_width = self.window.values.get_mut((y, current_x)).expect("finding wide cluster start: read in bounds").grapheme_cluster.width();
+                current_width = self.window.get_grapheme_cluster_mut(current_x, y).expect("finding wide cluster start: read in bounds").grapheme_cluster.width() as u32;
             }
 
             // Clear all cells (except the newly written one)
@@ -278,7 +361,7 @@ impl<'c, 'w> Cursor<'c, 'w> {
             let start_cluster_width = current_width;
             for x_to_clear in start_cluster_x..start_cluster_x+start_cluster_width {
                 if x_to_clear != target_cluster_x {
-                    self.window.values.get_mut((y, x_to_clear)).expect("overwrite cluster cells in bounds").grapheme_cluster.clear();
+                    self.window.get_grapheme_cluster_mut(x_to_clear, y).expect("overwrite cluster cells in bounds").grapheme_cluster.clear();
                 }
             }
         }
@@ -361,25 +444,25 @@ impl<'c, 'w> Cursor<'c, 'w> {
         self.wrap_line();
     }
 
-    pub fn push_style<'a>(&'a mut self, style_modifier: StyleModifier) -> CursorStyleStack<'a, 'c, 'w> {
+    pub fn push_style<'a>(&'a mut self, style_modifier: StyleModifier) -> CursorStyleStack<'a, 'c, 'g, T> {
         CursorStyleStack::new(self, style_modifier)
     }
 }
 
-impl<'c, 'w> ::std::fmt::Write for Cursor<'c, 'w> {
+impl<'c, 'g: 'c, T: 'c + CursorTarget> ::std::fmt::Write for Cursor<'c, 'g, T> {
     fn write_str(&mut self, s: &str) -> ::std::fmt::Result {
         self.write(s);
         Ok(())
     }
 }
 
-pub struct CursorStyleStack<'a, 'c: 'a, 'w: 'c> {
-    cursor: &'a mut Cursor<'c, 'w>,
+pub struct CursorStyleStack<'a, 'c: 'a, 'g: 'c, T: 'c + CursorTarget> {
+    cursor: &'a mut Cursor<'c, 'g, T>,
     previous_style_modifier: StyleModifier,
 }
 
-impl<'a, 'c: 'a, 'w: 'c> CursorStyleStack<'a, 'c, 'w> {
-    pub fn new(cursor: &'a mut Cursor<'c, 'w>, pushed_style_modifier: StyleModifier) -> Self {
+impl<'a, 'c: 'a, 'g: 'c, T: 'c + CursorTarget> CursorStyleStack<'a, 'c, 'g, T> {
+    pub fn new(cursor: &'a mut Cursor<'c, 'g, T>, pushed_style_modifier: StyleModifier) -> Self {
         let current_style_modifier = cursor.style_modifier;
         let combined_style_modifier = current_style_modifier.if_not(pushed_style_modifier);
         cursor.style_modifier = combined_style_modifier;
@@ -390,22 +473,22 @@ impl<'a, 'c: 'a, 'w: 'c> CursorStyleStack<'a, 'c, 'w> {
     }
 }
 
-impl<'a, 'c: 'a, 'w: 'c> ::std::ops::Drop for CursorStyleStack<'a, 'c, 'w> {
+impl<'a, 'c: 'a, 'g: 'c, T: 'c + CursorTarget> ::std::ops::Drop for CursorStyleStack<'a, 'c, 'g, T> {
     fn drop(&mut self) {
         self.cursor.style_modifier = self.previous_style_modifier;
     }
 }
 
-impl<'a, 'c: 'a, 'w: 'c> ::std::ops::DerefMut for CursorStyleStack<'a, 'c, 'w> {
-    fn deref_mut(&mut self) -> &mut Cursor<'c, 'w> {
+impl<'a, 'c: 'a, 'g: 'c, T: 'c + CursorTarget> ::std::ops::DerefMut for CursorStyleStack<'a, 'c, 'g, T> {
+    fn deref_mut(&mut self) -> &mut Cursor<'c, 'g, T> {
         &mut self.cursor
     }
 }
 
 
-impl<'a, 'c: 'a, 'w: 'c> ::std::ops::Deref for CursorStyleStack<'a, 'c, 'w> {
-    type Target = Cursor<'c, 'w>;
-    fn deref(&self) -> &Cursor<'c, 'w> {
+impl<'a, 'c: 'a, 'g: 'c, T: 'c + CursorTarget> ::std::ops::Deref for CursorStyleStack<'a, 'c, 'g, T> {
+    type Target = Cursor<'c, 'g, T>;
+    fn deref(&self) -> &Cursor<'c, 'g, T> {
         &self.cursor
     }
 }

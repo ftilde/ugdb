@@ -42,7 +42,7 @@ impl ExpressionRow {
     fn new() -> Self {
         ExpressionRow {
             expression: LineEdit::new(),
-            result: JsonViewer::new(JsonValue::Null),
+            result: JsonViewer::new(&JsonValue::Null),
         }
     }
 
@@ -175,7 +175,7 @@ impl ExpressionTable {
                     },
                 }
             };
-            row.result.reset(result);
+            row.result.reset(&result);
         }
     }
 }

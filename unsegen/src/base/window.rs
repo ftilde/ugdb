@@ -387,7 +387,7 @@ impl<'c, 'g: 'c, T: 'c + CursorTarget> Cursor<'c, 'g, T> {
             return;
         }
 
-        let mut line_it = text.lines().peekable();
+        let mut line_it = text.split('\n').peekable(); //.lines() swallows a terminal newline
         while let Some(line) = line_it.next() {
             for mut grapheme_cluster in GraphemeCluster::all_from_str(line) {
                 if grapheme_cluster.as_str() == "\t" {

@@ -84,7 +84,7 @@ impl<'a> Terminal<'a> {
                     current_style = c.style;
                 }
                 let grapheme_cluster = match c.grapheme_cluster.as_str() {
-                    "\t" | "\n" | "\r" | "\0" => panic!("Invalid grapheme cluster written to terminal"),
+                    c @ "\t" | c @ "\n" | c @ "\r" | c @ "\0" => panic!("Invalid grapheme cluster written to terminal: {:?}", c),
                     x => x,
                 };
                 buffer.push_str(grapheme_cluster);

@@ -164,8 +164,10 @@ named!(
     escaped_character<u8>,
     alt!(
         value!(b'\n', tag!("\\n")) |
+        value!(b'\r', tag!("\\r")) |
         value!(b'\t', tag!("\\t")) |
         value!(b'\"', tag!("\\\"")) |
+        value!(b'\\', tag!("\\\\")) |
         non_quote_byte
         )
     );

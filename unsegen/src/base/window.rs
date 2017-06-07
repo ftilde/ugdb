@@ -312,6 +312,10 @@ impl<'c, 'g: 'c, T: 'c + CursorTarget> Cursor<'c, 'g, T> {
 
     pub fn wrap_line(&mut self) {
         self.y += 1;
+        self.carriage_return();
+    }
+
+    pub fn carriage_return(&mut self) {
         self.x = self.line_start_column;
     }
 
@@ -390,9 +394,16 @@ impl<'c, 'g: 'c, T: 'c + CursorTarget> Cursor<'c, 'g, T> {
         let mut line_it = text.split('\n').peekable(); //.lines() swallows a terminal newline
         while let Some(line) = line_it.next() {
             for mut grapheme_cluster in GraphemeCluster::all_from_str(line) {
-                if grapheme_cluster.as_str() == "\t" {
-                    let width = self.tab_column_width - ((self.x as u32) % self.tab_column_width);
-                    grapheme_cluster = Self::create_tab_cluster(width)
+                match grapheme_cluster.as_str() {
+                    "\t" => {
+                        let width = self.tab_column_width - ((self.x as u32) % self.tab_column_width);
+                        grapheme_cluster = Self::create_tab_cluster(width)
+                    },
+                    "\r" => {
+                        self.carriage_return();
+                        continue;
+                    },
+                    _ => {},
                 }
                 let cluster_width = grapheme_cluster.width() as i32;
 

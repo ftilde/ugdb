@@ -18,6 +18,8 @@ unicode-width = "0.1"
 #pty
 nix = "^0.7"
 libc = "^0.2"
+#For gdb expression parsing
+pest = "^0.4.1"
 
 #unsegen
 syntect = "1.0"

@@ -1,10 +1,13 @@
 use unsegen::widget::widgets::{
     Column,
-    JsonValue,
+    json_ext,
     JsonViewer,
     LineEdit,
     Table,
     TableRow,
+};
+use self::json_ext::{
+    JsonValue,
 };
 use unsegen::widget::{
     Demand2D,
@@ -33,6 +36,11 @@ use gdbmi::input::{
 use gdbmi::output::{
     ResultClass,
 };
+use self::expression_parsing::{
+    parse_gdb_value,
+};
+
+mod expression_parsing;
 
 pub struct ExpressionRow {
     expression: LineEdit,
@@ -104,11 +112,6 @@ impl TableRow for ExpressionRow {
 pub struct ExpressionTable {
     table: Table<ExpressionRow>,
 }
-
-fn parse_gdb_value(result_string: &str) -> JsonValue {
-    JsonValue::String(result_string.to_owned())
-}
-
 
 impl ExpressionTable {
     pub fn new() -> Self {

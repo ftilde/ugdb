@@ -1,7 +1,10 @@
+#![recursion_limit = "200"] // See https://github.com/pest-parser/pest
 #[macro_use]
 extern crate chan;
 extern crate chan_signal;
 extern crate gdbmi;
+#[macro_use]
+extern crate pest; // For gdb structure parsing
 extern crate unsegen;
 extern crate unicode_width;
 

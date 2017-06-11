@@ -19,7 +19,9 @@ use std::cmp::{
 
 use std::collections::BTreeMap;
 
-pub use self::json::{
+pub use self::json as json_ext;
+
+use self::json::{
     JsonValue,
 };
 
@@ -55,7 +57,7 @@ impl DisplayObject {
     fn from_json(obj: &Object) -> Self {
         let mut result = DisplayObject {
             members: BTreeMap::new(),
-            extended: false,
+            extended: true, //TODO: change default to false
         };
         for (key, value) in obj.iter() {
             result.members.insert(key.to_string(), DisplayValue::from_json(value));
@@ -139,8 +141,6 @@ impl DisplayArray {
     fn draw<T: CursorTarget>(&self, cursor: &mut Cursor<T>, hints: RenderingHints) {
         use ::std::fmt::Write;
         //TODO: support open/close/num_extended
-        cursor.write("[ ");
-        cursor.write("\n");
         writeln!(cursor, "[ {}", CLOSE_SYMBOL).unwrap();
         for value in self.values.iter() {
             value.draw(cursor, hints);

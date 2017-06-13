@@ -350,7 +350,7 @@ impl<S, H, D> Widget for Pager<S, H, D>
             let decorator_demand = content.decorator.horizontal_space_demand(content.storage.view(min_line..max_line));
             let split_pos = layout_linearly(window.get_width(), 0, &[decorator_demand, Demand::at_least(1)])[0];
 
-            let (mut decoration_window, mut content_window) = window.split_h(split_pos); //TODO: make splitting work for zero width windows!
+            let (mut decoration_window, mut content_window) = window.split_h(split_pos).expect("valid split pos");
 
             // Fill background with correct color
             let bg_style = highlighter.default_style();

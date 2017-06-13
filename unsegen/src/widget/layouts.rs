@@ -168,7 +168,7 @@ impl HorizontalLayout {
     }
 
     pub fn draw(&self, window: Window, widgets: &mut [(&mut Widget, RenderingHints)]) {
-        draw_linearly(window, widgets, &self.separating_style, |w, p| w.split_h(p), |w| w.get_width(), SeparatingStyle::width, |d| d.width);
+        draw_linearly(window, widgets, &self.separating_style, |w, p| w.split_h(p).expect("valid split pos"), |w| w.get_width(), SeparatingStyle::width, |d| d.width);
     }
 }
 
@@ -203,7 +203,7 @@ impl VerticalLayout {
     }
 
     pub fn draw(&self, window: Window, widgets: &mut [(&mut Widget, RenderingHints)]) {
-        draw_linearly(window, widgets, &self.separating_style, |w, p| w.split_v(p), |w| w.get_height(), SeparatingStyle::height, |d| d.height);
+        draw_linearly(window, widgets, &self.separating_style, |w, p| w.split_v(p).expect("valid split pos"), |w| w.get_height(), SeparatingStyle::height, |d| d.height);
     }
 }
 

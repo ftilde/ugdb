@@ -46,6 +46,9 @@ impl Widget for LogViewer {
     }
     fn draw(&mut self, mut window: Window, _: RenderingHints) {
         let height = window.get_height() as usize;
+        if height == 0 {
+            return;
+        }
 
         // TODO: This does not work well when lines are wrapped, but we may want scrolling farther
         // than 1 line per event

@@ -191,11 +191,17 @@ impl<R: TableRow + 'static> Widget for Table<R> {
     fn draw(&mut self, window: Window, hints: RenderingHints) {
         let column_widths = self.layout_columns(&window);
 
-        let mut window = window;
+        let mut window = Some(window);
         let mut row_iter = self.rows.iter_mut().enumerate().peekable();
         while let Some((row_index, row)) = row_iter.next() {
+            if window.is_none() {
+                break;
+            }
             let height = row.height_demand().min;
-            let (mut row_window, rest_window) = window.split_v(height);
+            let (mut row_window, rest_window) = match window.unwrap().split_v(height) {
+                Ok((row_window, rest_window)) => (row_window, Some(rest_window)),
+                Err(row_window) => (row_window, None),
+            };
             window = rest_window;
 
             if let (1, &SeparatingStyle::AlternatingStyle(modifier)) = (row_index%2, &self.row_sep_style) {
@@ -204,7 +210,7 @@ impl<R: TableRow + 'static> Widget for Table<R> {
 
             let mut iter = R::columns().iter().zip(column_widths.iter()).enumerate().peekable();
             while let Some((col_index, (col, &pos))) = iter.next() {
-                let (mut cell_window, r) = row_window.split_h(pos);
+                let (mut cell_window, r) = row_window.split_h(pos).expect("valid split pos from layout");
                 row_window = r;
 
                 if let (1, &SeparatingStyle::AlternatingStyle(modifier)) = (col_index%2, &self.col_sep_style) {
@@ -225,15 +231,21 @@ impl<R: TableRow + 'static> Widget for Table<R> {
                 (col.access_mut)(row).draw(cell_window, cell_draw_hints);
                 if let (Some(_), &SeparatingStyle::Draw(ref c)) = (iter.peek(), &self.col_sep_style) {
                     if row_window.get_width() > 0 {
-                        let (mut sep_window, r) = row_window.split_h(c.width() as u32);
+                        let (mut sep_window, r) = row_window.split_h(c.width() as u32).expect("valid split pos from layout");
                         row_window = r;
                         sep_window.fill(c.clone());
                     }
                 }
             }
             if let (Some(_), &SeparatingStyle::Draw(ref c)) = (row_iter.peek(), &self.row_sep_style) {
-                let (mut sep_window, r) = window.split_v(1);
-                window = r;
+                if window.is_none() {
+                    break;
+                }
+                let (mut sep_window, rest_window) = match window.unwrap().split_v(height) {
+                    Ok((row_window, rest_window)) => (row_window, Some(rest_window)),
+                    Err(row_window) => (row_window, None),
+                };
+                window = rest_window;
                 sep_window.fill(c.clone());
             }
         }

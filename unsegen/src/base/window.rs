@@ -15,7 +15,8 @@ use base::ranges::{
     Bound,
     RangeArgument,
 };
-use ::unicode_segmentation::UnicodeSegmentation;
+use unicode_segmentation::UnicodeSegmentation;
+use std::fmt;
 
 type CharMatrixView<'w> = ArrayViewMut<'w, StyledGraphemeCluster, Ix2>;
 pub struct Window<'w> {
@@ -23,6 +24,11 @@ pub struct Window<'w> {
     default_style: Style,
 }
 
+impl<'w> ::std::fmt::Debug for Window<'w> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Window {{ w: {}, h: {} }}", self.get_width(), self.get_height())
+    }
+}
 
 impl<'w> Window<'w> {
     pub fn new(values: CharMatrixView<'w>, default_style: Style) -> Self {
@@ -81,34 +87,39 @@ impl<'w> Window<'w> {
         }
     }
 
-    pub fn split_v(self, split_pos: u32) -> (Self, Self) {
-        assert!(split_pos <= self.get_height(), "Invalid split_pos {} for window of height {}", split_pos, self.get_height());
-
-        let (first_mat, second_mat) = self.values.split_at(Axis(0), split_pos as Ix);
-        let w_u = Window {
-            values: first_mat,
-            default_style: self.default_style,
-        };
-        let w_d = Window {
-            values: second_mat,
-            default_style: self.default_style,
-        };
-        (w_u, w_d)
+    pub fn split_v(self, split_pos: u32) -> Result<(Self, Self), Self> {
+        if split_pos <= self.get_height() {
+            let (first_mat, second_mat) = self.values.split_at(Axis(0), split_pos as Ix);
+            let w_u = Window {
+                values: first_mat,
+                default_style: self.default_style,
+            };
+            let w_d = Window {
+                values: second_mat,
+                default_style: self.default_style,
+            };
+            Ok((w_u, w_d))
+        } else {
+            Err(self)
+        }
     }
 
-    pub fn split_h(self, split_pos: u32) -> (Self, Self) {
-        assert!(split_pos <= self.get_width(), "Invalid split_pos {} for window of width {}", split_pos, self.get_width());
+    pub fn split_h(self, split_pos: u32) -> Result<(Self, Self), Self> {
+        if split_pos <= self.get_width() {
 
-        let (first_mat, second_mat) = self.values.split_at(Axis(1), split_pos as Ix);
-        let w_l = Window {
-            values: first_mat,
-            default_style: self.default_style,
-        };
-        let w_r = Window {
-            values: second_mat,
-            default_style: self.default_style,
-        };
-        (w_l, w_r)
+            let (first_mat, second_mat) = self.values.split_at(Axis(1), split_pos as Ix);
+            let w_l = Window {
+                values: first_mat,
+                default_style: self.default_style,
+            };
+            let w_r = Window {
+                values: second_mat,
+                default_style: self.default_style,
+            };
+            Ok((w_l, w_r))
+        } else {
+            Err(self)
+        }
     }
 
     pub fn fill(&mut self, c: GraphemeCluster) {

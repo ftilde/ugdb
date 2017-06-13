@@ -110,9 +110,9 @@ impl<'a> Tui<'a> {
 
     pub fn draw(&mut self, window: Window) {
         let split_pos = window.get_width()/2-1;
-        let (window_l, rest) = window.split_h(split_pos);
+        let (window_l, rest) = window.split_h(split_pos).expect("Valid split pos guaranteed");
 
-        let (mut separator, window_r) = rest.split_h(2);
+        let (mut separator, window_r) = rest.split_h(2).expect("Valid split size for (not too small) terminals");
 
         separator.set_default_style(Style::new(Color::Green, Color::Blue, TextFormat{ bold: true, underline: true, invert: false, italic: true }));
         separator.fill(GraphemeCluster::try_from('山').unwrap());

@@ -90,16 +90,22 @@ impl DisplayObject {
     }
     */
 
-    fn draw<T: CursorTarget>(&self, cursor: &mut Cursor<T>, hints: RenderingHints) {
+    fn draw<T: CursorTarget>(&self, cursor: &mut Cursor<T>, hints: RenderingHints, indentation: u16) {
         use ::std::fmt::Write;
         if self.extended {
-            writeln!(cursor, "{{ {}", CLOSE_SYMBOL).unwrap();
-            for (key, value) in self.members.iter() {
-                write!(cursor, "{}: ", key).unwrap();
-                value.draw(cursor, hints);
-                writeln!(cursor, ",").unwrap();
+
+            write!(cursor, "{{ {}", CLOSE_SYMBOL).unwrap();
+            {
+                let mut cursor = cursor.save().line_start_column();
+                cursor.move_line_start_column(indentation as i32);
+                for (key, value) in self.members.iter() {
+                    cursor.wrap_line();
+                    write!(cursor, "{}: ", key).unwrap();
+                    value.draw(&mut cursor, hints, indentation);
+                    write!(cursor, ",").unwrap();
+                }
             }
-            write!(cursor, "}}").unwrap();
+            write!(cursor, "\n}}").unwrap();
         } else {
             write!(cursor, "{{ {} }}", OPEN_SYMBOL).unwrap();
         }
@@ -138,15 +144,20 @@ impl DisplayArray {
         result
     }
 
-    fn draw<T: CursorTarget>(&self, cursor: &mut Cursor<T>, hints: RenderingHints) {
+    fn draw<T: CursorTarget>(&self, cursor: &mut Cursor<T>, hints: RenderingHints, indentation: u16) {
         use ::std::fmt::Write;
         //TODO: support open/close/num_extended
-        writeln!(cursor, "[ {}", CLOSE_SYMBOL).unwrap();
-        for value in self.values.iter() {
-            value.draw(cursor, hints);
-            writeln!(cursor, ",",).unwrap();
+        write!(cursor, "[ {}", CLOSE_SYMBOL).unwrap();
+        {
+            let mut cursor = cursor.save().line_start_column();
+            cursor.move_line_start_column(indentation as i32);
+            for value in self.values.iter() {
+                cursor.wrap_line();
+                value.draw(&mut cursor, hints, indentation);
+                write!(cursor, ",",).unwrap();
+            }
         }
-        write!(cursor, "]").unwrap();
+        write!(cursor, "\n]").unwrap();
     }
 }
 
@@ -203,11 +214,11 @@ impl DisplayValue {
             &JsonValue::Array(ref val)   => DisplayValue::Array(DisplayArray::from_json(&val)),
         }
     }
-    fn draw<T: CursorTarget>(&self, cursor: &mut Cursor<T>, hints: RenderingHints) {
+    fn draw<T: CursorTarget>(&self, cursor: &mut Cursor<T>, hints: RenderingHints, indentation: u16) {
         match self {
             &DisplayValue::Scalar(ref scalar) => scalar.draw(cursor, hints),
-            &DisplayValue::Object(ref obj)    => obj.draw(cursor, hints),
-            &DisplayValue::Array(ref array)   => array.draw(cursor, hints),
+            &DisplayValue::Object(ref obj)    => obj.draw(cursor, hints, indentation),
+            &DisplayValue::Array(ref array)   => array.draw(cursor, hints, indentation),
         }
     }
 }
@@ -241,7 +252,7 @@ impl Widget for JsonViewer {
         let hints = RenderingHints::default();
         {
             let mut cursor = Cursor::<ExtentEstimationWindow>::new(&mut window);
-            self.value.draw(&mut cursor, hints);
+            self.value.draw(&mut cursor, hints, self.indentation);
         }
         Demand2D {
             width: Demand::at_least(window.extent_x()),
@@ -250,6 +261,6 @@ impl Widget for JsonViewer {
     }
     fn draw(&mut self, mut window: Window, hints: RenderingHints) {
         let mut cursor = Cursor::new(&mut window);
-        self.value.draw(&mut cursor, hints);
+        self.value.draw(&mut cursor, hints, self.indentation);
     }
 }

@@ -300,13 +300,21 @@ impl<'c, 'g: 'c, T: 'c + CursorTarget> Cursor<'c, 'g, T> {
         self.line_start_column = column;
     }
 
-    pub fn line_start_column(mut self, column: i32) -> Self{
+    pub fn move_line_start_column(&mut self, d: i32) {
+        self.line_start_column += d;
+    }
+
+    pub fn line_start_column(mut self, column: i32) -> Self {
         self.set_line_start_column(column);
         self
     }
 
     pub fn set_style_modifier(&mut self, style_modifier: StyleModifier) {
         self.style_modifier = style_modifier;
+    }
+
+    pub fn apply_style_modifier(&mut self, style_modifier: StyleModifier) {
+        self.style_modifier = self.style_modifier.if_not(style_modifier)
     }
 
     pub fn set_tab_column_width(&mut self, width: u32) {
@@ -466,8 +474,8 @@ impl<'c, 'g: 'c, T: 'c + CursorTarget> Cursor<'c, 'g, T> {
         self.wrap_line();
     }
 
-    pub fn push_style<'a>(&'a mut self, style_modifier: StyleModifier) -> CursorStyleStack<'a, 'c, 'g, T> {
-        CursorStyleStack::new(self, style_modifier)
+    pub fn save<'a>(&'a mut self) -> CursorRestorer<'a, 'c, 'g, T> {
+        CursorRestorer::new(self)
     }
 }
 
@@ -478,37 +486,71 @@ impl<'c, 'g: 'c, T: 'c + CursorTarget> ::std::fmt::Write for Cursor<'c, 'g, T> {
     }
 }
 
-pub struct CursorStyleStack<'a, 'c: 'a, 'g: 'c, T: 'c + CursorTarget> {
+pub struct CursorRestorer<'a, 'c: 'a, 'g: 'c, T: 'c + CursorTarget> {
     cursor: &'a mut Cursor<'c, 'g, T>,
-    previous_style_modifier: StyleModifier,
+    saved_style_modifier: Option<StyleModifier>,
+    saved_line_start_column: Option<i32>,
+    saved_pos_x: Option<i32>,
+    saved_pos_y: Option<i32>,
 }
 
-impl<'a, 'c: 'a, 'g: 'c, T: 'c + CursorTarget> CursorStyleStack<'a, 'c, 'g, T> {
-    pub fn new(cursor: &'a mut Cursor<'c, 'g, T>, pushed_style_modifier: StyleModifier) -> Self {
-        let current_style_modifier = cursor.style_modifier;
-        let combined_style_modifier = current_style_modifier.if_not(pushed_style_modifier);
-        cursor.style_modifier = combined_style_modifier;
-        CursorStyleStack {
+impl<'a, 'c: 'a, 'g: 'c, T: 'c + CursorTarget> CursorRestorer<'a, 'c, 'g, T> {
+    pub fn new(cursor: &'a mut Cursor<'c, 'g, T>) -> Self {
+        CursorRestorer {
             cursor: cursor,
-            previous_style_modifier: current_style_modifier,
+            saved_style_modifier: None,
+            saved_line_start_column: None,
+            saved_pos_x: None,
+            saved_pos_y: None,
+        }
+    }
+
+    pub fn style_modifier(mut self) -> Self {
+        self.saved_style_modifier = Some(self.cursor.style_modifier);
+        self
+    }
+
+    pub fn line_start_column(mut self) -> Self {
+        self.saved_line_start_column = Some(self.cursor.line_start_column);
+        self
+    }
+
+    pub fn pos_x(mut self) -> Self {
+        self.saved_pos_x = Some(self.cursor.x);
+        self
+    }
+
+    pub fn pos_y(mut self) -> Self {
+        self.saved_pos_y = Some(self.cursor.y);
+        self
+    }
+}
+
+impl<'a, 'c: 'a, 'g: 'c, T: 'c + CursorTarget> ::std::ops::Drop for CursorRestorer<'a, 'c, 'g, T> {
+    fn drop(&mut self) {
+        if let Some(saved) = self.saved_style_modifier {
+            self.cursor.style_modifier = saved;
+        }
+        if let Some(saved) = self.saved_line_start_column {
+            self.cursor.line_start_column = saved;
+        }
+        if let Some(saved) = self.saved_pos_x {
+            self.cursor.x = saved;
+        }
+        if let Some(saved) = self.saved_pos_y {
+            self.cursor.y = saved;
         }
     }
 }
 
-impl<'a, 'c: 'a, 'g: 'c, T: 'c + CursorTarget> ::std::ops::Drop for CursorStyleStack<'a, 'c, 'g, T> {
-    fn drop(&mut self) {
-        self.cursor.style_modifier = self.previous_style_modifier;
-    }
-}
-
-impl<'a, 'c: 'a, 'g: 'c, T: 'c + CursorTarget> ::std::ops::DerefMut for CursorStyleStack<'a, 'c, 'g, T> {
+impl<'a, 'c: 'a, 'g: 'c, T: 'c + CursorTarget> ::std::ops::DerefMut for CursorRestorer<'a, 'c, 'g, T> {
     fn deref_mut(&mut self) -> &mut Cursor<'c, 'g, T> {
         &mut self.cursor
     }
 }
 
 
-impl<'a, 'c: 'a, 'g: 'c, T: 'c + CursorTarget> ::std::ops::Deref for CursorStyleStack<'a, 'c, 'g, T> {
+impl<'a, 'c: 'a, 'g: 'c, T: 'c + CursorTarget> ::std::ops::Deref for CursorRestorer<'a, 'c, 'g, T> {
     type Target = Cursor<'c, 'g, T>;
     fn deref(&self) -> &Cursor<'c, 'g, T> {
         &self.cursor

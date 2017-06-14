@@ -136,18 +136,21 @@ impl Widget for LineEdit {
             if let Some(after_cursor_offset) = maybe_after_cursor_offset {
                 let (cursor_str, after_cursor) = from_cursor.split_at(after_cursor_offset - cursor_pos_offset);
                 {
-                    let mut cursor = cursor.push_style(cursor_style);
+                    let mut cursor = cursor.save().style_modifier();
+                    cursor.apply_style_modifier(cursor_style);
                     cursor.write(cursor_str);
                 }
                 cursor.write(after_cursor);
             } else {
-                let mut cursor = cursor.push_style(cursor_style);
+                let mut cursor = cursor.save().style_modifier();
+                cursor.apply_style_modifier(cursor_style);
                 cursor.write(from_cursor);
             }
         } else {
             cursor.write(&self.text);
             {
-                let mut cursor = cursor.push_style(cursor_style);
+                let mut cursor = cursor.save().style_modifier();
+                cursor.apply_style_modifier(cursor_style);
                 cursor.write(" ");
             }
         }

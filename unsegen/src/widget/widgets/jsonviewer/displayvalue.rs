@@ -22,6 +22,22 @@ use std::cmp::{
 
 use super::path::*;
 
+pub struct RenderingInfo {
+    pub hints: RenderingHints,
+    pub active_focused_style: StyleModifier,
+    pub inactive_focused_style: StyleModifier,
+}
+
+impl RenderingInfo {
+    fn get_focused_style(&self) -> StyleModifier {
+        if self.hints.active {
+            self.active_focused_style
+        } else {
+            self.inactive_focused_style
+        }
+    }
+}
+
 pub struct DisplayObject {
     pub members: BTreeMap<String, DisplayValue>,
     pub extended: bool,
@@ -58,7 +74,7 @@ impl DisplayObject {
         result
     }
 
-    fn draw<T: CursorTarget>(&self, cursor: &mut Cursor<T>, path: Option<&ObjectPath>, hints: RenderingHints, indentation: u16) {
+    fn draw<T: CursorTarget>(&self, cursor: &mut Cursor<T>, path: Option<&ObjectPath>, info: &RenderingInfo, indentation: u16) {
         use ::std::fmt::Write;
         if self.extended {
 
@@ -66,7 +82,7 @@ impl DisplayObject {
                 write!(cursor, "{{ ").unwrap();
                 let mut cursor = cursor.save().style_modifier();
                 if let Some(&ObjectPath::Toggle) = path {
-                    cursor.apply_style_modifier(StyleModifier::new().bold(true).invert());
+                    cursor.apply_style_modifier(info.get_focused_style());
                 }
                 write!(cursor, "{}", CLOSE_SYMBOL).unwrap();
             }
@@ -85,7 +101,7 @@ impl DisplayObject {
                     } else {
                         None
                     };
-                    value.draw(&mut cursor, subpath, hints, indentation);
+                    value.draw(&mut cursor, subpath, info, indentation);
                     write!(cursor, ",").unwrap();
                 }
             }
@@ -94,7 +110,7 @@ impl DisplayObject {
             write!(cursor, "{{ ").unwrap();
             let mut cursor = cursor.save().style_modifier();
             if let Some(&ObjectPath::Toggle) = path {
-                cursor.apply_style_modifier(StyleModifier::new().bold(true).invert());
+                cursor.apply_style_modifier(info.get_focused_style());
             }
             write!(cursor, "{}", OPEN_SYMBOL).unwrap();
             write!(cursor, " }}").unwrap();
@@ -138,20 +154,23 @@ impl DisplayArray {
         result
     }
 
-    fn draw<T: CursorTarget>(&self, cursor: &mut Cursor<T>, path: Option<&ArrayPath>, hints: RenderingHints, indentation: u16) {
+    fn draw<T: CursorTarget>(&self, cursor: &mut Cursor<T>, path: Option<&ArrayPath>, info: &RenderingInfo, indentation: u16) {
         use ::std::fmt::Write;
         //TODO: support open/close/num_extended
 
         write!(cursor, "[ ").unwrap();
-        if let Some(&ArrayPath::Shrink) = path {
+        {
+            write!(cursor, " ").unwrap();
             let mut cursor = cursor.save().style_modifier();
-            cursor.apply_style_modifier(StyleModifier::new().bold(true).invert());
+            if let Some(&ArrayPath::Shrink) = path {
+                cursor.apply_style_modifier(info.get_focused_style());
+            }
             write!(cursor, "{}", CLOSE_SYMBOL).unwrap();
         }
         {
             let mut cursor = cursor.save().line_start_column();
             cursor.move_line_start_column(indentation as i32);
-            for (i, value) in self.values.iter().enumerate() {
+            for (i, value) in self.values.iter().enumerate().take(self.num_extended) {
                 cursor.wrap_line();
 
                 let subpath = if let Some(&ArrayPath::Item(active_i, ref subpath)) = path {
@@ -164,14 +183,17 @@ impl DisplayArray {
                     None
                 };
 
-                value.draw(&mut cursor, subpath, hints, indentation);
+                value.draw(&mut cursor, subpath, info, indentation);
                 write!(cursor, ",",).unwrap();
             }
         }
         write!(cursor, "\n]").unwrap();
-        if let (Some(&ArrayPath::Grow), true) = (path, self.values.len() > self.num_extended)  {
+        if self.has_more_to_show() {
+            write!(cursor, " ").unwrap();
             let mut cursor = cursor.save().style_modifier();
-            cursor.apply_style_modifier(StyleModifier::new().bold(false).invert());
+            if let (Some(&ArrayPath::Grow), true) = (path, self.values.len() > self.num_extended)  {
+                cursor.apply_style_modifier(info.get_focused_style());
+            }
             write!(cursor, "{}", OPEN_SYMBOL).unwrap();
         }
     }
@@ -195,10 +217,10 @@ impl DisplayScalar {
         }
     }
 
-    fn draw<T: CursorTarget>(&self, cursor: &mut Cursor<T>, active: bool, _: RenderingHints) {
+    fn draw<T: CursorTarget>(&self, cursor: &mut Cursor<T>, active: bool, info: &RenderingInfo) {
         let mut cursor = cursor.save().style_modifier();
         if active {
-            cursor.apply_style_modifier(StyleModifier::new().bold(true).invert());
+            cursor.apply_style_modifier(info.get_focused_style());
         }
         cursor.write(&self.value);
     }
@@ -235,14 +257,14 @@ impl DisplayValue {
             &JsonValue::Array(ref val)   => DisplayValue::Array(DisplayArray::from_json(&val)),
         }
     }
-    pub fn draw<T: CursorTarget>(&self, cursor: &mut Cursor<T>, path: Option<&Path>, hints: RenderingHints, indentation: u16) {
+    pub fn draw<T: CursorTarget>(&self, cursor: &mut Cursor<T>, path: Option<&Path>, info: &RenderingInfo, indentation: u16) {
         match (self, path) {
-            (&DisplayValue::Scalar(ref scalar), Some(&Path::Scalar)) => scalar.draw(cursor, true, hints),
-            (&DisplayValue::Scalar(ref scalar), None) => scalar.draw(cursor, false, hints),
-            (&DisplayValue::Object(ref obj), Some(&Path::Object(ref op))) => obj.draw(cursor, Some(op), hints, indentation),
-            (&DisplayValue::Object(ref obj), None) => obj.draw(cursor, None, hints, indentation),
-            (&DisplayValue::Array(ref array), Some(&Path::Array(ref ap))) => array.draw(cursor, Some(ap), hints, indentation),
-            (&DisplayValue::Array(ref array), None) => array.draw(cursor, None, hints, indentation),
+            (&DisplayValue::Scalar(ref scalar), Some(&Path::Scalar)) => scalar.draw(cursor, true, info),
+            (&DisplayValue::Scalar(ref scalar), None) => scalar.draw(cursor, false, info),
+            (&DisplayValue::Object(ref obj), Some(&Path::Object(ref op))) => obj.draw(cursor, Some(op), info, indentation),
+            (&DisplayValue::Object(ref obj), None) => obj.draw(cursor, None, info, indentation),
+            (&DisplayValue::Array(ref array), Some(&Path::Array(ref ap))) => array.draw(cursor, Some(ap), info, indentation),
+            (&DisplayValue::Array(ref array), None) => array.draw(cursor, None, info, indentation),
             _ => panic!("Mismatched DisplayValue and path type!"),
         }
     }

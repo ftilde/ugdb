@@ -10,6 +10,7 @@ use super::super::{
 use base::{
     Cursor,
     ExtentEstimationWindow,
+    StyleModifier,
     Window,
 };
 
@@ -34,6 +35,8 @@ pub struct JsonViewer {
     value: DisplayValue,
     active_element: Path,
     indentation: u16,
+    active_focused_style: StyleModifier,
+    inactive_focused_style: StyleModifier,
 }
 
 impl JsonViewer {
@@ -42,6 +45,8 @@ impl JsonViewer {
             value: DisplayValue::from_json(&value),
             active_element: Path::Scalar, //Will be fixed ...
             indentation: 2,
+            active_focused_style: StyleModifier::new().invert().bold(true),
+            inactive_focused_style: StyleModifier::new().bold(true),
         };
         res.fix_active_element_path(); //... here!
         res
@@ -86,10 +91,14 @@ impl Widget for JsonViewer {
     fn space_demand(&self) -> Demand2D {
         let mut window = ExtentEstimationWindow::unbounded();
         //TODO: We may want to consider passing hints to space_demand as well for an accurate estimate
-        let hints = RenderingHints::default();
         {
             let mut cursor = Cursor::<ExtentEstimationWindow>::new(&mut window);
-            self.value.draw(&mut cursor, Some(&self.active_element), hints, self.indentation);
+            let info = RenderingInfo {
+                hints: RenderingHints::default(),
+                active_focused_style: self.active_focused_style,
+                inactive_focused_style: self.inactive_focused_style,
+            };
+            self.value.draw(&mut cursor, Some(&self.active_element), &info, self.indentation);
         }
         Demand2D {
             width: Demand::at_least(window.extent_x()),
@@ -98,7 +107,12 @@ impl Widget for JsonViewer {
     }
     fn draw(&mut self, mut window: Window, hints: RenderingHints) {
         let mut cursor = Cursor::new(&mut window);
-        self.value.draw(&mut cursor, Some(&self.active_element), hints, self.indentation);
+        let info = RenderingInfo {
+            hints: hints,
+            active_focused_style: self.active_focused_style,
+            inactive_focused_style: self.inactive_focused_style,
+        };
+        self.value.draw(&mut cursor, Some(&self.active_element), &info, self.indentation);
     }
 }
 

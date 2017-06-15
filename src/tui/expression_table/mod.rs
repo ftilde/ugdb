@@ -120,9 +120,9 @@ pub struct ExpressionTable {
 
 impl ExpressionTable {
     pub fn new() -> Self {
-        let row_sep_style = SeparatingStyle::AlternatingStyle(StyleModifier::new().bg_color(Color::Yellow));
+        let row_sep_style = SeparatingStyle::AlternatingStyle(StyleModifier::new().bg_color(Color::Black));
         let col_sep_style = SeparatingStyle::Draw(GraphemeCluster::try_from('│').unwrap());
-        let focused_style = StyleModifier::new().bold(true).underline(true);
+        let focused_style = StyleModifier::new().bold(true);
         let mut table = Table::new(row_sep_style, col_sep_style, focused_style);
         table.rows_mut().push(ExpressionRow::new()); //Invariant: always at least one line
         ExpressionTable {

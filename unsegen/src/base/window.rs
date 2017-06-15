@@ -486,6 +486,7 @@ impl<'c, 'g: 'c, T: 'c + CursorTarget> ::std::fmt::Write for Cursor<'c, 'g, T> {
     }
 }
 
+#[must_use]
 pub struct CursorRestorer<'a, 'c: 'a, 'g: 'c, T: 'c + CursorTarget> {
     cursor: &'a mut Cursor<'c, 'g, T>,
     saved_style_modifier: Option<StyleModifier>,

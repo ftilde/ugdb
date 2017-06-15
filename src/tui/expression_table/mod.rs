@@ -24,6 +24,7 @@ use unsegen::base::{
 use unsegen::input::{
     NavigateBehavior,
     EditBehavior,
+    ScrollBehavior,
     Key,
 };
 use input::{
@@ -87,8 +88,12 @@ impl ExpressionRow {
     }
 
     fn pass_event_to_result(&mut self, input: Input) -> Option<Input> {
-        //TODO
-        Some(input)
+        input.chain(ScrollBehavior::new(&mut self.result)
+                    .forwards_on(Key::PageDown)
+                    .backwards_on(Key::PageUp)
+                    .forwards_on(Key::Down)
+                    .backwards_on(Key::Up)
+                    ).finish()
     }
 }
 impl TableRow for ExpressionRow {

@@ -1,37 +1,30 @@
-extern crate json;
-
-use super::super::{
-    Demand,
-    Demand2D,
+use std::collections::BTreeMap;
+use widget::{
     RenderingHints,
-    Widget,
 };
 use base::{
     Cursor,
     CursorTarget,
-    ExtentEstimationWindow,
-    Window,
+    StyleModifier,
+};
+
+use json::{
+    JsonValue,
+};
+
+use json::object::{
+    Object,
 };
 
 use std::cmp::{
     min,
 };
 
-use std::collections::BTreeMap;
+use super::path::*;
 
-pub use self::json as json_ext;
-
-use self::json::{
-    JsonValue,
-};
-
-use self::json::object::{
-    Object,
-};
-
-struct DisplayObject {
-    members: BTreeMap<String, DisplayValue>,
-    extended: bool,
+pub struct DisplayObject {
+    pub members: BTreeMap<String, DisplayValue>,
+    pub extended: bool,
 }
 
 static OPEN_SYMBOL: &'static str = "[+]";
@@ -65,58 +58,59 @@ impl DisplayObject {
         result
     }
 
-    /*
-    fn space_demand(&self) -> Demand2D {
-        let mut height = Demand::zero();
-        let mut width = Demand::zero();
-        let assignment_width = Demand::exact(count_grapheme_clusters(": "));
-        if self.extended {
-            for (key, value) in self.members {
-                d2 = value.space_demand();
-                width = max(width, count_grapheme_clusters(key) + assignment_width + d2.width);
-                height += d2.height;
-            }
-            height += Demand::exact(2);
-            width += Demand::exact(INDENTATION);
-            width = max(width, Demand::exact(count_grapheme_clusters("{ ")) + CLOSE_SYMBOL_LEN); // "{ " + CLOSE_SYMBOL
-        } else {
-            height = Demand::exact(1);
-            width = Demand::exact(OPEN_SYMBOL_LEN);
-        }
-        Demand2D {
-            width: width,
-            height: width,
-        }
-    }
-    */
-
-    fn draw<T: CursorTarget>(&self, cursor: &mut Cursor<T>, hints: RenderingHints, indentation: u16) {
+    fn draw<T: CursorTarget>(&self, cursor: &mut Cursor<T>, path: Option<&ObjectPath>, hints: RenderingHints, indentation: u16) {
         use ::std::fmt::Write;
         if self.extended {
 
-            write!(cursor, "{{ {}", CLOSE_SYMBOL).unwrap();
+            {
+                write!(cursor, "{{ ").unwrap();
+                let mut cursor = cursor.save().style_modifier();
+                if let Some(&ObjectPath::Toggle) = path {
+                    cursor.apply_style_modifier(StyleModifier::new().bold(true).invert());
+                }
+                write!(cursor, "{}", CLOSE_SYMBOL).unwrap();
+            }
             {
                 let mut cursor = cursor.save().line_start_column();
                 cursor.move_line_start_column(indentation as i32);
                 for (key, value) in self.members.iter() {
                     cursor.wrap_line();
                     write!(cursor, "{}: ", key).unwrap();
-                    value.draw(&mut cursor, hints, indentation);
+                    let subpath = if let Some(&ObjectPath::Item(ref active_key, ref subpath)) = path {
+                        if active_key == key {
+                            Some(subpath.as_ref())
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+                    value.draw(&mut cursor, subpath, hints, indentation);
                     write!(cursor, ",").unwrap();
                 }
             }
             write!(cursor, "\n}}").unwrap();
         } else {
-            write!(cursor, "{{ {} }}", OPEN_SYMBOL).unwrap();
+            write!(cursor, "{{ ").unwrap();
+            let mut cursor = cursor.save().style_modifier();
+            if let Some(&ObjectPath::Toggle) = path {
+                cursor.apply_style_modifier(StyleModifier::new().bold(true).invert());
+            }
+            write!(cursor, "{}", OPEN_SYMBOL).unwrap();
+            write!(cursor, " }}").unwrap();
         }
     }
 }
 
-struct DisplayArray {
-    values: Vec<DisplayValue>,
-    num_extended: usize,
+pub struct DisplayArray {
+    pub values: Vec<DisplayValue>,
+    pub num_extended: usize,
 }
 impl DisplayArray {
+    pub fn has_more_to_show(&self) -> bool {
+        self.num_extended < self.values.len()
+    }
+
     fn replace(&self, values: &Vec<JsonValue>) -> Self {
         let mut result = DisplayArray {
             values: Vec::new(),
@@ -136,7 +130,7 @@ impl DisplayArray {
     fn from_json(values: &Vec<JsonValue>) -> Self {
         let mut result = DisplayArray {
             values: Vec::new(),
-            num_extended: 3,
+            num_extended: min(3, values.len()),
         };
         for value in values {
             result.values.push(DisplayValue::from_json(value));
@@ -144,27 +138,50 @@ impl DisplayArray {
         result
     }
 
-    fn draw<T: CursorTarget>(&self, cursor: &mut Cursor<T>, hints: RenderingHints, indentation: u16) {
+    fn draw<T: CursorTarget>(&self, cursor: &mut Cursor<T>, path: Option<&ArrayPath>, hints: RenderingHints, indentation: u16) {
         use ::std::fmt::Write;
         //TODO: support open/close/num_extended
-        write!(cursor, "[ {}", CLOSE_SYMBOL).unwrap();
+
+        write!(cursor, "[ ").unwrap();
+        if let Some(&ArrayPath::Shrink) = path {
+            let mut cursor = cursor.save().style_modifier();
+            cursor.apply_style_modifier(StyleModifier::new().bold(true).invert());
+            write!(cursor, "{}", CLOSE_SYMBOL).unwrap();
+        }
         {
             let mut cursor = cursor.save().line_start_column();
             cursor.move_line_start_column(indentation as i32);
-            for value in self.values.iter() {
+            for (i, value) in self.values.iter().enumerate() {
                 cursor.wrap_line();
-                value.draw(&mut cursor, hints, indentation);
+
+                let subpath = if let Some(&ArrayPath::Item(active_i, ref subpath)) = path {
+                    if i == active_i {
+                        Some(subpath.as_ref())
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
+                value.draw(&mut cursor, subpath, hints, indentation);
                 write!(cursor, ",",).unwrap();
             }
         }
         write!(cursor, "\n]").unwrap();
+        if let (Some(&ArrayPath::Grow), true) = (path, self.values.len() > self.num_extended)  {
+            let mut cursor = cursor.save().style_modifier();
+            cursor.apply_style_modifier(StyleModifier::new().bold(false).invert());
+            write!(cursor, "{}", OPEN_SYMBOL).unwrap();
+        }
     }
 }
 
 //TODO: we may want to support other types, but I'm not sure if that is necessary
-struct DisplayScalar {
-    value: String,
+pub struct DisplayScalar {
+    pub value: String,
 }
+
 impl DisplayScalar {
     fn replace<S: ToString>(&self, value: &S) -> Self {
         DisplayScalar {
@@ -178,19 +195,23 @@ impl DisplayScalar {
         }
     }
 
-    fn draw<T: CursorTarget>(&self, cursor: &mut Cursor<T>, _: RenderingHints) {
+    fn draw<T: CursorTarget>(&self, cursor: &mut Cursor<T>, active: bool, _: RenderingHints) {
+        let mut cursor = cursor.save().style_modifier();
+        if active {
+            cursor.apply_style_modifier(StyleModifier::new().bold(true).invert());
+        }
         cursor.write(&self.value);
     }
 }
 
-enum DisplayValue {
+pub enum DisplayValue {
     Scalar(DisplayScalar),
     Object(DisplayObject),
     Array(DisplayArray),
 }
 
 impl DisplayValue {
-    fn replace(&self, value: &JsonValue) -> Self {
+    pub fn replace(&self, value: &JsonValue) -> Self {
         match (self, value) {
             (&DisplayValue::Scalar(ref scalar), &JsonValue::Null)             => DisplayValue::Scalar(scalar.replace(&JsonValue::Null)),
             (&DisplayValue::Scalar(ref scalar), &JsonValue::Short(ref val))   => DisplayValue::Scalar(scalar.replace(&val)),
@@ -203,7 +224,7 @@ impl DisplayValue {
         }
     }
 
-    fn from_json(value: &JsonValue) -> Self {
+    pub fn from_json(value: &JsonValue) -> Self {
         match value {
             &JsonValue::Null             => DisplayValue::Scalar(DisplayScalar::from_json(&JsonValue::Null)),
             &JsonValue::Short(ref val)   => DisplayValue::Scalar(DisplayScalar::from_json(&val)),
@@ -214,53 +235,15 @@ impl DisplayValue {
             &JsonValue::Array(ref val)   => DisplayValue::Array(DisplayArray::from_json(&val)),
         }
     }
-    fn draw<T: CursorTarget>(&self, cursor: &mut Cursor<T>, hints: RenderingHints, indentation: u16) {
-        match self {
-            &DisplayValue::Scalar(ref scalar) => scalar.draw(cursor, hints),
-            &DisplayValue::Object(ref obj)    => obj.draw(cursor, hints, indentation),
-            &DisplayValue::Array(ref array)   => array.draw(cursor, hints, indentation),
+    pub fn draw<T: CursorTarget>(&self, cursor: &mut Cursor<T>, path: Option<&Path>, hints: RenderingHints, indentation: u16) {
+        match (self, path) {
+            (&DisplayValue::Scalar(ref scalar), Some(&Path::Scalar)) => scalar.draw(cursor, true, hints),
+            (&DisplayValue::Scalar(ref scalar), None) => scalar.draw(cursor, false, hints),
+            (&DisplayValue::Object(ref obj), Some(&Path::Object(ref op))) => obj.draw(cursor, Some(op), hints, indentation),
+            (&DisplayValue::Object(ref obj), None) => obj.draw(cursor, None, hints, indentation),
+            (&DisplayValue::Array(ref array), Some(&Path::Array(ref ap))) => array.draw(cursor, Some(ap), hints, indentation),
+            (&DisplayValue::Array(ref array), None) => array.draw(cursor, None, hints, indentation),
+            _ => panic!("Mismatched DisplayValue and path type!"),
         }
-    }
-}
-
-pub struct JsonViewer {
-    value: DisplayValue,
-    indentation: u16,
-}
-
-impl JsonViewer {
-    pub fn new(value: &JsonValue) -> Self {
-        JsonViewer {
-            value: DisplayValue::from_json(&value),
-            indentation: 2,
-        }
-    }
-
-    pub fn reset(&mut self, value: &JsonValue) {
-        self.value = DisplayValue::from_json(value);
-    }
-
-    pub fn replace(&mut self, value: &JsonValue) {
-        self.value = self.value.replace(value);
-    }
-}
-
-impl Widget for JsonViewer {
-    fn space_demand(&self) -> Demand2D {
-        let mut window = ExtentEstimationWindow::unbounded();
-        //TODO: We may want to consider passing hints to space_demand as well for an accurate estimate
-        let hints = RenderingHints::default();
-        {
-            let mut cursor = Cursor::<ExtentEstimationWindow>::new(&mut window);
-            self.value.draw(&mut cursor, hints, self.indentation);
-        }
-        Demand2D {
-            width: Demand::at_least(window.extent_x()),
-            height: Demand::exact(window.extent_y()),
-        }
-    }
-    fn draw(&mut self, mut window: Window, hints: RenderingHints) {
-        let mut cursor = Cursor::new(&mut window);
-        self.value.draw(&mut cursor, hints, self.indentation);
     }
 }

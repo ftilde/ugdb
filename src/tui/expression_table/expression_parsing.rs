@@ -175,13 +175,18 @@ impl_rdp! {
 }
 
 pub fn parse_gdb_value(result_string: &str) -> JsonValue {
-    let mut parser = Rdp::new(StringInput::new(&result_string));
-    parser.json();
-    //println!("{:?}", parser.queue_with_captures());
-    //println!("{:?}", parser.expected());
-    parser.get_json()
+    let parse_result = ::std::panic::catch_unwind(|| {
+        let mut parser = Rdp::new(StringInput::new(&result_string));
+        parser.json();
+        //println!("{:?}", parser.queue_with_captures());
+        //println!("{:?}", parser.expected());
+        parser.get_json()
+    });
 
-    //JsonValue::String(result_string.to_owned())
+    match parse_result {
+        Ok(res) => res,
+        Err(_) => JsonValue::String(format!("*Error parsing*: {}", result_string))
+    }
 }
 
 #[cfg(test)]

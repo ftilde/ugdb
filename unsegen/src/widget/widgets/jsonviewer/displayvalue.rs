@@ -47,6 +47,10 @@ static OPEN_SYMBOL: &'static str = "[+]";
 static CLOSE_SYMBOL: &'static str = "[-]";
 
 impl DisplayObject {
+    pub fn toggle_visibility(&mut self) {
+        self.extended ^= true;
+    }
+
     fn replace(&self, obj: &Object) -> Self {
         let mut result = DisplayObject {
             members: BTreeMap::new(),
@@ -123,6 +127,14 @@ pub struct DisplayArray {
     pub num_extended: usize,
 }
 impl DisplayArray {
+    pub fn grow(&mut self) {
+        self.num_extended += 1;
+        assert!(self.num_extended <= self.values.len());
+    }
+    pub fn shrink(&mut self) {
+        self.num_extended -= 1;
+    }
+
     pub fn has_more_to_show(&self) -> bool {
         self.num_extended < self.values.len()
     }
@@ -266,6 +278,33 @@ impl DisplayValue {
             (&DisplayValue::Array(ref array), Some(&Path::Array(ref ap))) => array.draw(cursor, Some(ap), info, indentation),
             (&DisplayValue::Array(ref array), None) => array.draw(cursor, None, info, indentation),
             _ => panic!("Mismatched DisplayValue and path type!"),
+        }
+    }
+}
+
+#[cfg(test)]
+impl DisplayValue {
+
+    pub fn unwrap_scalar_ref(&self) -> &DisplayScalar {
+        if let &DisplayValue::Scalar(ref val) = self {
+            val
+        } else {
+            panic!("Tried to unwrap non-scalar DisplayValue");
+        }
+    }
+
+    pub fn unwrap_object_ref(&self) -> &DisplayObject {
+        if let &DisplayValue::Object(ref val) = self {
+            val
+        } else {
+            panic!("Tried to unwrap non-object DisplayValue");
+        }
+    }
+    pub fn unwrap_array_ref(&self) -> &DisplayArray {
+        if let &DisplayValue::Array(ref val) = self {
+            val
+        } else {
+            panic!("Tried to unwrap non-array DisplayValue");
         }
     }
 }

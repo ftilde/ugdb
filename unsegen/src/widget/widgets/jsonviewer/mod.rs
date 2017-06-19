@@ -63,7 +63,7 @@ impl JsonViewer {
     }
 
     pub fn select_next(&mut self) -> Result<(),()> {
-        if let Some(new_path) = find_next_path(self.active_element.clone(), &self.value) {
+        if let Some(new_path) = self.active_element.clone().find_next_path(&self.value) {
             self.active_element = new_path;
             Ok(())
         } else {
@@ -72,7 +72,7 @@ impl JsonViewer {
     }
 
     pub fn select_previous(&mut self) -> Result<(),()> {
-        if let Some(new_path) = find_previous_path(self.active_element.clone(), &self.value) {
+        if let Some(new_path) = self.active_element.clone().find_previous_path(&self.value) {
             self.active_element = new_path;
             Ok(())
         } else {
@@ -83,7 +83,11 @@ impl JsonViewer {
     fn fix_active_element_path(&mut self) {
         let mut tmp = Path::Scalar;
         ::std::mem::swap(&mut self.active_element, &mut tmp);
-        self.active_element = fix_path_for_value(tmp, &self.value)
+        self.active_element = tmp.fix_path_for_value(&self.value)
+    }
+
+    pub fn toggle_active_element(&mut self) -> Result<(),()> {
+        self.active_element.find_and_act_on_element(&mut self.value)
     }
 }
 

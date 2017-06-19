@@ -18,6 +18,10 @@ impl Input {
         };
         chain_begin.chain(behavior)
     }
+
+    pub fn matches<T: ToEvent>(&self, e: T) -> bool {
+        self.event == e.to_event()
+    }
 }
 
 pub struct InputChain {

@@ -93,7 +93,19 @@ impl ExpressionRow {
                     .backwards_on(Key::PageUp)
                     .forwards_on(Key::Down)
                     .backwards_on(Key::Up)
-                    ).finish()
+                    )
+            .chain(|evt: Input| {
+                if evt.matches(Key::Char(' ')) {
+                    if self.result.toggle_active_element().is_ok() {
+                        None
+                    } else {
+                        Some(evt)
+                    }
+                } else {
+                    Some(evt)
+                }
+            })
+            .finish()
     }
 }
 impl TableRow for ExpressionRow {
@@ -134,7 +146,7 @@ impl ExpressionTable {
             .chain(|i: Input| match i.event {
                 _ => Some(i),
             })
-            .chain(NavigateBehavior::new(&mut self.table)
+            .chain(NavigateBehavior::new(&mut self.table) //TODO: Fix this properly in lineedit
                  .down_on(Key::Char('\n'))
                  )
             .chain(self.table.current_cell_behavior())
@@ -183,7 +195,7 @@ impl ExpressionTable {
                     },
                 }
             };
-            row.result.reset(&result);
+            row.result.replace(&result);
         }
     }
 }

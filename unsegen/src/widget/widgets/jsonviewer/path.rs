@@ -72,69 +72,6 @@ fn first_path_in(value: &DisplayValue) -> Path {
         },
     }
 }
-
-pub fn find_next_path(path: Path, value: &DisplayValue) -> Option<Path> {
-    match value {
-        &DisplayValue::Array(ref array) => {
-            match path.unwrap_array() {
-                ArrayPath::Item(i, subpath) => {
-                    if let Some(new_sub_path) = find_next_path(*subpath, &array.values[i]) {
-                        Some(Path::Array(ArrayPath::Item(i, Box::new(new_sub_path))))
-                    } else {
-                        let potential_new_i = i+1;
-                        if let (true, Some(next)) = (potential_new_i < array.num_extended, array.values.get(potential_new_i)) {
-                            Some(Path::Array(ArrayPath::Item(potential_new_i, Box::new(first_path_in(&*next)))))
-                        } else {
-                            if array.values.len() > array.num_extended {
-                                Some(Path::Array(ArrayPath::Grow))
-                            } else {
-                                None
-                            }
-                        }
-                    }
-                },
-                ArrayPath::Shrink => {
-                    Some(Path::Array(if let (true, Some(first)) = (array.num_extended > 0, array.values.first()) {
-                        ArrayPath::Item(0, Box::new(first_path_in(&*first)))
-                    } else {
-                        ArrayPath::Grow
-                    }))
-                },
-                ArrayPath::Grow => {
-                    None
-                },
-            }
-        },
-
-        &DisplayValue::Object(ref obj) => {
-            match path.unwrap_object() {
-                ObjectPath::Item(key, subpath) => {
-                    if let Some(new_sub_path) = find_next_path(*subpath, &obj.members[&key]) {
-                        Some(Path::Object(ObjectPath::Item(key, Box::new(new_sub_path))))
-                    } else {
-                        if let Some((first_key, first_val)) = obj.members.iter().skip_while(|&(k, _)| *k != key).skip(1).next() {
-                            Some(Path::Object(ObjectPath::Item(first_key.to_string(), Box::new(first_path_in(first_val)))))
-                        } else {
-                            None
-                        }
-                    }
-                },
-                ObjectPath::Toggle => {
-                    if let Some((first_key, first_val)) = obj.members.iter().next() {
-                        Some(Path::Object(ObjectPath::Item(first_key.to_string(), Box::new(first_path_in(first_val)))))
-                    } else {
-                        None
-                    }
-                },
-            }
-        },
-
-        &DisplayValue::Scalar(_) => {
-            None
-        },
-    }
-}
-
 fn last_path_in(value: &DisplayValue) -> Path {
     match value {
         &DisplayValue::Array(ref array) => {
@@ -160,126 +97,224 @@ fn last_path_in(value: &DisplayValue) -> Path {
         },
     }
 }
-pub fn find_previous_path(path: Path, value: &DisplayValue) -> Option<Path> {
-    match value {
-        &DisplayValue::Array(ref array) => {
-            match path.unwrap_array() {
-                ArrayPath::Item(i, subpath) => {
-                    if let Some(new_sub_path) = find_previous_path(*subpath, &array.values[i]) {
-                        Some(Path::Array(ArrayPath::Item(i, Box::new(new_sub_path))))
-                    } else {
-                        if let Some(next) = i.checked_sub(1).and_then(|new_i| array.values.get(new_i)) {
-                            Some(Path::Array(ArrayPath::Item(i-1, Box::new(last_path_in(&*next)))))
+
+impl Path {
+
+    pub fn find_next_path(self, value: &DisplayValue) -> Option<Self> {
+        match value {
+            &DisplayValue::Array(ref array) => {
+                match self.unwrap_array() {
+                    ArrayPath::Item(i, subpath) => {
+                        if let Some(new_sub_path) = subpath.find_next_path(&array.values[i]) {
+                            Some(Path::Array(ArrayPath::Item(i, Box::new(new_sub_path))))
                         } else {
-                            Some(Path::Array(ArrayPath::Shrink))
-                        }
-                    }
-                },
-                ArrayPath::Shrink => {
-                    None
-                },
-                ArrayPath::Grow => {
-                    Some(Path::Array(if let (true, Some(first)) = (array.num_extended > 0, array.values.iter().nth(array.num_extended-1)) {
-                        ArrayPath::Item(array.num_extended-1, Box::new(last_path_in(&*first)))
-                    } else {
-                        ArrayPath::Shrink
-                    }))
-                },
-            }
-        },
-
-        &DisplayValue::Object(ref obj) => {
-            match path.unwrap_object() {
-                ObjectPath::Item(key, subpath) => {
-                    if let Some(new_sub_path) = find_previous_path(*subpath, &obj.members[&key]) {
-                        Some(Path::Object(ObjectPath::Item(key, Box::new(new_sub_path))))
-                    } else {
-                        if let Some((last_key, last_val)) = obj.members.iter().rev().skip_while(|&(k, _)| *k != key).skip(1).next() {
-                            Some(Path::Object(ObjectPath::Item(last_key.to_string(), Box::new(last_path_in(last_val)))))
-                        } else {
-                            Some(Path::Object(ObjectPath::Toggle))
-                        }
-                    }
-                },
-                ObjectPath::Toggle => {
-                    None
-                },
-            }
-        },
-
-        &DisplayValue::Scalar(_) => {
-            None
-        },
-    }
-}
-
-pub fn fix_path_for_value(path: Path, value: &DisplayValue) -> Path {
-    match value { // "E0009: cannot bind by-move and by-ref in the same pattern" is really annoying...
-        &DisplayValue::Array(ref arr) => {
-            match path {
-                Path::Array(array_path) => {
-                    Path::Array(match array_path {
-                        ArrayPath::Item(i, subpath) => {
-                            if arr.num_extended >= i {
-                                let new_sub_path = fix_path_for_value(*subpath, &arr.values[i]);
-                                ArrayPath::Item(i, Box::new(new_sub_path))
+                            let potential_new_i = i+1;
+                            if let (true, Some(next)) = (potential_new_i < array.num_extended, array.values.get(potential_new_i)) {
+                                Some(Path::Array(ArrayPath::Item(potential_new_i, Box::new(first_path_in(&*next)))))
                             } else {
-                                if arr.values.len() > i {
-                                    ArrayPath::Grow
+                                if array.values.len() > array.num_extended {
+                                    Some(Path::Array(ArrayPath::Grow))
                                 } else {
-                                    let size = arr.values.len();
-                                    if size > 0 {
-                                        let new_i = size - 1;
-                                        let new_sub_path = fix_path_for_value(*subpath, &arr.values[new_i]);
-                                        ArrayPath::Item(new_i, Box::new(new_sub_path))
-                                    } else {
-                                        ArrayPath::Shrink
-                                    }
+                                    None
                                 }
                             }
-                        },
-                        ArrayPath::Grow => {
-                            if arr.num_extended < arr.values.len() {
-                                ArrayPath::Grow
+                        }
+                    },
+                    ArrayPath::Shrink => {
+                        Some(Path::Array(if let (true, Some(first)) = (array.num_extended > 0, array.values.first()) {
+                            ArrayPath::Item(0, Box::new(first_path_in(&*first)))
+                        } else {
+                            ArrayPath::Grow
+                        }))
+                    },
+                    ArrayPath::Grow => {
+                        None
+                    },
+                }
+            },
+
+            &DisplayValue::Object(ref obj) => {
+                match self.unwrap_object() {
+                    ObjectPath::Item(key, subpath) => {
+                        if let Some(new_sub_path) = subpath.find_next_path(&obj.members[&key]) {
+                            Some(Path::Object(ObjectPath::Item(key, Box::new(new_sub_path))))
+                        } else {
+                            if let Some((first_key, first_val)) = obj.members.iter().skip_while(|&(k, _)| *k != key).skip(1).next() {
+                                Some(Path::Object(ObjectPath::Item(first_key.to_string(), Box::new(first_path_in(first_val)))))
                             } else {
-                                ArrayPath::Shrink
+                                None
                             }
-                        },
-                        ArrayPath::Shrink => {
+                        }
+                    },
+                    ObjectPath::Toggle => {
+                        if let Some((first_key, first_val)) = obj.members.iter().next() {
+                            Some(Path::Object(ObjectPath::Item(first_key.to_string(), Box::new(first_path_in(first_val)))))
+                        } else {
+                            None
+                        }
+                    },
+                }
+            },
+
+            &DisplayValue::Scalar(_) => {
+                None
+            },
+        }
+    }
+
+    pub fn find_previous_path(self, value: &DisplayValue) -> Option<Self> {
+        match value {
+            &DisplayValue::Array(ref array) => {
+                match self.unwrap_array() {
+                    ArrayPath::Item(i, subpath) => {
+                        if let Some(new_sub_path) = subpath.find_previous_path(&array.values[i]) {
+                            Some(Path::Array(ArrayPath::Item(i, Box::new(new_sub_path))))
+                        } else {
+                            if let Some(next) = i.checked_sub(1).and_then(|new_i| array.values.get(new_i)) {
+                                Some(Path::Array(ArrayPath::Item(i-1, Box::new(last_path_in(&*next)))))
+                            } else {
+                                Some(Path::Array(ArrayPath::Shrink))
+                            }
+                        }
+                    },
+                    ArrayPath::Shrink => {
+                        None
+                    },
+                    ArrayPath::Grow => {
+                        Some(Path::Array(if let (true, Some(first)) = (array.num_extended > 0, array.values.iter().nth(array.num_extended-1)) {
+                            ArrayPath::Item(array.num_extended-1, Box::new(last_path_in(&*first)))
+                        } else {
                             ArrayPath::Shrink
-                        },
-                    })
-                },
-                _ => {
-                    Path::Array(ArrayPath::Shrink)
-                },
-            }
-        },
-        &DisplayValue::Object(ref obj) => {
-            match path {
-                Path::Object(obj_path) => {
-                    Path::Object(match obj_path {
-                        ObjectPath::Item(key, subpath) => {
-                            if let Some(val) = obj.members.get(&key) {
-                                let new_sub_path = fix_path_for_value(*subpath, val);
-                                ObjectPath::Item(key, Box::new(new_sub_path))
+                        }))
+                    },
+                }
+            },
+
+            &DisplayValue::Object(ref obj) => {
+                match self.unwrap_object() {
+                    ObjectPath::Item(key, subpath) => {
+                        if let Some(new_sub_path) = subpath.find_previous_path(&obj.members[&key]) {
+                            Some(Path::Object(ObjectPath::Item(key, Box::new(new_sub_path))))
+                        } else {
+                            if let Some((last_key, last_val)) = obj.members.iter().rev().skip_while(|&(k, _)| *k != key).skip(1).next() {
+                                Some(Path::Object(ObjectPath::Item(last_key.to_string(), Box::new(last_path_in(last_val)))))
                             } else {
-                                ObjectPath::Toggle
+                                Some(Path::Object(ObjectPath::Toggle))
                             }
-                        },
-                        ObjectPath::Toggle => {
-                            ObjectPath::Toggle
-                        },
-                    })
-                },
-                _ => {
-                    Path::Object(ObjectPath::Toggle)
-                },
-            }
-        },
-        &DisplayValue::Scalar(_) => {
-            Path::Scalar
-        },
+                        }
+                    },
+                    ObjectPath::Toggle => {
+                        None
+                    },
+                }
+            },
+
+            &DisplayValue::Scalar(_) => {
+                None
+            },
+        }
+    }
+
+    pub fn fix_path_for_value(self, value: &DisplayValue) -> Self {
+        match value { // "E0009: cannot bind by-move and by-ref in the same pattern" is really annoying...
+            &DisplayValue::Array(ref arr) => {
+                match self {
+                    Path::Array(array_path) => {
+                        Path::Array(match array_path {
+                            ArrayPath::Item(i, subpath) => {
+                                if arr.num_extended >= i {
+                                    let new_sub_path = subpath.fix_path_for_value(&arr.values[i]);
+                                    ArrayPath::Item(i, Box::new(new_sub_path))
+                                } else {
+                                    if arr.values.len() > i {
+                                        ArrayPath::Grow
+                                    } else {
+                                        let size = arr.values.len();
+                                        if size > 0 {
+                                            let new_i = size - 1;
+                                            let new_sub_path = subpath.fix_path_for_value(&arr.values[new_i]);
+                                            ArrayPath::Item(new_i, Box::new(new_sub_path))
+                                        } else {
+                                            ArrayPath::Shrink
+                                        }
+                                    }
+                                }
+                            },
+                            ArrayPath::Grow => {
+                                if arr.num_extended < arr.values.len() {
+                                    ArrayPath::Grow
+                                } else {
+                                    ArrayPath::Shrink
+                                }
+                            },
+                            ArrayPath::Shrink => {
+                                ArrayPath::Shrink
+                            },
+                        })
+                    },
+                    _ => {
+                        Path::Array(ArrayPath::Shrink)
+                    },
+                }
+            },
+            &DisplayValue::Object(ref obj) => {
+                match self {
+                    Path::Object(obj_path) => {
+                        Path::Object(match obj_path {
+                            ObjectPath::Item(key, subpath) => {
+                                if let Some(val) = obj.members.get(&key) {
+                                    let new_sub_path = subpath.fix_path_for_value(val);
+                                    ObjectPath::Item(key, Box::new(new_sub_path))
+                                } else {
+                                    ObjectPath::Toggle
+                                }
+                            },
+                            ObjectPath::Toggle => {
+                                ObjectPath::Toggle
+                            },
+                        })
+                    },
+                    _ => {
+                        Path::Object(ObjectPath::Toggle)
+                    },
+                }
+            },
+            &DisplayValue::Scalar(_) => {
+                Path::Scalar
+            },
+        }
+    }
+
+    pub fn find_and_act_on_element(&self, value: &mut DisplayValue) -> Result<(), ()> {
+        match (value, self) {
+            (&mut DisplayValue::Array(ref mut array), &Path::Array(ArrayPath::Item(i, ref subpath))) => {
+                subpath.find_and_act_on_element(&mut array.values[i])
+            },
+            (&mut DisplayValue::Array(ref mut array), &Path::Array(ArrayPath::Grow)) => {
+                array.grow();
+                Ok(())
+            },
+            (&mut DisplayValue::Array(ref mut array), &Path::Array(ArrayPath::Shrink)) => {
+                array.shrink();
+                Ok(())
+            },
+
+            (&mut DisplayValue::Object(ref mut obj), &Path::Object(ObjectPath::Item(ref key, ref subpath))) => {
+                subpath.find_and_act_on_element(obj.members.get_mut(key).unwrap())
+            },
+            (&mut DisplayValue::Object(ref mut obj), &Path::Object(ObjectPath::Toggle)) => {
+                obj.toggle_visibility();
+                Ok(())
+            },
+
+            (&mut DisplayValue::Scalar(_), &Path::Scalar) => {
+                // We do not do anything with scalars.
+                Err(())
+            },
+            _ => {
+                panic!("Path does not match value");
+            },
+        }
     }
 }
 
@@ -290,7 +325,7 @@ mod test {
 
     fn aeq_next_path<P: Into<Option<Path>>>(val: JsonValue, before: Path, expected_after: P) {
         let expected_after = expected_after.into();
-        let real_after = find_next_path(before, &DisplayValue::from_json(&val));
+        let real_after = before.find_next_path(&DisplayValue::from_json(&val));
         assert_eq!(real_after, expected_after);
     }
 
@@ -313,7 +348,7 @@ mod test {
 
     fn aeq_previous_path<P: Into<Option<Path>>>(val: JsonValue, before: Path, expected_after: P) {
         let expected_after = expected_after.into();
-        let real_after = find_previous_path(before, &DisplayValue::from_json(&val));
+        let real_after = before.find_previous_path(&DisplayValue::from_json(&val));
         assert_eq!(real_after, expected_after);
     }
 
@@ -332,5 +367,25 @@ mod test {
         aeq_previous_path(array!{ 0, 1, 2, 3, 4}, Path::array_grow(), Path::scalar().array(2));
 
         aeq_previous_path(object!{ "bar" => array!{ 1 }, "foo" => "f"}, Path::scalar().object("foo"), Path::scalar().array(0).object("bar"));
+    }
+
+    fn aeq_find_and_act_on_element<F: FnOnce(&DisplayValue) -> bool>(val: JsonValue, path: Path, action_valid: F, should_error: bool) {
+        let mut val = DisplayValue::from_json(&val);
+        assert!(should_error == path.find_and_act_on_element(&mut val).is_err());
+        assert!(action_valid(&val));
+    }
+    #[test]
+    fn test_find_and_act_on_element() {
+        aeq_find_and_act_on_element(JsonValue::String("foo".to_owned()), Path::scalar(), |v| v.unwrap_scalar_ref().value == "foo", true);
+
+        aeq_find_and_act_on_element(array!{ 0, 1, 2, 3, 4}, Path::array_grow(), |v| v.unwrap_array_ref().num_extended == 4, false);
+        aeq_find_and_act_on_element(array!{ 0, 1, 2, 3, 4}, Path::array_shrink(), |v| v.unwrap_array_ref().num_extended == 2, false);
+
+        aeq_find_and_act_on_element(object!{ "bar" => "b", "foo" => "f"}, Path::object_toggle(), |v| !v.unwrap_object_ref().extended, false);
+
+        aeq_find_and_act_on_element(object!{ "bar" => array!{0, 1, 2, 3, 4}, "foo" => "f"}, Path::array_grow().object("bar"), |v| v.unwrap_object_ref().members["bar"].unwrap_array_ref().num_extended == 4, false);
+        aeq_find_and_act_on_element(object!{ "bar" => array!{0, 1, 2, 3, 4}, "foo" => "f"}, Path::array_shrink().object("bar"), |v| v.unwrap_object_ref().members["bar"].unwrap_array_ref().num_extended == 2, false);
+
+        aeq_find_and_act_on_element(array!{ object!{ "bar" => "b", "foo" => "f"}, 1, 2, 3}, Path::object_toggle().array(0), |v| !v.unwrap_array_ref().values[0].unwrap_object_ref().extended, false);
     }
 }

@@ -112,11 +112,13 @@ impl DisplayObject {
             write!(cursor, "\n}}").unwrap();
         } else {
             write!(cursor, "{{ ").unwrap();
-            let mut cursor = cursor.save().style_modifier();
-            if let Some(&ObjectPath::Toggle) = path {
-                cursor.apply_style_modifier(info.get_focused_style());
+            {
+                let mut cursor = cursor.save().style_modifier();
+                if let Some(&ObjectPath::Toggle) = path {
+                    cursor.apply_style_modifier(info.get_focused_style());
+                }
+                write!(cursor, "{}", OPEN_SYMBOL).unwrap();
             }
-            write!(cursor, "{}", OPEN_SYMBOL).unwrap();
             write!(cursor, " }}").unwrap();
         }
     }

@@ -1,0 +1,10 @@
+[package]
+name = "unsegen-jsonviewer"
+version = "0.1.0"
+authors = ["ftilde <ftilde@protonmail.com>"]
+
+[dependencies]
+json = "^0.11"
+
+[dependencies.unsegen]
+path = "../"

@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
-use widget::{
+use unsegen::widget::{
     RenderingHints,
 };
-use base::{
+use unsegen::base::{
     Cursor,
     CursorTarget,
     StyleModifier,

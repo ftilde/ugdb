@@ -1,4 +1,4 @@
-use unsegen::widget::widgets::json_ext::{
+use unsegen_jsonviewer::json_ext::{
     JsonValue,
     object,
     Array,

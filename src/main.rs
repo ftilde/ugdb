@@ -1,12 +1,17 @@
 #![recursion_limit = "200"] // See https://github.com/pest-parser/pest
+
 #[macro_use]
 extern crate chan;
 extern crate chan_signal;
 extern crate gdbmi;
-#[macro_use]
-extern crate pest; // For gdb structure parsing
+
 extern crate unsegen;
-extern crate unicode_width;
+
+extern crate unsegen_jsonviewer; // For ExpressionTable
+#[macro_use]
+extern crate pest; // For ExpressionTable (gdb structure parsing)
+
+extern crate unicode_width; // For AssemblyLineDecorator
 
 // These are used because (due to lifetime issues) we have to manage SyntaxSet, TermRead etc. ourselves
 // TODO: maybe reexport types in unsegen?

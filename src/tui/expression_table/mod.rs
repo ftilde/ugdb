@@ -1,10 +1,12 @@
 use unsegen::widget::widgets::{
     Column,
-    json_ext,
-    JsonViewer,
     LineEdit,
     Table,
     TableRow,
+};
+use unsegen_jsonviewer::{
+    json_ext,
+    JsonViewer,
 };
 use self::json_ext::{
     JsonValue,

@@ -1,25 +1,38 @@
-//#[macro_use]
-//extern crate json;
+extern crate unsegen;
 
-use super::super::{
+#[cfg(test)] //Only tests use macros. Otherwise we get unused_imports warnings.
+#[macro_use]
+extern crate json;
+
+#[cfg(not(test))]
+extern crate json;
+
+use unsegen::widget::{
     Demand,
     Demand2D,
     RenderingHints,
     Widget,
 };
-use base::{
+use unsegen::base::{
     Cursor,
     ExtentEstimationWindow,
     StyleModifier,
     Window,
 };
 
-use input::{
+use unsegen::input::{
     Scrollable,
     OperationResult,
 };
 
-pub use json as json_ext;
+// Convenience reexport (We may want to add more items later):
+pub mod json_ext {
+    pub use json::{
+        Array,
+        JsonValue,
+        object,
+    };
+}
 
 use json::{
     JsonValue,

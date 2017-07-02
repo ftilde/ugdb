@@ -70,7 +70,7 @@ impl DisplayObject {
     fn from_json(obj: &Object) -> Self {
         let mut result = DisplayObject {
             members: BTreeMap::new(),
-            extended: true, //TODO: change default to false
+            extended: true,
         };
         for (key, value) in obj.iter() {
             result.members.insert(key.to_string(), DisplayValue::from_json(value));
@@ -126,9 +126,13 @@ impl DisplayObject {
 
 pub struct DisplayArray {
     pub values: Vec<DisplayValue>,
+    pub extended: bool,
     pub num_extended: usize,
 }
 impl DisplayArray {
+    pub fn toggle_visibility(&mut self) {
+        self.extended ^= true;
+    }
     pub fn grow(&mut self) {
         self.num_extended += 1;
         assert!(self.num_extended <= self.values.len());
@@ -137,13 +141,18 @@ impl DisplayArray {
         self.num_extended -= 1;
     }
 
-    pub fn has_more_to_show(&self) -> bool {
+    pub fn can_grow(&self) -> bool {
         self.num_extended < self.values.len()
+    }
+
+    pub fn can_shrink(&self) -> bool {
+        self.num_extended > 0
     }
 
     fn replace(&self, values: &Vec<JsonValue>) -> Self {
         let mut result = DisplayArray {
             values: Vec::new(),
+            extended: self.extended,
             num_extended: min(self.num_extended, values.len()),
         };
 
@@ -160,6 +169,7 @@ impl DisplayArray {
     fn from_json(values: &Vec<JsonValue>) -> Self {
         let mut result = DisplayArray {
             values: Vec::new(),
+            extended: true,
             num_extended: min(3, values.len()),
         };
         for value in values {
@@ -170,45 +180,68 @@ impl DisplayArray {
 
     fn draw<T: CursorTarget>(&self, cursor: &mut Cursor<T>, path: Option<&ArrayPath>, info: &RenderingInfo, indentation: u16) {
         use ::std::fmt::Write;
-        //TODO: support open/close/num_extended
 
-        write!(cursor, "[ ").unwrap();
-        {
-            write!(cursor, " ").unwrap();
-            let mut cursor = cursor.save().style_modifier();
-            if let Some(&ArrayPath::Shrink) = path {
-                cursor.apply_style_modifier(info.get_focused_style());
+        if self.extended {
+            write!(cursor, " [").unwrap();
+            {
+                write!(cursor, " ").unwrap();
+                let mut cursor = cursor.save().style_modifier();
+                if let Some(&ArrayPath::Toggle) = path {
+                    cursor.apply_style_modifier(info.get_focused_style());
+                }
+                write!(cursor, "{}", CLOSE_SYMBOL).unwrap();
             }
-            write!(cursor, "{}", CLOSE_SYMBOL).unwrap();
-        }
-        {
-            let mut cursor = cursor.save().line_start_column();
-            cursor.move_line_start_column(indentation as i32);
-            for (i, value) in self.values.iter().enumerate().take(self.num_extended) {
-                cursor.wrap_line();
+            {
+                let mut cursor = cursor.save().line_start_column();
+                cursor.move_line_start_column(indentation as i32);
+                for (i, value) in self.values.iter().enumerate().take(self.num_extended) {
+                    cursor.wrap_line();
 
-                let subpath = if let Some(&ArrayPath::Item(active_i, ref subpath)) = path {
-                    if i == active_i {
-                        Some(subpath.as_ref())
+                    let subpath = if let Some(&ArrayPath::Item(active_i, ref subpath)) = path {
+                        if i == active_i {
+                            Some(subpath.as_ref())
+                        } else {
+                            None
+                        }
                     } else {
                         None
-                    }
-                } else {
-                    None
-                };
+                    };
 
-                value.draw(&mut cursor, subpath, info, indentation);
-                write!(cursor, ",",).unwrap();
+                    value.draw(&mut cursor, subpath, info, indentation);
+                    write!(cursor, ",",).unwrap();
+                }
             }
-        }
-        write!(cursor, "\n]").unwrap();
-        if self.has_more_to_show() {
-            write!(cursor, " ").unwrap();
-            let mut cursor = cursor.save().style_modifier();
-            if let (Some(&ArrayPath::Grow), true) = (path, self.values.len() > self.num_extended)  {
-                cursor.apply_style_modifier(info.get_focused_style());
+            write!(cursor, "\n] <").unwrap();
+            if self.can_shrink() {
+                let mut cursor = cursor.save().style_modifier();
+                if let Some(&ArrayPath::Shrink) = path {
+                    cursor.apply_style_modifier(info.get_focused_style());
+                }
+                write!(cursor, "-").unwrap();
+            } else {
+                write!(cursor, " ").unwrap();
             }
-            write!(cursor, "{}", OPEN_SYMBOL).unwrap();
+            write!(cursor, "{}/{}", self.num_extended, self.values.len()).unwrap();
+            if self.can_grow() {
+                let mut cursor = cursor.save().style_modifier();
+                if let Some(&ArrayPath::Grow) = path {
+                    cursor.apply_style_modifier(info.get_focused_style());
+                }
+                write!(cursor, "+").unwrap();
+            } else {
+                write!(cursor, " ").unwrap();
+            }
+            write!(cursor, ">").unwrap();
+        } else {
+            write!(cursor, "[ ").unwrap();
+            {
+                let mut cursor = cursor.save().style_modifier();
+                if let Some(&ArrayPath::Toggle) = path {
+                    cursor.apply_style_modifier(info.get_focused_style());
+                }
+                write!(cursor, "{}", OPEN_SYMBOL).unwrap();
+            }
+            write!(cursor, " ]").unwrap();
         }
     }
 }
@@ -302,8 +335,23 @@ impl DisplayValue {
             panic!("Tried to unwrap non-object DisplayValue");
         }
     }
+    pub fn unwrap_object_ref_mut(&mut self) -> &mut DisplayObject {
+        if let &mut DisplayValue::Object(ref mut val) = self {
+            val
+        } else {
+            panic!("Tried to unwrap non-object DisplayValue");
+        }
+    }
+
     pub fn unwrap_array_ref(&self) -> &DisplayArray {
         if let &DisplayValue::Array(ref val) = self {
+            val
+        } else {
+            panic!("Tried to unwrap non-array DisplayValue");
+        }
+    }
+    pub fn unwrap_array_ref_mut(&mut self) -> &mut DisplayArray {
+        if let &mut DisplayValue::Array(ref mut val) = self {
             val
         } else {
             panic!("Tried to unwrap non-array DisplayValue");

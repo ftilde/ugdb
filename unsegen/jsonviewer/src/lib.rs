@@ -100,7 +100,9 @@ impl JsonViewer {
     }
 
     pub fn toggle_active_element(&mut self) -> Result<(),()> {
-        self.active_element.find_and_act_on_element(&mut self.value)
+        let res = self.active_element.find_and_act_on_element(&mut self.value);
+        self.fix_active_element_path();
+        res
     }
 }
 

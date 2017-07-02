@@ -1,6 +1,3 @@
-Add ExpressionTable:
- - JsonViewer
-
 Add Container management:
  - Top level layouting as a tree of containers (cf. i3)
  - Different kinds of containers (hsplit, vsplit, widget (or extension), grid?

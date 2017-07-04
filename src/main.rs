@@ -7,6 +7,7 @@ extern crate gdbmi;
 
 extern crate unsegen;
 
+extern crate unsegen_terminal;
 extern crate unsegen_jsonviewer; // For ExpressionTable
 #[macro_use]
 extern crate pest; // For ExpressionTable (gdb structure parsing)
@@ -17,14 +18,6 @@ extern crate unicode_width; // For AssemblyLineDecorator
 // TODO: maybe reexport types in unsegen?
 extern crate syntect;
 extern crate termion;
-
-// For pty
-extern crate libc;
-
-//For gdbmi AND pty
-extern crate nix;
-
-mod pty;
 
 mod tui;
 mod input;
@@ -49,7 +42,7 @@ use unsegen::base::{
     Terminal,
 };
 
-fn pty_output_loop(sink: Sender<Vec<u8>>, mut reader: pty::PTYOutput) {
+fn pty_output_loop(sink: Sender<Vec<u8>>, mut reader: unsegen_terminal::PTYOutput) {
     use ::std::io::Read;
 
     let mut buffer = [0; 1024];
@@ -74,7 +67,7 @@ fn main() {
     // (See chan_signal documentation)
     let signal_event_source = chan_signal::notify(&[Signal::WINCH]);
 
-    let process_pty = pty::PTY::open().expect("Could not create pty.");
+    let process_pty = unsegen_terminal::PTY::open().expect("Could not create pty.");
 
     //println!("PTY: {}", process_pty.name());
     let ptyname = process_pty.name().to_owned();

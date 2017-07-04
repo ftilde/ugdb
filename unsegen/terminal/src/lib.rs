@@ -1,3 +1,7 @@
+extern crate libc;
+extern crate nix;
+extern crate unsegen;
+
 use unsegen::base::{
     Window,
 };
@@ -13,8 +17,14 @@ use unsegen::widget::{
 use unsegen::widget::widgets::{
     LogViewer,
 };
-// Terminal ---------------------------------------------------------------------------------------
-use pty;
+mod pty;
+
+pub use pty::{
+    PTY,
+    PTYInput,
+    PTYOutput,
+};
+
 pub struct PseudoTerminal {
     //width: u32,
     //height: u32,

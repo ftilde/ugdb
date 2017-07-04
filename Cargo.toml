@@ -15,9 +15,6 @@ chan = "^0.1"
 chan-signal = "^0.2"
 lazy_static = "0.2.2"
 unicode-width = "0.1"
-#pty
-nix = "^0.7"
-libc = "^0.2"
 
 # For ExpressionTable (gdb expression parsing)
 pest = "^0.4.1"
@@ -28,6 +25,9 @@ termion = "^1.3"
 
 [dependencies.unsegen]
 path = "unsegen/"
+
+[dependencies.unsegen-terminal]
+path = "unsegen/terminal"
 
 # For ExpressionTable
 [dependencies.unsegen-jsonviewer]

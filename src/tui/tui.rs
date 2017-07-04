@@ -32,7 +32,10 @@ use gdbmi::output::{
 
 use super::console::Console;
 use super::srcview::CodeWindow;
-use super::pseudoterminal::PseudoTerminal;
+use unsegen_terminal::{
+    PseudoTerminal,
+    PTYInput,
+};
 use super::expression_table::ExpressionTable;
 
 pub struct Tui<'a> {
@@ -57,7 +60,7 @@ enum SubWindow {
 
 impl<'a> Tui<'a> {
 
-    pub fn new(process_pty: ::pty::PTYInput, highlighting_theme: &'a Theme) -> Self {
+    pub fn new(process_pty: PTYInput, highlighting_theme: &'a Theme) -> Self {
         Tui {
             console: Console::new(),
             expression_table: ExpressionTable::new(),

@@ -26,6 +26,7 @@ pub struct RenderingInfo {
     pub hints: RenderingHints,
     pub active_focused_style: StyleModifier,
     pub inactive_focused_style: StyleModifier,
+    pub item_changed_style: StyleModifier,
 }
 
 impl RenderingInfo {
@@ -43,8 +44,8 @@ pub struct DisplayObject {
     pub extended: bool,
 }
 
-static OPEN_SYMBOL: &'static str = "[+]";
-static CLOSE_SYMBOL: &'static str = "[-]";
+const OPEN_SYMBOL: &'static str = "[+]";
+const CLOSE_SYMBOL: &'static str = "[-]";
 
 impl DisplayObject {
     pub fn toggle_visibility(&mut self) {
@@ -128,6 +129,7 @@ pub struct DisplayArray {
     pub values: Vec<DisplayValue>,
     pub extended: bool,
     pub num_extended: usize,
+    pub length_changed: bool,
 }
 impl DisplayArray {
     pub fn toggle_visibility(&mut self) {
@@ -154,6 +156,7 @@ impl DisplayArray {
             values: Vec::new(),
             extended: self.extended,
             num_extended: min(self.num_extended, values.len()),
+            length_changed: self.values.len() != values.len(),
         };
 
         let num_old_values = self.values.len();
@@ -171,6 +174,7 @@ impl DisplayArray {
             values: Vec::new(),
             extended: true,
             num_extended: min(3, values.len()),
+            length_changed: false,
         };
         for value in values {
             result.values.push(DisplayValue::from_json(value));
@@ -211,7 +215,12 @@ impl DisplayArray {
                     write!(cursor, ",",).unwrap();
                 }
             }
-            write!(cursor, "\n] <").unwrap();
+            write!(cursor, "\n] ").unwrap();
+            let mut cursor = cursor.save().style_modifier();
+            if self.length_changed {
+                cursor.apply_style_modifier(info.item_changed_style);
+            }
+            write!(cursor, "<").unwrap();
             if self.can_shrink() {
                 let mut cursor = cursor.save().style_modifier();
                 if let Some(&ArrayPath::Shrink) = path {
@@ -249,18 +258,23 @@ impl DisplayArray {
 //TODO: we may want to support other types, but I'm not sure if that is necessary
 pub struct DisplayScalar {
     pub value: String,
+    pub changed: bool,
 }
 
 impl DisplayScalar {
     fn replace<S: ToString>(&self, value: &S) -> Self {
+        let new_value = value.to_string();
+        let changed = self.value != new_value;
         DisplayScalar {
-            value: value.to_string()
+            value: new_value,
+            changed: changed,
         }
     }
 
     fn from_json<S: ToString>(value: &S) -> Self {
         DisplayScalar {
-            value: value.to_string()
+            value: value.to_string(),
+            changed: false,
         }
     }
 
@@ -268,6 +282,9 @@ impl DisplayScalar {
         let mut cursor = cursor.save().style_modifier();
         if active {
             cursor.apply_style_modifier(info.get_focused_style());
+        }
+        if self.changed {
+            cursor.apply_style_modifier(info.item_changed_style);
         }
         cursor.write(&self.value);
     }

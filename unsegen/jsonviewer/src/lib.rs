@@ -14,6 +14,7 @@ use unsegen::widget::{
     Widget,
 };
 use unsegen::base::{
+    Color,
     Cursor,
     ExtentEstimationWindow,
     StyleModifier,
@@ -50,6 +51,7 @@ pub struct JsonViewer {
     indentation: u16,
     active_focused_style: StyleModifier,
     inactive_focused_style: StyleModifier,
+    item_changed_style: StyleModifier,
 }
 
 impl JsonViewer {
@@ -60,6 +62,7 @@ impl JsonViewer {
             indentation: 2,
             active_focused_style: StyleModifier::new().invert().bold(true),
             inactive_focused_style: StyleModifier::new().bold(true),
+            item_changed_style: StyleModifier::new().bg_color(Color::Red),
         };
         res.fix_active_element_path(); //... here!
         res
@@ -116,6 +119,7 @@ impl Widget for JsonViewer {
                 hints: RenderingHints::default(),
                 active_focused_style: self.active_focused_style,
                 inactive_focused_style: self.inactive_focused_style,
+                item_changed_style: self.item_changed_style,
             };
             self.value.draw(&mut cursor, Some(&self.active_element), &info, self.indentation);
         }
@@ -130,6 +134,7 @@ impl Widget for JsonViewer {
             hints: hints,
             active_focused_style: self.active_focused_style,
             inactive_focused_style: self.inactive_focused_style,
+            item_changed_style: self.item_changed_style,
         };
         self.value.draw(&mut cursor, Some(&self.active_element), &info, self.indentation);
     }

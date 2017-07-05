@@ -6,6 +6,7 @@ authors = ["ftilde <ftilde@protonmail.com>"]
 [dependencies]
 nix = "^0.7"
 libc = "^0.2"
+vte = "0.3"
 
 [dependencies.unsegen]
 path = "../"

@@ -1,6 +1,7 @@
 extern crate libc;
 extern crate nix;
 extern crate unsegen;
+extern crate vte;
 
 use unsegen::base::{
     Window,
@@ -18,6 +19,10 @@ use unsegen::widget::widgets::{
     LogViewer,
 };
 mod pty;
+#[allow(dead_code)]
+mod ansi;
+#[allow(dead_code)]
+mod index;
 
 use pty::{
     PTY,
@@ -30,8 +35,20 @@ use std::ffi::{
     OsString,
 };
 
+use ansi::{
+    Processor,
+    Handler,
+    TermInfo,
+};
+
+use index::{
+    Line,
+    Column,
+};
+
 use std::fs::File;
 use std::thread;
+use ::std::fmt::Write;
 
 fn read_slave_input_loop<S: SlaveInputSink>(sink: S, mut reader: PTYOutput) {
     use ::std::io::Read;
@@ -49,21 +66,69 @@ pub trait SlaveInputSink : std::marker::Send {
     fn send(&self, data: Box<[u8]>);
 }
 
-pub struct Terminal {
-    //width: u32,
-    //height: u32,
+// Resembles the terminal buffer itself.
+struct TerminalBuffer {
     display: LogViewer,
-    //prompt_line: unsegen::widgets::PromptLine,
-    //layout: unsegen::VerticalLayout,
-    //slave_input_thread: thread::Thread,
+    //input_buffer: Vec<u8>,
+}
 
+impl TerminalBuffer {
+    fn new() -> Self {
+        TerminalBuffer  {
+            display: LogViewer::new(),
+            //input_buffer: Vec::new(),
+        }
+    }
+    /*
+    pub fn display_byte(&mut self, byte: u8) {
+        self.input_buffer.push(byte);
+
+        if let Ok(string) = String::from_utf8(self.input_buffer.clone()) {
+            use std::fmt::Write;
+            self.display.storage.write_str(&string).expect("Write byte to terminal");
+            self.input_buffer.clear();
+        }
+    }
+    */
+}
+
+impl Handler for TerminalBuffer {
+
+    /// A character to be displayed
+    fn input(&mut self, c: char) {
+        write!(self.display.storage, "{}", c).unwrap();
+    }
+
+    /// Carriage return
+    fn carriage_return(&mut self) {
+        write!(self.display.storage, "\r").unwrap();
+    }
+
+    /// Linefeed
+    fn linefeed(&mut self) {
+        write!(self.display.storage, "\n").unwrap();
+    }
+}
+
+impl TermInfo for TerminalBuffer {
+    fn lines(&self) -> Line {
+        Line(0)
+    }
+    fn cols(&self) -> Column {
+        Column(0)
+    }
+}
+
+pub struct Terminal {
+    buffer: TerminalBuffer,
+    //slave_input_thread: thread::Thread,
     master_input_sink: PTYInput,
 
     //Hack used to keep the slave device open as long as the master exists. This may not be a good idea, we will see...
     _slave_handle: File,
     slave_name: OsString,
 
-    input_buffer: Vec<u8>,
+    ansi_processor: Processor,
 }
 
 impl Terminal {
@@ -86,25 +151,19 @@ impl Terminal {
         write!(pts, "").expect("initial write to pts");
 
         Terminal {
+            buffer: TerminalBuffer::new(),
             master_input_sink: pty_input,
-            display: LogViewer::new(),
-            //prompt_line: unsegen::widgets::PromptLine::with_prompt("".into()),
-            //layout: unsegen::VerticalLayout::new(unsegen::SeparatingStyle::Draw('=')),
-            input_buffer: Vec::new(),
+            //slave_input_thread: slave_input_thread,
             _slave_handle: pts,
             slave_name: ptsname,
-            //slave_input_thread: slave_input_thread,
+            ansi_processor: Processor::new(),
         }
     }
 
+    //TODO: do we need to distinguish between input from user and from slave?
     pub fn add_byte_input(&mut self, bytes: Box<[u8]>) {
-        self.input_buffer.append(&mut bytes.into_vec());
-
-        //TODO: handle control sequences?
-        if let Ok(string) = String::from_utf8(self.input_buffer.clone()) {
-            use std::fmt::Write;
-            self.display.storage.write_str(&string).expect("Write byte to terminal");
-            self.input_buffer.clear();
+        for byte in bytes.iter() {
+            self.ansi_processor.advance(&mut self.buffer, *byte, &mut self.master_input_sink);
         }
     }
 
@@ -117,12 +176,12 @@ impl Widget for Terminal {
     fn space_demand(&self) -> Demand2D {
         //let widgets: Vec<&unsegen::Widget> = vec![&self.display, &self.prompt_line];
         //self.layout.space_demand(widgets.into_iter())
-        self.display.space_demand()
+        self.buffer.display.space_demand()
     }
     fn draw(&mut self, window: Window, hints: RenderingHints) {
         //let widgets: Vec<&unsegen::Widget> = vec![&self.display, &self.prompt_line];
         //self.layout.draw(window, &widgets)
-        self.display.draw(window, hints);
+        self.buffer.display.draw(window, hints);
     }
 }
 

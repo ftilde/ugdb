@@ -13,6 +13,7 @@ use std::io::{self, Read, Write};
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::result;
 use libc;
+use std::ffi::OsStr;
 
 mod ffi;
 
@@ -89,7 +90,7 @@ impl PTY {
         })
     }
 
-    pub fn name(&self) -> &str {
+    pub fn name(&self) -> &OsStr {
         // man ptsname:
         // "On success, ptsname() returns a pointer to a string in _static_ storage which
         // will be overwritten by subsequent calls. This pointer must not be freed."
@@ -99,11 +100,11 @@ impl PTY {
         assert!((pts_name as *const i32) != ::std::ptr::null(),
                 format!("ptsname failed. ({})", last_error()));
 
-        let pts_name = unsafe { ::std::ffi::CStr::from_ptr(pts_name) };
-        let pts_name_buf = pts_name.to_bytes();
+        let pts_name_cstr = unsafe { ::std::ffi::CStr::from_ptr(pts_name) };
+        let pts_name_slice = pts_name_cstr.to_bytes();
 
-        // The pts name is always valid utf8... right?
-        ::std::str::from_utf8(pts_name_buf).expect("TTY name is not valid utf8")
+        use ::std::os::unix::ffi::OsStrExt;
+        OsStr::from_bytes(pts_name_slice)
     }
 
     pub fn split_io(self) -> (PTYInput, PTYOutput) {

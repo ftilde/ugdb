@@ -22,7 +22,6 @@ extern crate termion;
 mod tui;
 mod input;
 
-use std::thread;
 use ::std::ffi::OsString;
 
 use chan::Sender;
@@ -42,21 +41,18 @@ use unsegen::base::{
     Terminal,
 };
 
-fn pty_output_loop(sink: Sender<Vec<u8>>, mut reader: unsegen_terminal::PTYOutput) {
-    use ::std::io::Read;
-
-    let mut buffer = [0; 1024];
-    while let Ok(n) = reader.read(&mut buffer) {
-        let mut bytes = vec![0; n];
-        bytes.copy_from_slice(&mut buffer[..n]);
-        sink.send(bytes);
-    }
-}
-
 struct MpscOobRecordSink(Sender<OutOfBandRecord>);
 
 impl OutOfBandRecordSink for MpscOobRecordSink {
     fn send(&self, data: OutOfBandRecord) {
+        self.0.send(data);
+    }
+}
+
+struct MpscSlaveInputSink(Sender<Box<[u8]>>);
+
+impl ::unsegen_terminal::SlaveInputSink for MpscSlaveInputSink {
+    fn send(&self, data: Box<[u8]>) {
         self.0.send(data);
     }
 }
@@ -67,33 +63,15 @@ fn main() {
     // (See chan_signal documentation)
     let signal_event_source = chan_signal::notify(&[Signal::WINCH]);
 
-    let process_pty = unsegen_terminal::PTY::open().expect("Could not create pty.");
-
-    //println!("PTY: {}", process_pty.name());
-    let ptyname = process_pty.name().to_owned();
-
-    // Hack:
-    // Open slave terminal, so that it does not get destroyed when a gdb process opens it and
-    // closes it afterwards.
-    let mut pts = std::fs::OpenOptions::new().write(true).read(true).open(&ptyname).expect("pts file");
-    use std::io::Write;
-    write!(pts, "").expect("initial write to pts");
+    // Create terminal and setup slave input piping
+    let (pts_sink, pts_source) = chan::async();
+    let tui_terminal = ::unsegen_terminal::Terminal::new(MpscSlaveInputSink(pts_sink));
 
     // Start gdb and setup output event piping
     let (oob_sink, oob_source) = chan::async();
-
-    //let executable_path = "/home/dominik/gdbmi-test/test";
-    //let mut gdb = GDB::spawn_with_executable(executable_path, process_pty.name(), MpscOobRecordSink(oob_sink)).expect("spawn gdb");
     let all_args: Vec<OsString> = ::std::env::args_os().collect();
     let gdb_arguments = &all_args[1..];
-    let mut gdb = GDB::spawn(gdb_arguments, process_pty.name(), MpscOobRecordSink(oob_sink)).expect("spawn gdb");
-
-    // Setup pty piping
-    let (pty_input, pty_output) = process_pty.split_io();
-    let (pty_output_sink, pty_output_source) = chan::async();
-    /*let ptyThread = */ thread::spawn(move || {
-        pty_output_loop(pty_output_sink, pty_output);
-    });
+    let mut gdb = GDB::spawn(gdb_arguments, tui_terminal.get_slave_name(), MpscOobRecordSink(oob_sink)).expect("spawn gdb");
 
     // Setup input piping
     let (keyboard_sink, keyboard_source) = chan::async();
@@ -105,8 +83,7 @@ fn main() {
 
         let mut terminal = Terminal::new(stdout.lock());
         let theme_set = syntect::highlighting::ThemeSet::load_defaults();
-        let mut tui = tui::Tui::new(pty_input, &theme_set.themes["base16-ocean.dark"]);
-        tui.add_debug_message(&ptyname);
+        let mut tui = tui::Tui::new(tui_terminal, &theme_set.themes["base16-ocean.dark"]);
 
         tui.draw(terminal.create_root_window(Style::default()));
         terminal.present();
@@ -131,7 +108,7 @@ fn main() {
                         },
                     }
                 },
-                pty_output_source.recv() -> pty_output => {
+                pts_source.recv() -> pty_output => {
                     tui.add_pty_input(pty_output.expect("get pty input"));
                 },
                 signal_event_source.recv() -> signal_event => {

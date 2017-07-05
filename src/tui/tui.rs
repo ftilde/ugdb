@@ -33,15 +33,14 @@ use gdbmi::output::{
 use super::console::Console;
 use super::srcview::CodeWindow;
 use unsegen_terminal::{
-    PseudoTerminal,
-    PTYInput,
+    Terminal,
 };
 use super::expression_table::ExpressionTable;
 
 pub struct Tui<'a> {
     console: Console,
     expression_table: ExpressionTable,
-    process_pty: PseudoTerminal,
+    process_pty: Terminal,
     src_view: CodeWindow<'a>,
 
     left_layout: VerticalLayout,
@@ -54,17 +53,17 @@ pub struct Tui<'a> {
 enum SubWindow {
     Console,
     CodeWindow,
-    PseudoTerminal,
+    Terminal,
     ExpressionTable,
 }
 
 impl<'a> Tui<'a> {
 
-    pub fn new(process_pty: PTYInput, highlighting_theme: &'a Theme) -> Self {
+    pub fn new(terminal: Terminal, highlighting_theme: &'a Theme) -> Self {
         Tui {
             console: Console::new(),
             expression_table: ExpressionTable::new(),
-            process_pty: PseudoTerminal::new(process_pty),
+            process_pty: terminal,
             src_view: CodeWindow::new(highlighting_theme),
             left_layout: VerticalLayout::new(SeparatingStyle::Draw(GraphemeCluster::try_from('=').unwrap())),
             right_layout: VerticalLayout::new(SeparatingStyle::Draw(GraphemeCluster::try_from('=').unwrap())),
@@ -103,13 +102,15 @@ impl<'a> Tui<'a> {
         }
     }
 
-    pub fn add_pty_input(&mut self, input: Vec<u8>) {
+    pub fn add_pty_input(&mut self, input: Box<[u8]>) {
         self.process_pty.add_byte_input(input);
     }
 
+    /*
     pub fn add_debug_message(&mut self, msg: &str) {
         self.console.add_debug_message(format!("Debug: {}", msg));
     }
+    */
 
     pub fn draw(&mut self, window: Window) {
         let split_pos = window.get_width()/2-1;
@@ -137,7 +138,7 @@ impl<'a> Tui<'a> {
 
         let mut right_widgets: Vec<(&mut Widget, RenderingHints)> = vec![
             (&mut self.expression_table, if self.active_window == SubWindow::ExpressionTable { active_hints } else { inactive_hints }),
-            (&mut self.process_pty, if self.active_window == SubWindow::PseudoTerminal { active_hints } else { inactive_hints }),
+            (&mut self.process_pty, if self.active_window == SubWindow::Terminal { active_hints } else { inactive_hints }),
         ];
         self.right_layout.draw(window_r, &mut right_widgets);
     }
@@ -149,7 +150,7 @@ impl<'a> Tui<'a> {
                 self.console.event(event, gdb);
             },
             InputEvent::PseudoTerminalEvent(event) => {
-                self.active_window = SubWindow::PseudoTerminal;
+                self.active_window = SubWindow::Terminal;
                 event.chain(WriteBehavior::new(&mut self.process_pty));
             },
             InputEvent::SourcePagerEvent(event) => {

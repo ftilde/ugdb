@@ -6,12 +6,25 @@ extern crate nom;
 pub mod input;
 pub mod output;
 
-use std::process::{Command,Child,ChildStdin,Stdio};
+use std::process::{
+    Command,
+    Child,
+    ChildStdin,
+    Stdio,
+};
 use std::thread;
-use std::sync::mpsc;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::ffi::OsStr;
+use std::sync::{
+    mpsc,
+    Arc,
+};
+use std::sync::atomic::{
+    AtomicBool,
+    Ordering,
+};
+use std::ffi::{
+    OsStr,
+    OsString
+};
 
 pub struct GDB {
     pub process: Child,
@@ -35,10 +48,12 @@ impl GDB {
     pub fn spawn_with_executable<S>(executable_path: &str, process_tty_name: &str, oob_sink: S) -> Result<GDB, ::std::io::Error> where S: OutOfBandRecordSink + 'static {
         Self::spawn(&[executable_path], process_tty_name, oob_sink)
     }
-    pub fn spawn<S, A: AsRef<OsStr>>(arguments: &[A], process_tty_name: &str, oob_sink: S) -> Result<GDB, ::std::io::Error> where S: OutOfBandRecordSink + 'static {
+    pub fn spawn<S, A: AsRef<OsStr>, B: AsRef<OsStr>>(arguments: &[A], process_tty_name: B, oob_sink: S) -> Result<GDB, ::std::io::Error> where S: OutOfBandRecordSink + 'static {
+        let mut tty_arg = OsString::from("--tty=");
+        tty_arg.push(process_tty_name.as_ref());
         let mut child = try!{Command::new("/bin/gdb")
             .arg("--interpreter=mi")
-            .arg(format!("--tty={}", process_tty_name))
+            .arg(tty_arg)
             .args(arguments)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

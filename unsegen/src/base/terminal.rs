@@ -5,32 +5,10 @@ use termion::raw::{IntoRawMode, RawTerminal};
 use termion::screen::{AlternateScreen};
 use termion;
 use base::{
-    GraphemeCluster,
     Style,
     Window,
     WindowBuffer,
 };
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct StyledGraphemeCluster {
-    pub grapheme_cluster: GraphemeCluster,
-    pub style: Style,
-}
-
-impl StyledGraphemeCluster {
-    pub fn new(grapheme_cluster: GraphemeCluster, style: Style) -> Self {
-        StyledGraphemeCluster {
-            grapheme_cluster: grapheme_cluster,
-            style: style,
-        }
-    }
-}
-
-impl Default for StyledGraphemeCluster {
-    fn default() -> Self {
-        Self::new(GraphemeCluster::space(), Style::default())
-    }
-}
 
 pub struct Terminal<'a> {
     values: WindowBuffer,
@@ -101,36 +79,35 @@ impl<'a> Drop for Terminal<'a> {
 #[cfg(test)]
 pub mod test {
     use super::super::{
-        CharMatrix,
-        StyledGraphemeCluster,
         Style,
+        StyledGraphemeCluster,
         Window,
+        WindowBuffer,
         GraphemeCluster,
-    };
-    use ndarray::{
-        Ix,
     };
 
     #[derive(PartialEq)]
     pub struct FakeTerminal {
-        values: CharMatrix,
+        values: WindowBuffer,
     }
     impl FakeTerminal {
-        pub fn with_size((w, h): (Ix, Ix)) -> Self {
+        pub fn with_size((w, h): (u32, u32)) -> Self {
             FakeTerminal {
-                values: CharMatrix::default((h, w)),
+                values: WindowBuffer::new(w, h)
             }
         }
 
+        /*
         pub fn size(&self) -> (Ix, Ix) {
             (self.values.dim().1, self.values.dim().0)
         }
+        */
 
         pub fn create_root_window(&mut self) -> Window {
-            Window::new(self.values.view_mut(), Style::plain())
+            self.values.as_window()
         }
 
-        pub fn from_str((w, h): (Ix, Ix), description: &str) -> Result<Self, ::ndarray::ShapeError>{
+        pub fn from_str((w, h): (u32, u32), description: &str) -> Result<Self, ::ndarray::ShapeError>{
             let mut tiles = Vec::<StyledGraphemeCluster>::new();
             for c in GraphemeCluster::all_from_str(description) {
                 if c.as_str() == " " || c.as_str() == "\n" {
@@ -139,7 +116,7 @@ pub mod test {
                 tiles.push(StyledGraphemeCluster::new(c, Style::plain()));
             }
             Ok(FakeTerminal {
-                values: try!{::ndarray::Array2::from_shape_vec((h, w), tiles)},
+                values: WindowBuffer::from_storage(try!{::ndarray::Array2::from_shape_vec((h as usize, w as usize), tiles)}),
             })
         }
 
@@ -150,12 +127,13 @@ pub mod test {
 
     impl ::std::fmt::Debug for FakeTerminal {
         fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-            for r in 0..self.values.dim().0 {
-                for c in 0..self.values.dim().1 {
-                    let c = self.values.get((r, c)).expect("debug: in bounds");
+            let raw_values = self.values.storage();
+            for r in 0..raw_values.dim().0 {
+                for c in 0..raw_values.dim().1 {
+                    let c = raw_values.get((r, c)).expect("debug: in bounds");
                     try!{write!(f, "{}", c.grapheme_cluster.as_str())};
                 }
-                if r != self.values.dim().0-1 {
+                if r != raw_values.dim().0-1 {
                     try!{write!(f, "|")};
                 }
             }

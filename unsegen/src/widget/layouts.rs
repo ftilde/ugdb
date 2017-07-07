@@ -295,7 +295,7 @@ mod test {
         aeq_horizontal_layout_space_demand(vec![&FakeWidget::new((Demand::from_to(1, 2), Demand::from_to(1, 3))), &FakeWidget::new((Demand::exact(1), Demand::exact(2)))], (Demand::from_to(2, 3), Demand::from_to(2, 3)));
         aeq_horizontal_layout_space_demand(vec![&FakeWidget::new((Demand::at_least(3), Demand::at_least(3))), &FakeWidget::new((Demand::exact(1), Demand::exact(5)))], (Demand::at_least(4), Demand::at_least(5)));
     }
-    fn aeq_horizontal_layout_draw(terminal_size: (usize, usize), widgets: Vec<&mut Widget>, solution: &str) {
+    fn aeq_horizontal_layout_draw(terminal_size: (u32, u32), widgets: Vec<&mut Widget>, solution: &str) {
         let mut term = FakeTerminal::with_size(terminal_size);
         let mut widgets_with_hints: Vec<(&mut Widget, RenderingHints)> = widgets.into_iter().map(|w| (w, RenderingHints::default())).collect();
         HorizontalLayout::new(SeparatingStyle::None).draw(term.create_root_window(), widgets_with_hints.as_mut_slice());
@@ -321,7 +321,7 @@ mod test {
         aeq_vertical_layout_space_demand(vec![&FakeWidget::new((Demand::from_to(1, 3), Demand::from_to(1, 2))), &FakeWidget::new((Demand::exact(2), Demand::exact(1)))], (Demand::from_to(2, 3), Demand::from_to(2, 3)));
         aeq_vertical_layout_space_demand(vec![&FakeWidget::new((Demand::at_least(3), Demand::at_least(3))), &FakeWidget::new((Demand::exact(5), Demand::exact(1)))], (Demand::at_least(5), Demand::at_least(4)));
     }
-    fn aeq_vertical_layout_draw(terminal_size: (usize, usize), widgets: Vec<&mut Widget>, solution: &str) {
+    fn aeq_vertical_layout_draw(terminal_size: (u32, u32), widgets: Vec<&mut Widget>, solution: &str) {
         let mut term = FakeTerminal::with_size(terminal_size);
         let mut widgets_with_hints: Vec<(&mut Widget, RenderingHints)> = widgets.into_iter().map(|w| (w, RenderingHints::default())).collect();
         VerticalLayout::new(SeparatingStyle::None).draw(term.create_root_window(), widgets_with_hints.as_mut_slice());

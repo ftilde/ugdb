@@ -6,9 +6,6 @@ extern crate termion;
 extern crate unicode_segmentation;
 extern crate unicode_width;
 
-#[macro_use]
-extern crate json; //For JsonViewer
-
 pub mod base;
 pub mod input;
 pub mod widget;

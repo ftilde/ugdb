@@ -37,7 +37,6 @@ use gdbmi::output::{
 };
 
 use unsegen::base::{
-    Style,
     Terminal,
 };
 
@@ -85,7 +84,7 @@ fn main() {
         let theme_set = syntect::highlighting::ThemeSet::load_defaults();
         let mut tui = tui::Tui::new(tui_terminal, &theme_set.themes["base16-ocean.dark"]);
 
-        tui.draw(terminal.create_root_window(Style::default()));
+        tui.draw(terminal.create_root_window());
         terminal.present();
 
         loop {
@@ -118,7 +117,7 @@ fn main() {
                     }
                 }
             }
-            tui.draw(terminal.create_root_window(Style::default()));
+            tui.draw(terminal.create_root_window());
             terminal.present();
         }
     }

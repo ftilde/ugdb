@@ -5,6 +5,7 @@ use super::{
     GraphemeCluster,
 };
 use ndarray::{
+    Array,
     ArrayViewMut,
     Axis,
     Ix,
@@ -17,6 +18,28 @@ use base::ranges::{
 };
 use unicode_segmentation::UnicodeSegmentation;
 use std::fmt;
+
+pub type CharMatrix = Array<StyledGraphemeCluster, Ix2>;
+
+pub struct WindowBuffer {
+    storage: CharMatrix,
+}
+
+impl WindowBuffer {
+    pub fn new(width: u32, height: u32) -> Self {
+        WindowBuffer {
+            storage: CharMatrix::default(Ix2(width as usize, height as usize)),
+        }
+    }
+
+    pub fn as_window<'a>(&'a mut self) -> Window<'a> {
+        Window::new(self.storage.view_mut())
+    }
+
+    pub fn storage(&self) -> &CharMatrix {
+        &self.storage
+    }
+}
 
 type CharMatrixView<'w> = ArrayViewMut<'w, StyledGraphemeCluster, Ix2>;
 pub struct Window<'w> {
@@ -31,10 +54,10 @@ impl<'w> ::std::fmt::Debug for Window<'w> {
 }
 
 impl<'w> Window<'w> {
-    pub fn new(values: CharMatrixView<'w>, default_style: Style) -> Self {
+    pub fn new(values: CharMatrixView<'w>) -> Self {
         Window {
             values: values,
-            default_style: default_style,
+            default_style: Style::default(),
         }
     }
 

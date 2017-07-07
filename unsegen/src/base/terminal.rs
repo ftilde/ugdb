@@ -1,8 +1,5 @@
 use ndarray::{
-    Array,
     Axis,
-    Ix,
-    Ix2,
 };
 use termion::raw::{IntoRawMode, RawTerminal};
 use termion::screen::{AlternateScreen};
@@ -11,6 +8,7 @@ use base::{
     GraphemeCluster,
     Style,
     Window,
+    WindowBuffer,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -34,9 +32,8 @@ impl Default for StyledGraphemeCluster {
     }
 }
 
-pub type CharMatrix = Array<StyledGraphemeCluster, Ix2>;
 pub struct Terminal<'a> {
-    values: CharMatrix,
+    values: WindowBuffer,
     terminal: AlternateScreen<RawTerminal<::std::io::StdoutLock<'a>>>,
 }
 
@@ -46,24 +43,22 @@ impl<'a> Terminal<'a> {
         let mut terminal = AlternateScreen::from(stdout.into_raw_mode().expect("raw terminal"));
         write!(terminal, "{}", termion::cursor::Hide).expect("write: hide cursor");
         Terminal {
-            values: CharMatrix::default(Ix2(0,0)),
-            terminal: terminal
+            values: WindowBuffer::new(0, 0),
+            terminal: terminal,
         }
     }
 
-    pub fn create_root_window(&mut self, default_style: Style) -> Window {
+    pub fn create_root_window(&mut self) -> Window {
         let (x, y) = termion::terminal_size().expect("get terminal size");
-        let dim = Ix2(y as Ix, x as Ix);
-        if dim[0] != self.values.dim().0 || dim[1] != self.values.dim().1 {
-            self.values = CharMatrix::default(dim);
+        let x = x as u32;
+        let y = y as u32;
+        if x != self.values.as_window().get_width() || y != self.values.as_window().get_height() {
+            self.values = WindowBuffer::new(x, y)
         } else {
-            let template = StyledGraphemeCluster::new(GraphemeCluster::space(), default_style);
-            for val in self.values.iter_mut() {
-                *val = template.clone();
-            }
+            self.values.as_window().clear();
         }
 
-        Window::new(self.values.view_mut(), default_style)
+        self.values.as_window()
     }
 
     pub fn present(&mut self) {
@@ -72,7 +67,7 @@ impl<'a> Terminal<'a> {
 
         let mut current_style = Style::default();
 
-        for (y, line) in self.values.axis_iter(Axis(0)).enumerate() {
+        for (y, line) in self.values.storage().axis_iter(Axis(0)).enumerate() {
             write!(self.terminal, "{}", termion::cursor::Goto(1, (y+1) as u16)).expect("move cursor");
             let mut buffer = String::with_capacity(line.len());
             for c in line.iter() {

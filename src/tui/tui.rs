@@ -12,7 +12,9 @@ use unsegen::widget::{
     Widget,
 };
 use unsegen::input::{
+    Key,
     WriteBehavior,
+    ScrollBehavior,
 };
 use input::{
     InputEvent,
@@ -151,7 +153,10 @@ impl<'a> Tui<'a> {
             },
             InputEvent::PseudoTerminalEvent(event) => {
                 self.active_window = SubWindow::Terminal;
-                event.chain(WriteBehavior::new(&mut self.process_pty));
+                event.chain(ScrollBehavior::new(&mut self.process_pty)
+                            .forwards_on(Key::PageDown)
+                            .backwards_on(Key::PageUp))
+                    .chain(WriteBehavior::new(&mut self.process_pty));
             },
             InputEvent::SourcePagerEvent(event) => {
                 self.active_window = SubWindow::CodeWindow;

@@ -1265,8 +1265,7 @@ pub mod C1 {
 mod tests {
     use std::io;
     use index::{Line, Column};
-    use super::{Processor, Handler, Attr, TermInfo, Color, StandardCharset, CharsetIndex};
-    use ::Rgb;
+    use super::{Processor, Handler, Attr, TermInfo, Color, StandardCharset, CharsetIndex, Rgb};
 
     /// The /dev/null of io::Write
     struct Void;

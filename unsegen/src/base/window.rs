@@ -53,21 +53,18 @@ impl WindowBuffer {
         }
     }
 
+    pub fn from_storage(storage: CharMatrix) -> Self {
+        WindowBuffer {
+            storage: storage,
+        }
+    }
+
     pub fn as_window<'a>(&'a mut self) -> Window<'a> {
         Window::new(self.storage.view_mut())
     }
 
     pub fn storage(&self) -> &CharMatrix {
         &self.storage
-    }
-}
-
-#[cfg(test)]
-impl WindowBuffer {
-    pub fn from_storage(storage: CharMatrix) -> Self {
-        WindowBuffer {
-            storage: storage,
-        }
     }
 }
 
@@ -224,6 +221,7 @@ impl<'a> CursorTarget for Window<'a> {
     }
 }
 
+
 pub struct ExtentEstimationWindow {
     some_value: StyledGraphemeCluster,
     default_style: Style,
@@ -231,6 +229,8 @@ pub struct ExtentEstimationWindow {
     extent_x: u32,
     extent_y: u32,
 }
+
+pub const UNBOUNDED_EXTENT: u32 = 2147483647;//i32::max_value() as u32;
 
 impl ExtentEstimationWindow {
     pub fn with_width(width: u32) -> Self {
@@ -245,7 +245,7 @@ impl ExtentEstimationWindow {
     }
 
     pub fn unbounded() -> Self {
-        Self::with_width(i32::max_value() as u32)
+        Self::with_width(UNBOUNDED_EXTENT)
     }
 
     pub fn extent_x(&self) -> u32 {
@@ -266,7 +266,7 @@ impl CursorTarget for ExtentEstimationWindow {
         self.width
     }
     fn get_height(&self) -> u32 {
-        i32::max_value() as u32
+        UNBOUNDED_EXTENT
     }
     fn get_grapheme_cluster_mut(&mut self, x: u32, y: u32) -> Option<&mut StyledGraphemeCluster> {
         self.extent_x = max(self.extent_x, x+1);

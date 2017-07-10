@@ -76,7 +76,6 @@ impl<'a> Drop for Terminal<'a> {
     }
 }
 
-#[cfg(test)]
 pub mod test {
     use super::super::{
         Style,

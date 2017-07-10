@@ -17,15 +17,15 @@ pub enum WrappingMode {
 
 pub trait CursorTarget {
     fn get_width(&self) -> u32;
+    fn get_soft_width(&self) -> u32 {
+        self.get_width()
+    }
     fn get_height(&self) -> u32;
     fn get_grapheme_cluster_mut(&mut self, x: u32, y: u32) -> Option<&mut StyledGraphemeCluster>;
     fn get_default_style(&self) -> &Style;
 }
 
-
-pub struct Cursor<'c, 'g: 'c, T: 'c + CursorTarget = Window<'g>> {
-    window: &'c mut T,
-    _dummy: ::std::marker::PhantomData<&'g ()>,
+pub struct CursorState {
     wrapping_mode: WrappingMode,
     style_modifier: StyleModifier,
     x: i32,
@@ -34,11 +34,9 @@ pub struct Cursor<'c, 'g: 'c, T: 'c + CursorTarget = Window<'g>> {
     tab_column_width: u32,
 }
 
-impl<'c, 'g: 'c, T: 'c + CursorTarget> Cursor<'c, 'g, T> {
-    pub fn new(window: &'c mut T) -> Self {
-        Cursor {
-            window: window,
-            _dummy: ::std::marker::PhantomData::default(),
+impl Default for CursorState {
+    fn default() -> Self {
+        CursorState {
             wrapping_mode: WrappingMode::NoWrap,
             style_modifier: StyleModifier::none(),
             x: 0,
@@ -47,10 +45,35 @@ impl<'c, 'g: 'c, T: 'c + CursorTarget> Cursor<'c, 'g, T> {
             tab_column_width: 4,
         }
     }
+}
+
+
+pub struct Cursor<'c, 'g: 'c, T: 'c + CursorTarget = Window<'g>> {
+    window: &'c mut T,
+    _dummy: ::std::marker::PhantomData<&'g ()>,
+    state: CursorState,
+}
+
+impl<'c, 'g: 'c, T: 'c + CursorTarget> Cursor<'c, 'g, T> {
+    pub fn new(window: &'c mut T) -> Self {
+        Self::with_state(window, CursorState::default())
+    }
+
+    pub fn with_state(window: &'c mut T, state: CursorState) -> Self {
+        Cursor {
+            window: window,
+            _dummy: ::std::marker::PhantomData::default(),
+            state: state,
+        }
+    }
+
+    pub fn into_state(self) -> CursorState {
+        self.state
+    }
 
     pub fn set_position(&mut self, x: i32, y: i32) {
-        self.x = x;
-        self.y = y;
+        self.state.x = x;
+        self.state.y = y;
     }
 
     pub fn position(mut self, x: i32, y: i32) -> Self {
@@ -59,16 +82,16 @@ impl<'c, 'g: 'c, T: 'c + CursorTarget> Cursor<'c, 'g, T> {
     }
 
     pub fn get_position(&self) -> (i32, i32) {
-        (self.x, self.y)
+        (self.state.x, self.state.y)
     }
 
     pub fn move_by(&mut self, x: i32, y: i32) {
-        self.x += x;
-        self.y += y;
+        self.state.x += x;
+        self.state.y += y;
     }
 
     pub fn set_wrapping_mode(&mut self, wm: WrappingMode) {
-        self.wrapping_mode = wm;
+        self.state.wrapping_mode = wm;
     }
 
     pub fn wrapping_mode(mut self, wm: WrappingMode) -> Self {
@@ -77,11 +100,11 @@ impl<'c, 'g: 'c, T: 'c + CursorTarget> Cursor<'c, 'g, T> {
     }
 
     pub fn set_line_start_column(&mut self, column: i32) {
-        self.line_start_column = column;
+        self.state.line_start_column = column;
     }
 
     pub fn move_line_start_column(&mut self, d: i32) {
-        self.line_start_column += d;
+        self.state.line_start_column += d;
     }
 
     pub fn line_start_column(mut self, column: i32) -> Self {
@@ -90,43 +113,43 @@ impl<'c, 'g: 'c, T: 'c + CursorTarget> Cursor<'c, 'g, T> {
     }
 
     pub fn set_style_modifier(&mut self, style_modifier: StyleModifier) {
-        self.style_modifier = style_modifier;
+        self.state.style_modifier = style_modifier;
     }
 
     pub fn apply_style_modifier(&mut self, style_modifier: StyleModifier) {
-        self.style_modifier = self.style_modifier.if_not(style_modifier)
+        self.state.style_modifier = self.state.style_modifier.if_not(style_modifier)
     }
 
     pub fn set_tab_column_width(&mut self, width: u32) {
-        self.tab_column_width = width;
+        self.state.tab_column_width = width;
     }
 
     pub fn fill_and_wrap_line(&mut self) {
-        let w = self.window.get_width() as i32;
-        while self.x < w {
+        let w = self.window.get_soft_width() as i32;
+        while self.state.x <= 0 || self.state.x % w != 0 {
             self.write(" ");
         }
         self.wrap_line();
     }
 
     pub fn wrap_line(&mut self) {
-        self.y += 1;
+        self.state.y += 1;
         self.carriage_return();
     }
 
     pub fn carriage_return(&mut self) {
-        self.x = self.line_start_column;
+        self.state.x = self.state.line_start_column;
     }
 
 
     fn active_style(&self) -> Style {
-        self.style_modifier.apply(self.window.get_default_style())
+        self.state.style_modifier.apply(self.window.get_default_style())
     }
 
     pub fn num_expected_wraps(&self, line: &str) -> u32 {
-        if self.wrapping_mode == WrappingMode::Wrap {
+        if self.state.wrapping_mode == WrappingMode::Wrap {
             let num_chars = line.graphemes(true).count();
-            max(0, ((num_chars as i32 + self.x) / (self.window.get_width() as i32)) as u32)
+            max(0, ((num_chars as i32 + self.state.x) / (self.window.get_width() as i32)) as u32)
         } else {
             0
         }
@@ -140,10 +163,9 @@ impl<'c, 'g: 'c, T: 'c + CursorTarget> Cursor<'c, 'g, T> {
         }
     }
 
-    fn write_grapheme_cluster_unchecked(&mut self, cluster: GraphemeCluster) {
-        let style = self.active_style();
-        let target_cluster_x = self.x as u32;
-        let y = self.y as u32;
+    fn write_grapheme_cluster_unchecked(&mut self, cluster: GraphemeCluster, style: Style) {
+        let target_cluster_x = self.state.x as u32;
+        let y = self.state.y as u32;
         let old_target_cluster_width = {
             let target_cluster = self.window.get_grapheme_cluster_mut(target_cluster_x, y).expect("in bounds");
             let w = target_cluster.grapheme_cluster.width() as u32;
@@ -181,21 +203,77 @@ impl<'c, 'g: 'c, T: 'c + CursorTarget> Cursor<'c, 'g, T> {
         // in pratice. If they do... we have to think of something...
     }
 
+    fn write_cluster(&mut self, grapheme_cluster: GraphemeCluster, style: &Style) -> Result<(),()> {
+        let cluster_width = grapheme_cluster.width() as i32;
+
+        let space_in_line = self.remaining_space_in_line();
+        if space_in_line < cluster_width {
+            // Overwrite spaces that we could not fill with our (too wide) grapheme cluster
+            for _ in 0..space_in_line {
+                self.write_grapheme_cluster_unchecked(GraphemeCluster::space(), style.clone());
+                self.state.x += 1;
+            }
+            if self.state.wrapping_mode == WrappingMode::Wrap {
+                self.wrap_line();
+                if self.remaining_space_in_line() < cluster_width {
+                    // Still no space for the cluster after line wrap: We have to give up.
+                    // There is no way we can write our cluster anywhere.
+                    return Err(());
+                }
+            } else {
+                // We do not wrap, so we are outside of the window now
+                return Err(());
+            }
+        }
+        if     0 <= self.state.x && (self.state.x as u32) < self.window.get_width()
+            && 0 <= self.state.y && (self.state.y as u32) < self.window.get_height() {
+
+            self.write_grapheme_cluster_unchecked(grapheme_cluster, style.clone());
+        }
+        self.state.x += 1;
+        if cluster_width > 1 && 0 <= self.state.y && (self.state.y as u32) < self.window.get_height() {
+            for _ in 1..cluster_width {
+                if 0 <= self.state.x && (self.state.x as u32) < self.window.get_width() {
+                    self.write_grapheme_cluster_unchecked(unsafe {
+                        GraphemeCluster::empty()
+                    }, style.clone());
+                }
+                self.state.x += 1;
+            }
+        }
+        Ok(())
+    }
+
     fn remaining_space_in_line(&self) -> i32 {
-        self.window.get_width() as i32 - self.x
+        self.window.get_width() as i32 - self.state.x
+    }
+
+    pub fn write_preformatted(&mut self, clusters: &[StyledGraphemeCluster]) {
+        if self.window.get_width() == 0 || self.window.get_height() == 0 {
+            return;
+        }
+
+        assert!(clusters.iter().map(|s| s.grapheme_cluster.width()).sum::<usize>() == clusters.len(), "Invalid preformated cluster slice!");
+
+        for cluster in clusters.iter() {
+            if self.write_cluster(cluster.grapheme_cluster.clone(), &cluster.style).is_err() {
+                break;
+            }
+        }
     }
 
     pub fn write(&mut self, text: &str) {
         if self.window.get_width() == 0 || self.window.get_height() == 0 {
             return;
         }
+        let style = self.active_style();
 
         let mut line_it = text.split('\n').peekable(); //.lines() swallows a terminal newline
         while let Some(line) = line_it.next() {
             for mut grapheme_cluster in GraphemeCluster::all_from_str(line) {
                 match grapheme_cluster.as_str() {
                     "\t" => {
-                        let width = self.tab_column_width - ((self.x as u32) % self.tab_column_width);
+                        let width = self.state.tab_column_width - ((self.state.x as u32) % self.state.tab_column_width);
                         grapheme_cluster = Self::create_tab_cluster(width)
                     },
                     "\r" => {
@@ -204,43 +282,8 @@ impl<'c, 'g: 'c, T: 'c + CursorTarget> Cursor<'c, 'g, T> {
                     },
                     _ => {},
                 }
-                let cluster_width = grapheme_cluster.width() as i32;
-
-                let space_in_line = self.remaining_space_in_line();
-                if space_in_line < cluster_width {
-                    // Overwrite spaces that we could not fill with our (too wide) grapheme cluster
-                    for _ in 0..space_in_line {
-                        self.write_grapheme_cluster_unchecked(GraphemeCluster::space());
-                        self.x += 1;
-                    }
-                    if self.wrapping_mode == WrappingMode::Wrap {
-                        self.wrap_line();
-                        if self.remaining_space_in_line() < cluster_width {
-                            // Still no space for the cluster after line wrap: We have to give up.
-                            // There is no way we can write our cluster anywhere.
-                            break;
-                        }
-                    } else {
-                        // We do not wrap, so we are outside of the window now
-                        break;
-                    }
-                }
-                if     0 <= self.x && (self.x as u32) < self.window.get_width()
-                    && 0 <= self.y && (self.y as u32) < self.window.get_height() {
-
-                    self.write_grapheme_cluster_unchecked(grapheme_cluster);
-                }
-                self.x += 1;
-                // TODO: This still probably does not work if we _overwrite_ wide clusters.
-                if cluster_width > 1 && 0 <= self.y && (self.y as u32) < self.window.get_height() {
-                    for _ in 1..cluster_width {
-                        if 0 <= self.x && (self.x as u32) < self.window.get_width() {
-                            self.write_grapheme_cluster_unchecked(unsafe {
-                                GraphemeCluster::empty()
-                            });
-                        }
-                        self.x += 1;
-                    }
+                if self.write_cluster(grapheme_cluster, &style).is_err() {
+                    break;
                 }
             }
             if line_it.peek().is_some() {
@@ -287,22 +330,22 @@ impl<'a, 'c: 'a, 'g: 'c, T: 'c + CursorTarget> CursorRestorer<'a, 'c, 'g, T> {
     }
 
     pub fn style_modifier(mut self) -> Self {
-        self.saved_style_modifier = Some(self.cursor.style_modifier);
+        self.saved_style_modifier = Some(self.cursor.state.style_modifier);
         self
     }
 
     pub fn line_start_column(mut self) -> Self {
-        self.saved_line_start_column = Some(self.cursor.line_start_column);
+        self.saved_line_start_column = Some(self.cursor.state.line_start_column);
         self
     }
 
     pub fn pos_x(mut self) -> Self {
-        self.saved_pos_x = Some(self.cursor.x);
+        self.saved_pos_x = Some(self.cursor.state.x);
         self
     }
 
     pub fn pos_y(mut self) -> Self {
-        self.saved_pos_y = Some(self.cursor.y);
+        self.saved_pos_y = Some(self.cursor.state.y);
         self
     }
 }
@@ -310,16 +353,16 @@ impl<'a, 'c: 'a, 'g: 'c, T: 'c + CursorTarget> CursorRestorer<'a, 'c, 'g, T> {
 impl<'a, 'c: 'a, 'g: 'c, T: 'c + CursorTarget> ::std::ops::Drop for CursorRestorer<'a, 'c, 'g, T> {
     fn drop(&mut self) {
         if let Some(saved) = self.saved_style_modifier {
-            self.cursor.style_modifier = saved;
+            self.cursor.state.style_modifier = saved;
         }
         if let Some(saved) = self.saved_line_start_column {
-            self.cursor.line_start_column = saved;
+            self.cursor.state.line_start_column = saved;
         }
         if let Some(saved) = self.saved_pos_x {
-            self.cursor.x = saved;
+            self.cursor.state.x = saved;
         }
         if let Some(saved) = self.saved_pos_y {
-            self.cursor.y = saved;
+            self.cursor.state.y = saved;
         }
     }
 }

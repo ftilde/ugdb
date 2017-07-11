@@ -417,7 +417,10 @@ impl Handler for TerminalWindow {
     /// Linefeed
     fn linefeed(&mut self) {
         self.with_cursor(|cursor| {
-            cursor.wrap_line()
+            // Slight hack:
+            // Write something into the new line to force the buffer to update it's size.
+            cursor.write("\n ");
+            cursor.move_by(-1, 0);
         });
         trace_ansi!("linefeed");
     }

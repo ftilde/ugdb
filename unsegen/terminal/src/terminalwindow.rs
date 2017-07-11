@@ -252,17 +252,19 @@ fn ansi_to_unsegen_color(ansi_color: ansi::Color) -> UColor {
 }
 
 macro_rules! warn_unimplemented {
-    ($arg:tt) => {{
+    ($($arg:tt)*) => {{
         use std::io::Write;
-        (writeln!(&mut ::std::io::stderr(), "WARN: Unimplemented ansi function \"{}\"", $arg)).expect("stderr");
+        (write!(&mut ::std::io::stderr(), "WARN: Unimplemented ansi function \"")).expect("stderr");
+        (write!(&mut ::std::io::stderr(), $($arg)*)).expect("stderr");
+        (writeln!(&mut ::std::io::stderr(), "\"")).expect("stderr");
     }}
 }
 
 macro_rules! trace_ansi {
     ($($arg:tt)*) => {{
-        use std::io::Write;
-        (write!(&mut ::std::io::stderr(), "INFO: Ansi trace: ")).expect("stderr");
-        (writeln!(&mut ::std::io::stderr(), $($arg)*)).expect("stderr");
+        //use std::io::Write;
+        //(write!(&mut ::std::io::stderr(), "INFO: Ansi trace: ")).expect("stderr");
+        //(writeln!(&mut ::std::io::stderr(), $($arg)*)).expect("stderr");
     }}
 }
 
@@ -340,15 +342,19 @@ impl Handler for TerminalWindow {
     }
 
     /// Move cursor forward `cols`
-    fn move_forward(&mut self, _: index::Column) {
-        //TODO
-        warn_unimplemented!("move_forward");
+    fn move_forward(&mut self, cols: index::Column) {
+        self.with_cursor(|cursor| {
+            cursor.move_by(cols.0 as i32, 0);
+        });
+        trace_ansi!("move_forward");
     }
 
     /// Move cursor backward `cols`
-    fn move_backward(&mut self, _: index::Column) {
-        //TODO
-        warn_unimplemented!("move_backward");
+    fn move_backward(&mut self, cols: index::Column) {
+        self.with_cursor(|cursor| {
+            cursor.move_by(-(cols.0 as i32), 0);
+        });
+        trace_ansi!("move_backward");
     }
 
     /// Move cursor down `rows` and set to column 1
@@ -505,9 +511,21 @@ impl Handler for TerminalWindow {
     }
 
     /// Clear screen
-    fn clear_screen(&mut self, _: ansi::ClearMode) {
-        //TODO
-        warn_unimplemented!("clear_screen");
+    fn clear_screen(&mut self, mode: ansi::ClearMode) {
+        match mode {
+            ansi::ClearMode::Below => {
+                warn_unimplemented!("clear_screen below");
+            },
+            ansi::ClearMode::Above => {
+                warn_unimplemented!("clear_screen above");
+            },
+            ansi::ClearMode::All => {
+                warn_unimplemented!("clear_screen all");
+            },
+            ansi::ClearMode::Saved => {
+                warn_unimplemented!("clear_screen saved");
+            },
+        }
     }
 
     /// Clear tab stops
@@ -529,7 +547,7 @@ impl Handler for TerminalWindow {
     /// down is performed
     fn reverse_index(&mut self) {
         //TODO
-        warn_unimplemented!("set_mode");
+        warn_unimplemented!("reverse_index");
     }
 
     /// set a terminal attribute
@@ -561,15 +579,15 @@ impl Handler for TerminalWindow {
     }
 
     /// Set mode
-    fn set_mode(&mut self, _: ansi::Mode) {
+    fn set_mode(&mut self, mode: ansi::Mode) {
         //TODO
-        warn_unimplemented!("set_mode");
+        warn_unimplemented!("set_mode {:?}", mode);
     }
 
     /// Unset mode
-    fn unset_mode(&mut self, _: ansi::Mode) {
+    fn unset_mode(&mut self, mode: ansi::Mode) {
         //TODO
-        warn_unimplemented!("unset_mode");
+        warn_unimplemented!("unset_mode {:?}", mode);
     }
 
     /// DECSTBM - Set the terminal scrolling region

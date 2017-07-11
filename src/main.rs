@@ -93,7 +93,8 @@ fn main() {
                     if let Some(record) = oob_evt {
                         tui.add_out_of_band_record(record, &mut gdb);
                     } else {
-                        break; // TODO why silent fail/break?
+                        // OOB pipe has closed. => gdb will be stopping soon
+                        break;
                     }
                 },
                 keyboard_source.recv() -> evt => {

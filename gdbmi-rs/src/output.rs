@@ -134,7 +134,7 @@ impl Output {
     fn parse(line: &str) -> Self {
         match output(line.as_bytes()) {
             IResult::Done(_, c) => { return c; },
-            IResult::Incomplete(e) => { panic!("parsing line: incomplete {:?}", e) }, //Is it okay to read the next bytes then?
+            IResult::Incomplete(e) => { panic!("parsing line: incomplete {:?}", e)}, //Is it okay to read the next bytes then?
             IResult::Error(e) => { panic!("parse error: {}", e) }
         }
     }
@@ -221,7 +221,7 @@ named!(buggy_gdb_list_in_result<JsonValue>,
 named!(
     result<(String, JsonValue)>,
     chain!(
-        var: is_not!("={" /* Disallowing '{' should detect bugs */) ~
+        var: is_not!("={}" /* Do not allow =, {, nor } */) ~
         tag!("=") ~
         val: buggy_gdb_list_in_result,
         || (String::from_utf8_lossy(var).into_owned(), val))
@@ -359,3 +359,13 @@ named!(
             || output
             )
     );
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_output() {
+        let _ = Output::parse("=library-loaded,ranges=[{}]\n");
+    }
+}

@@ -30,6 +30,10 @@ use ansi::{
 
 use std::fmt::Write;
 use index;
+use std::cmp::{
+    min,
+    max,
+};
 
 #[derive(Clone)]
 struct Line {
@@ -45,6 +49,11 @@ impl Line {
 
     fn length(&self) -> u32 {
         self.content.len() as u32
+    }
+
+    fn height_for_width(&self, width: u32) -> u32 {
+        //TODO: this might not be correct if there are wide clusters within the content, hmm...
+        self.length().checked_sub(1).unwrap_or(0) as u32 / width + 1
     }
 
     fn get_grapheme_cluster_mut(&mut self, x: u32) -> Option<&mut StyledGraphemeCluster> {
@@ -69,6 +78,10 @@ impl LineBuffer {
             window_width: 0,
             default_style: Style::default(),
         }
+    }
+
+    fn height_as_displayed(&self) -> u32 {
+        self.lines.iter().map(|l| l.height_for_width(self.window_width)).sum()
     }
 
     pub fn set_window_width(&mut self, w: u32) {
@@ -106,8 +119,8 @@ pub struct TerminalWindow {
     buffer: LineBuffer,
     cursor_state: CursorState,
     //input_buffer: Vec<u8>,
-    scrollback_position: Option<usize>,
-    scroll_step: usize,
+    scrollback_position: Option<u32>,
+    scroll_step: u32,
 }
 
 impl TerminalWindow {
@@ -123,8 +136,9 @@ impl TerminalWindow {
         }
     }
 
-    fn current_scrollback_line(&self) -> usize {
-        self.scrollback_position.unwrap_or(self.buffer.lines.len().checked_sub(1).unwrap_or(0))
+    // position of the first (displayed) row of the buffer that will NOT be displayed
+    fn current_scrollback_pos(&self) -> u32 {
+        self.scrollback_position.unwrap_or(self.buffer.height_as_displayed())
     }
 
     pub fn set_width(&mut self, w: u32) {
@@ -151,17 +165,13 @@ impl TerminalWindow {
         f(&mut cursor);
         self.cursor_state = cursor.into_state();
     }
-    /*
-    pub fn display_byte(&mut self, byte: u8) {
-        self.input_buffer.push(byte);
 
-        if let Ok(string) = String::from_utf8(self.input_buffer.clone()) {
-            use std::fmt::Write;
-            self.display.storage.write_str(&string).expect("Write byte to terminal");
-            self.input_buffer.clear();
-        }
+    fn line_to_buffer_pos_y(&self, line: index::Line) -> i32 {
+        max(0, self.buffer.lines.len() as i32 - self.window_height as i32) + line.0 as i32
     }
-    */
+    fn col_to_buffer_pos_x(&self, col: index::Column) -> i32 {
+        col.0 as i32
+    }
 }
 
 impl Widget for TerminalWindow {
@@ -177,25 +187,21 @@ impl Widget for TerminalWindow {
         let height = window.get_height();
         let width = window.get_width();
 
-        self.set_width(width);
-        self.set_height(height);
-
         if height == 0 || width == 0 || self.buffer.lines.is_empty() {
             return;
         }
 
-        let y_start = height as usize - 1;
+        let scrollback_offset = (self.buffer.height_as_displayed() - self.current_scrollback_pos()) as i32;
+        let minimum_y_start = height as i32 + scrollback_offset;
+        let start_line = self.buffer.lines.len().checked_sub(minimum_y_start as usize).unwrap_or(0);
+        let line_range = start_line..;
+        let y_start = min(0, minimum_y_start - self.buffer.lines[line_range.clone()].iter().map(|line| line.height_for_width(width)).sum::<u32>() as i32);
         let mut cursor = Cursor::new(&mut window)
             .position(0, y_start as i32)
             .wrapping_mode(WrappingMode::Wrap);
-        let end_line = self.current_scrollback_line();
-        let start_line = end_line.checked_sub(height as usize).unwrap_or(0);
-        for line in self.buffer.lines[start_line..(end_line+1)].iter().rev() {
-            let num_auto_wraps = (line.length().checked_sub(1).unwrap_or(0) / width) as i32;
-            cursor.move_by(0, -num_auto_wraps);
+        for line in self.buffer.lines[line_range].iter() {
             cursor.write_preformatted(line.content.as_slice());
-            cursor.carriage_return();
-            cursor.move_by(0, -num_auto_wraps-1);
+            cursor.wrap_line();
         }
     }
 }
@@ -268,6 +274,7 @@ macro_rules! trace_ansi {
     }}
 }
 
+
 impl Handler for TerminalWindow {
 
     /// OSC to set window title
@@ -290,23 +297,31 @@ impl Handler for TerminalWindow {
     }
 
     /// Set cursor to position
-    fn goto(&mut self, y: index::Line, x: index::Column) {
+    fn goto(&mut self, line: index::Line, col: index::Column) {
+        let x = self.col_to_buffer_pos_x(col);
+        let y = self.line_to_buffer_pos_y(line);
         self.with_cursor(|cursor| {
-            cursor.set_position(x.0 as i32, y.0 as i32);
+            cursor.set_position(x, y);
         });
         trace_ansi!("goto");
     }
 
     /// Set cursor to specific row
-    fn goto_line(&mut self, _: index::Line) {
-        //TODO
-        warn_unimplemented!("goto_line");
+    fn goto_line(&mut self, line: index::Line) {
+        let y = self.line_to_buffer_pos_y(line);
+        self.with_cursor(|cursor| {
+            cursor.move_to_y(y);
+        });
+        trace_ansi!("goto_line");
     }
 
     /// Set cursor to specific column
-    fn goto_col(&mut self, _: index::Column) {
-        //TODO
-        warn_unimplemented!("goto_col");
+    fn goto_col(&mut self, col: index::Column) {
+        let x = self.col_to_buffer_pos_x(col);
+        self.with_cursor(|cursor| {
+            cursor.move_to_x(x);
+        });
+        trace_ansi!("goto_col");
     }
 
     /// Insert blank characters in current line starting from cursor
@@ -650,9 +665,9 @@ impl TermInfo for TerminalWindow {
 
 impl Scrollable for TerminalWindow {
     fn scroll_forwards(&mut self) -> OperationResult {
-        let current = self.current_scrollback_line();
+        let current = self.current_scrollback_pos();
         let candidate = current + self.scroll_step;
-        self.scrollback_position = if candidate < self.buffer.lines.len() {
+        self.scrollback_position = if candidate < self.buffer.height_as_displayed() {
             Some(candidate)
         } else {
             None
@@ -664,14 +679,13 @@ impl Scrollable for TerminalWindow {
         }
     }
     fn scroll_backwards(&mut self) -> OperationResult {
-        let current = self.current_scrollback_line();
-        let op_res = if current != 0 {
+        let current = self.current_scrollback_pos();
+        if current > self.window_height {
+            self.scrollback_position = Some(current.checked_sub(self.scroll_step).unwrap_or(0));
             Ok(())
         } else {
             Err(())
-        };
-        self.scrollback_position = Some(current.checked_sub(self.scroll_step).unwrap_or(0));
-        op_res
+        }
     }
 }
 

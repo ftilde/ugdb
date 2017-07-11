@@ -150,7 +150,7 @@ impl Terminal {
     fn ensure_size(&mut self, w: u32, h: u32) {
         if w != self.terminal_window.get_width() || h != self.terminal_window.get_height() {
             self.terminal_window.set_width(w);
-            self.terminal_window.set_height(w);
+            self.terminal_window.set_height(h);
 
             self.master_input_sink.resize(w as u16, h as u16, w as u16 /*??*/, h as u16 /*??*/).expect("Resize pty");
         }

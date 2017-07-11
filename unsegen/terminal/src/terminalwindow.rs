@@ -127,13 +127,21 @@ impl TerminalWindow {
         self.scrollback_position.unwrap_or(self.buffer.lines.len().checked_sub(1).unwrap_or(0))
     }
 
-    fn set_width(&mut self, w: u32) {
+    pub fn set_width(&mut self, w: u32) {
         self.window_width = w;
         self.buffer.set_window_width(w);
     }
 
-    fn set_height(&mut self, h: u32) {
+    pub fn set_height(&mut self, h: u32) {
         self.window_height = h;
+    }
+
+    pub fn get_width(&self) -> u32 {
+        self.window_width
+    }
+
+    pub fn get_height(&self) -> u32 {
+        self.window_height
     }
 
     fn with_cursor<F: FnOnce(&mut Cursor<LineBuffer>)>(&mut self, f: F) {
@@ -160,8 +168,8 @@ impl Widget for TerminalWindow {
     fn space_demand(&self) -> Demand2D {
         // at_least => We can grow if there is space
         Demand2D {
-            width: Demand::at_least(self.cols().0 as u32),
-            height: Demand::at_least(self.lines().0 as u32),
+            width: Demand::at_least(self.window_width as u32),
+            height: Demand::at_least(self.window_height as u32),
         }
     }
 
@@ -615,10 +623,10 @@ impl Handler for TerminalWindow {
 
 impl TermInfo for TerminalWindow {
     fn lines(&self) -> index::Line {
-        index::Line(self.window_height as usize) //TODO: is this even correct? do we want 'unbounded'?
+        index::Line(self.get_height() as usize) //TODO: is this even correct? do we want 'unbounded'?
     }
     fn cols(&self) -> index::Column {
-        index::Column(self.window_width as usize) //TODO: see above
+        index::Column(self.get_width() as usize) //TODO: see above
     }
 }
 

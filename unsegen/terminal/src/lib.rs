@@ -146,6 +146,15 @@ impl Terminal {
             _ => { Ok(()) }
         }.expect("Write to terminal");
     }
+
+    fn ensure_size(&mut self, w: u32, h: u32) {
+        if w != self.terminal_window.get_width() || h != self.terminal_window.get_height() {
+            self.terminal_window.set_width(w);
+            self.terminal_window.set_height(w);
+
+            self.master_input_sink.resize(w as u16, h as u16, w as u16 /*??*/, h as u16 /*??*/).expect("Resize pty");
+        }
+    }
 }
 
 impl Widget for Terminal {
@@ -153,6 +162,7 @@ impl Widget for Terminal {
         self.terminal_window.space_demand()
     }
     fn draw(&mut self, window: Window, hints: RenderingHints) {
+        self.ensure_size(window.get_width(), window.get_height());
         self.terminal_window.draw(window, hints);
     }
 }

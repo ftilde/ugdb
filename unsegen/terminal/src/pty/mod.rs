@@ -163,6 +163,30 @@ impl Write for PTYInput {
     }
 }
 
+impl PTYInput {
+    pub fn resize(&self, w: u16, h: u16, wpixel: u16, hpixel: u16) -> io::Result<()> {
+        let size = libc::winsize {
+            ws_row: h as libc::c_ushort,
+            ws_col: w as libc::c_ushort,
+            ws_xpixel: wpixel as libc::c_ushort,
+            ws_ypixel: hpixel as libc::c_ushort,
+        };
+
+        let res = {
+            let lock = self.pty.lock().expect("lock pty for resize");
+            unsafe {
+                libc::ioctl(lock.fd, libc::TIOCSWINSZ, &size as *const libc::winsize)
+            }
+        };
+
+        if res < 0 {
+            Err(io::Error::last_os_error())
+        } else {
+            Ok(())
+        }
+    }
+}
+
 fn open_ptm() -> Result<libc::c_int> {
     let pty_master = unsafe_try!(ffi::posix_openpt(libc::O_RDWR));
 

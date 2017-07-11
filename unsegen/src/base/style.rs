@@ -118,6 +118,7 @@ pub enum Color {
         g: u8,
         b: u8,
     },
+    Ansi(u8),
     Black,
     Blue,
     Cyan,
@@ -137,11 +138,19 @@ pub enum Color {
 }
 
 impl Color {
+    pub fn ansi_rgb(r: u8, g: u8, b: u8) -> Self {
+        Color::Ansi(termion::color::AnsiValue::rgb(r,g,b).0)
+    }
+    pub fn ansi_grayscale(v: u8 /* < 24 */) -> Self {
+        Color::Ansi(termion::color::AnsiValue::grayscale(v).0)
+    }
+
     fn set_terminal_attributes_fg(&self, terminal: &mut RawTerminal<::std::io::StdoutLock>) -> ::std::io::Result<()> {
         use termion::color::Fg as Target;
         use std::io::Write;
         match self {
             &Color::Rgb { r, g, b } => write!(terminal, "{}", Target(termion::color::Rgb(r, g, b))),
+            &Color::Ansi(v) => write!(terminal, "{}", Target(termion::color::AnsiValue(v))),
             &Color::Black   => write!(terminal, "{}", Target(termion::color::Black)),
             &Color::Blue    => write!(terminal, "{}", Target(termion::color::Blue)),
             &Color::Cyan    => write!(terminal, "{}", Target(termion::color::Cyan)),
@@ -165,6 +174,7 @@ impl Color {
         use std::io::Write;
         match self {
             &Color::Rgb { r, g, b } => write!(terminal, "{}", Target(termion::color::Rgb(r, g, b))),
+            &Color::Ansi(v) => write!(terminal, "{}", Target(termion::color::AnsiValue(v))),
             &Color::Black   => write!(terminal, "{}", Target(termion::color::Black)),
             &Color::Blue    => write!(terminal, "{}", Target(termion::color::Blue)),
             &Color::Cyan    => write!(terminal, "{}", Target(termion::color::Cyan)),

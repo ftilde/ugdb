@@ -3,11 +3,13 @@ use unsegen::base::{
     CursorState,
     CursorTarget,
     Style,
+    StyleModifier,
     StyledGraphemeCluster,
     Window,
     WrappingMode,
     UNBOUNDED_EXTENT,
 };
+use unsegen::base::Color as UColor;
 use unsegen::widget::{
     Demand,
     Demand2D,
@@ -18,7 +20,9 @@ use unsegen::input::{
     Scrollable,
     OperationResult,
 };
+use ansi;
 use ansi::{
+    Attr,
     CursorStyle,
     Handler,
     TermInfo,
@@ -185,6 +189,57 @@ impl Widget for TerminalWindow {
             cursor.carriage_return();
             cursor.move_by(0, -num_auto_wraps-1);
         }
+    }
+}
+
+fn ansi_to_unsegen_color(ansi_color: ansi::Color) -> UColor {
+    match ansi_color {
+        ansi::Color::Named(c) => match c {
+            ansi::NamedColor::Black => UColor::Black,
+            ansi::NamedColor::Red => UColor::Red,
+            ansi::NamedColor::Green => UColor::Green,
+            ansi::NamedColor::Yellow => UColor::Yellow,
+            ansi::NamedColor::Blue => UColor::Blue,
+            ansi::NamedColor::Magenta => UColor::Magenta,
+            ansi::NamedColor::Cyan => UColor::Cyan,
+            ansi::NamedColor::White => UColor::White,
+            ansi::NamedColor::BrightBlack => UColor::LightBlack,
+            ansi::NamedColor::BrightRed => UColor::LightRed,
+            ansi::NamedColor::BrightGreen => UColor::LightGreen,
+            ansi::NamedColor::BrightYellow => UColor::LightYellow,
+            ansi::NamedColor::BrightBlue => UColor::LightBlue,
+            ansi::NamedColor::BrightMagenta => UColor::LightMagenta,
+            ansi::NamedColor::BrightCyan => UColor::LightCyan,
+            ansi::NamedColor::BrightWhite => UColor::LightWhite,
+            ansi::NamedColor::Foreground => UColor::White, //??
+            ansi::NamedColor::Background => UColor::Black, //??
+            ansi::NamedColor::CursorText =>  {
+                // This is kind of tricky to get...
+                UColor::Black
+            },
+            ansi::NamedColor::Cursor => {
+                // This is kind of tricky to get...
+                UColor::Black
+            },
+            // Also not sure what to do here
+            ansi::NamedColor::DimBlack => UColor::Black,
+            ansi::NamedColor::DimRed => UColor::Red,
+            ansi::NamedColor::DimGreen => UColor::Green,
+            ansi::NamedColor::DimYellow => UColor::Yellow,
+            ansi::NamedColor::DimBlue => UColor::Blue,
+            ansi::NamedColor::DimMagenta => UColor::Magenta,
+            ansi::NamedColor::DimCyan => UColor::Cyan,
+            ansi::NamedColor::DimWhite => UColor::White,
+        },
+        ansi::Color::Spec(c) => {
+            //TODO: Is this truecolor or ansi rgb? Probably ansi.
+            UColor::ansi_rgb(c.r, c.g, c.b)
+        },
+        ansi::Color::Indexed(c) => {
+            //TODO: We might in the future implement a separate color table, but for new we "reuse"
+            //the table of the underlying terminal:
+            UColor::Ansi(c)
+        },
     }
 }
 
@@ -400,12 +455,36 @@ impl Handler for TerminalWindow {
     fn reverse_index(&mut self) {
         //TODO
     }
+    */
 
     /// set a terminal attribute
-    fn terminal_attribute(&mut self, _attr: Attr) {
-        //TODO
+    fn terminal_attribute(&mut self, attr: Attr) {
+        self.with_cursor(|c| {
+            match attr {
+                Attr::Reset => { c.set_style_modifier(StyleModifier::new()) },
+                Attr::Bold => { c.apply_style_modifier(StyleModifier::new().bold(true)); },
+                Attr::Dim => { /* What is this? */},
+                Attr::Italic => { c.apply_style_modifier(StyleModifier::new().italic(true)); },
+                Attr::Underscore => { c.apply_style_modifier(StyleModifier::new().underline(true)); },
+                Attr::BlinkSlow => { /* Not supported (yet) */},
+                Attr::BlinkFast => { /* Not supported (yet) */},
+                Attr::Reverse => { /* Not supported (yet) */},
+                Attr::Hidden => { /* Not supported (yet) */},
+                Attr::Strike => { /* Not supported (yet) */},
+                Attr::CancelBoldDim => { c.apply_style_modifier(StyleModifier::new().bold(false)); },
+                Attr::CancelItalic => { c.apply_style_modifier(StyleModifier::new().italic(false)); },
+                Attr::CancelUnderline => { c.apply_style_modifier(StyleModifier::new().underline(false)); },
+                Attr::CancelBlink => { /* Not supported (yet) */},
+                Attr::CancelReverse => { /* Not supported (yet) */},
+                Attr::CancelHidden => { /* Not supported (yet) */},
+                Attr::CancelStrike => { /* Not supported (yet) */},
+                Attr::Foreground(color) => { c.apply_style_modifier(StyleModifier::new().fg_color(ansi_to_unsegen_color(color))); },
+                Attr::Background(color) => { c.apply_style_modifier(StyleModifier::new().bg_color(ansi_to_unsegen_color(color))); },
+            }
+        });
     }
 
+    /*
     /// Set mode
     fn set_mode(&mut self, _mode: Mode) {
         //TODO

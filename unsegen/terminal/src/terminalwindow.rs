@@ -243,6 +243,13 @@ fn ansi_to_unsegen_color(ansi_color: ansi::Color) -> UColor {
     }
 }
 
+macro_rules! warn_unimplemented {
+    ($arg:tt) => {{
+        use std::io::Write;
+        (writeln!(&mut ::std::io::stderr(), "WARN: Unimplemented ansi function \"{}\"", $arg)).expect("stderr");
+    }}
+}
+
 impl Handler for TerminalWindow {
 
     /// OSC to set window title
@@ -262,79 +269,91 @@ impl Handler for TerminalWindow {
         });
     }
 
-    /*
     /// Set cursor to position
-    fn goto(&mut self, Line, Column) {
+    fn goto(&mut self, _: index::Line, _: index::Column) {
         //TODO
+        warn_unimplemented!("goto");
     }
 
     /// Set cursor to specific row
-    fn goto_line(&mut self, Line) {
+    fn goto_line(&mut self, _: index::Line) {
         //TODO
+        warn_unimplemented!("goto_line");
     }
 
     /// Set cursor to specific column
-    fn goto_col(&mut self, Column) {
+    fn goto_col(&mut self, _: index::Column) {
         //TODO
+        warn_unimplemented!("goto_col");
     }
 
     /// Insert blank characters in current line starting from cursor
-    fn insert_blank(&mut self, Column) {
+    fn insert_blank(&mut self, _: index::Column) {
         //TODO
+        warn_unimplemented!("insert_blank");
     }
 
     /// Move cursor up `rows`
-    fn move_up(&mut self, Line) {
+    fn move_up(&mut self, _: index::Line) {
         //TODO
+        warn_unimplemented!("move_up");
     }
 
     /// Move cursor down `rows`
-    fn move_down(&mut self, Line) {
+    fn move_down(&mut self, _: index::Line) {
         //TODO
+        warn_unimplemented!("move_down");
     }
 
     /// Identify the terminal (should write back to the pty stream)
     ///
     /// TODO this should probably return an io::Result
-    fn identify_terminal<W: io::Write>(&mut self, &mut W) {
+    fn identify_terminal<W: ::std::io::Write>(&mut self, _: &mut W) {
         //TODO
+        warn_unimplemented!("identify_terminal");
     }
 
     /// Report device status
-    fn device_status<W: io::Write>(&mut self, &mut W, usize) {
+    fn device_status<W: ::std::io::Write>(&mut self, _: &mut W, _: usize) {
         //TODO
+        warn_unimplemented!("device_status");
     }
 
     /// Move cursor forward `cols`
-    fn move_forward(&mut self, Column) {
+    fn move_forward(&mut self, _: index::Column) {
         //TODO
+        warn_unimplemented!("move_forward");
     }
 
     /// Move cursor backward `cols`
-    fn move_backward(&mut self, Column) {
+    fn move_backward(&mut self, _: index::Column) {
         //TODO
+        warn_unimplemented!("move_backward");
     }
 
     /// Move cursor down `rows` and set to column 1
-    fn move_down_and_cr(&mut self, Line) {
+    fn move_down_and_cr(&mut self, _: index::Line) {
         //TODO
+        warn_unimplemented!("move_down_and_cr");
     }
 
     /// Move cursor up `rows` and set to column 1
-    fn move_up_and_cr(&mut self, Line) {
+    fn move_up_and_cr(&mut self, _: index::Line) {
         //TODO
+        warn_unimplemented!("move_up_and_cr");
     }
 
     /// Put `count` tabs
     fn put_tab(&mut self, _count: i64) {
         //TODO
+        warn_unimplemented!("put_tab");
     }
 
     /// Backspace `count` characters
     fn backspace(&mut self) {
         //TODO
+        warn_unimplemented!("backspace");
     }
-    */
 
     /// Carriage return
     fn carriage_return(&mut self) {
@@ -355,96 +374,112 @@ impl Handler for TerminalWindow {
         //omitted
     }
 
-    /*
     /// Substitute char under cursor
     fn substitute(&mut self) {
-        //TODO
+        //TODO... substitute with what?
+        warn_unimplemented!("substitute");
     }
 
     /// Newline
     fn newline(&mut self) {
         //TODO
+        warn_unimplemented!("newline");
     }
 
     /// Set current position as a tabstop
     fn set_horizontal_tabstop(&mut self) {
         //TODO
+        warn_unimplemented!("set_horizontal_tabstop");
     }
 
     /// Scroll up `rows` rows
-    fn scroll_up(&mut self, Line) {
+    fn scroll_up(&mut self, _: index::Line) {
         //TODO
+        warn_unimplemented!("scroll_up");
     }
 
     /// Scroll down `rows` rows
-    fn scroll_down(&mut self, Line) {
+    fn scroll_down(&mut self, _: index::Line) {
         //TODO
+        warn_unimplemented!("scroll_down");
     }
 
     /// Insert `count` blank lines
-    fn insert_blank_lines(&mut self, Line) {
+    fn insert_blank_lines(&mut self, _: index::Line) {
         //TODO
+        warn_unimplemented!("insert_blank_lines");
     }
 
     /// Delete `count` lines
-    fn delete_lines(&mut self, Line) {
+    fn delete_lines(&mut self, _: index::Line) {
         //TODO
+        warn_unimplemented!("delete_lines");
     }
 
     /// Erase `count` chars in current line following cursor
     ///
     /// Erase means resetting to the default state (default colors, no content,
     /// no mode flags)
-    fn erase_chars(&mut self, Column) {
+    fn erase_chars(&mut self, _: index::Column) {
         //TODO
+        warn_unimplemented!("erase_chars");
     }
 
     /// Delete `count` chars
     ///
     /// Deleting a character is like the delete key on the keyboard - everything
     /// to the right of the deleted things is shifted left.
-    fn delete_chars(&mut self, Column) {
+    fn delete_chars(&mut self, _: index::Column) {
         //TODO
+        warn_unimplemented!("delete_chars");
     }
 
     /// Move backward `count` tabs
     fn move_backward_tabs(&mut self, _count: i64) {
         //TODO
+        warn_unimplemented!("move_backward_tabs");
     }
 
     /// Move forward `count` tabs
     fn move_forward_tabs(&mut self, _count: i64) {
         //TODO
+        warn_unimplemented!("move_forward_tabs");
     }
 
     /// Save current cursor position
     fn save_cursor_position(&mut self) {
         //TODO
+        warn_unimplemented!("save_cursor_position");
     }
 
     /// Restore cursor position
     fn restore_cursor_position(&mut self) {
         //TODO
+        warn_unimplemented!("restore_cursor_position");
     }
 
     /// Clear current line
-    fn clear_line(&mut self, _mode: LineClearMode) {
+    fn clear_line(&mut self, _: ansi::LineClearMode) {
         //TODO
+        warn_unimplemented!("clear_line");
     }
 
     /// Clear screen
-    fn clear_screen(&mut self, _mode: ClearMode) {
+    fn clear_screen(&mut self, _: ansi::ClearMode) {
         //TODO
+        warn_unimplemented!("clear_screen");
     }
 
     /// Clear tab stops
-    fn clear_tabs(&mut self, _mode: TabulationClearMode) {
+    fn clear_tabs(&mut self, _: ansi::TabulationClearMode) {
         //TODO
+        warn_unimplemented!("clear_tabs");
     }
 
     /// Reset terminal state
     fn reset_state(&mut self) {
         //TODO
+        warn_unimplemented!("reset_state");
     }
 
     /// Reverse Index
@@ -454,8 +489,8 @@ impl Handler for TerminalWindow {
     /// down is performed
     fn reverse_index(&mut self) {
         //TODO
+        warn_unimplemented!("set_mode");
     }
-    */
 
     /// set a terminal attribute
     fn terminal_attribute(&mut self, attr: Attr) {
@@ -484,58 +519,65 @@ impl Handler for TerminalWindow {
         });
     }
 
-    /*
     /// Set mode
-    fn set_mode(&mut self, _mode: Mode) {
+    fn set_mode(&mut self, _: ansi::Mode) {
         //TODO
+        warn_unimplemented!("set_mode");
     }
 
     /// Unset mode
-    fn unset_mode(&mut self, Mode) {
+    fn unset_mode(&mut self, _: ansi::Mode) {
         //TODO
+        warn_unimplemented!("unset_mode");
     }
 
     /// DECSTBM - Set the terminal scrolling region
-    fn set_scrolling_region(&mut self, Range<Line>) {
+    fn set_scrolling_region(&mut self, _: ::std::ops::Range<index::Line>) {
         //TODO
+        warn_unimplemented!("set_scrolling_region");
     }
 
     /// DECKPAM - Set keypad to applications mode (ESCape instead of digits)
     fn set_keypad_application_mode(&mut self) {
         //TODO
+        warn_unimplemented!("set_keypad_application_mode");
     }
 
     /// DECKPNM - Set keypad to numeric mode (digits intead of ESCape seq)
     fn unset_keypad_application_mode(&mut self) {
         //TODO
+        warn_unimplemented!("unset_keypad_application_mode");
     }
 
     /// Set one of the graphic character sets, G0 to G3, as the active charset.
     ///
     /// 'Invoke' one of G0 to G3 in the GL area. Also refered to as shift in,
     /// shift out and locking shift depending on the set being activated
-    fn set_active_charset(&mut self, CharsetIndex) {
+    fn set_active_charset(&mut self, _: ansi::CharsetIndex) {
         //TODO
+        warn_unimplemented!("set_active_charset");
     }
 
     /// Assign a graphic character set to G0, G1, G2 or G3
     ///
     /// 'Designate' a graphic character set as one of G0 to G3, so that it can
     /// later be 'invoked' by `set_active_charset`
-    fn configure_charset(&mut self, CharsetIndex, StandardCharset) {
+    fn configure_charset(&mut self, _: ansi::CharsetIndex, _: ansi::StandardCharset) {
         //TODO
+        warn_unimplemented!("configure_charset");
     }
 
     /// Set an indexed color value
-    fn set_color(&mut self, usize, Rgb) {
-        //TODO
+    fn set_color(&mut self, _: usize, _: ansi::Rgb) {
+        //TODO: Implement this, once there is support for a per-terminal color table
+        warn_unimplemented!("set_color");
     }
 
     /// Run the dectest routine
     fn dectest(&mut self) {
         //TODO
+        warn_unimplemented!("dectest");
     }
-    */
 }
 
 impl TermInfo for TerminalWindow {

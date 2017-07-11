@@ -280,9 +280,11 @@ impl Handler for TerminalWindow {
     }
 
     /// Set cursor to position
-    fn goto(&mut self, _: index::Line, _: index::Column) {
-        //TODO
-        warn_unimplemented!("goto");
+    fn goto(&mut self, y: index::Line, x: index::Column) {
+        self.with_cursor(|cursor| {
+            cursor.set_position(x.0 as i32, y.0 as i32);
+        });
+        trace_ansi!("goto");
     }
 
     /// Set cursor to specific row
@@ -365,8 +367,10 @@ impl Handler for TerminalWindow {
 
     /// Backspace `count` characters
     fn backspace(&mut self) {
-        //TODO
-        warn_unimplemented!("backspace");
+        self.with_cursor(|cursor| {
+            cursor.backspace();
+        });
+        trace_ansi!("backspace");
     }
 
     /// Carriage return

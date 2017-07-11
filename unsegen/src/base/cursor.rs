@@ -133,6 +133,20 @@ impl<'c, 'g: 'c, T: 'c + CursorTarget> Cursor<'c, 'g, T> {
         self.state.tab_column_width = width;
     }
 
+    pub fn backspace(&mut self) {
+        let style = self.active_style();
+        let saved_x = self.state.x;
+        self.write_cluster(GraphemeCluster::space(), &style).expect("Cursor should be on screen");
+
+        if self.state.wrapping_mode == WrappingMode::Wrap && self.state.x <= 0 {
+            self.move_by(0, -1);
+            let right_most_column = self.window.get_soft_width() as i32 - 1;
+            self.move_to_x(right_most_column);
+        } else {
+            self.state.x = saved_x - 1;
+        }
+    }
+
     fn clear_line_in_range(&mut self, range: Range<i32>) {
         let style = self.active_style();
         let saved_x = self.state.x;

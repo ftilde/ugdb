@@ -86,6 +86,14 @@ impl<'c, 'g: 'c, T: 'c + CursorTarget> Cursor<'c, 'g, T> {
         (self.state.x, self.state.y)
     }
 
+    pub fn get_pos_x(&self) -> i32 {
+        self.state.x
+    }
+
+    pub fn get_pos_y(&self) -> i32 {
+        self.state.y
+    }
+
     pub fn move_by(&mut self, x: i32, y: i32) {
         self.state.x += x;
         self.state.y += y;

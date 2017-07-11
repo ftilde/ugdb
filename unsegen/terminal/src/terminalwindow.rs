@@ -51,6 +51,10 @@ impl Line {
         self.content.len() as u32
     }
 
+    fn clear(&mut self) {
+        self.content.clear();
+    }
+
     fn height_for_width(&self, width: u32) -> u32 {
         //TODO: this might not be correct if there are wide clusters within the content, hmm...
         self.length().checked_sub(1).unwrap_or(0) as u32 / width + 1
@@ -527,19 +531,37 @@ impl Handler for TerminalWindow {
 
     /// Clear screen
     fn clear_screen(&mut self, mode: ansi::ClearMode) {
-        match mode {
+        let clear_range = match mode {
             ansi::ClearMode::Below => {
-                warn_unimplemented!("clear_screen below");
+                trace_ansi!("clear_screen below");
+                let mut range_start = 0;
+                self.with_cursor(|cursor| {
+                    range_start = max(0, cursor.get_pos_y()+1) as usize
+                });
+
+                self.clear_line(ansi::LineClearMode::Right);
+                range_start .. self.buffer.lines.len()
             },
             ansi::ClearMode::Above => {
-                warn_unimplemented!("clear_screen above");
+                trace_ansi!("clear_screen above");
+                let mut range_end = ::std::usize::MAX;
+                self.with_cursor(|cursor| {
+                    range_end = max(0, cursor.get_pos_y()) as usize
+                });
+                self.clear_line(ansi::LineClearMode::Left);
+                self.buffer.lines.len().checked_sub(self.window_height as usize).unwrap_or(0) .. range_end
             },
             ansi::ClearMode::All => {
-                warn_unimplemented!("clear_screen all");
+                trace_ansi!("clear_screen all");
+                self.buffer.lines.len().checked_sub(self.window_height as usize).unwrap_or(0) .. self.buffer.lines.len()
             },
             ansi::ClearMode::Saved => {
                 warn_unimplemented!("clear_screen saved");
+                return;
             },
+        };
+        for line in self.buffer.lines[clear_range].iter_mut() {
+            line.clear();
         }
     }
 

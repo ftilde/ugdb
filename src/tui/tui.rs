@@ -95,7 +95,7 @@ impl<'a> Tui<'a> {
     pub fn add_out_of_band_record(&mut self, record: OutOfBandRecord, gdb: &mut gdbmi::GDB) {
         match record {
             OutOfBandRecord::StreamRecord{ kind: _, data} => {
-                self.console.add_message(data);
+                self.console.write_to_log(data);
             },
             OutOfBandRecord::AsyncRecord{token: _, kind, class, results} => {
                 self.handle_async_record(kind, class, &results, gdb);
@@ -107,12 +107,6 @@ impl<'a> Tui<'a> {
     pub fn add_pty_input(&mut self, input: Box<[u8]>) {
         self.process_pty.add_byte_input(input);
     }
-
-    /*
-    pub fn add_debug_message(&mut self, msg: &str) {
-        self.console.add_debug_message(format!("Debug: {}", msg));
-    }
-    */
 
     pub fn draw(&mut self, window: Window) {
         let split_pos = window.get_width()/2-1;

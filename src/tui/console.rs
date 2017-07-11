@@ -52,9 +52,9 @@ impl Console {
         }
     }
 
-    pub fn add_message(&mut self, msg: String) {
+    pub fn write_to_log<S: AsRef<str>>(&mut self, msg: S) {
         use std::fmt::Write;
-        write!(self.gdb_log.storage, "{}\n", msg).expect("Write message");
+        write!(self.gdb_log.storage, "{}", msg.as_ref()).expect("Write message");
     }
 
     pub fn add_debug_message(&mut self, msg: String) {
@@ -108,13 +108,13 @@ impl Console {
                 },
                 // Gdb commands
                 _ => {
-                    self.add_message(format!("(gdb) {}", line));
+                    self.write_to_log(format!("(gdb) {}\n", line));
                     match gdb.execute(&gdbmi::input::MiCommand::cli_exec(line)) {
                         Ok(result) => {
                             self.add_debug_message(format!("Result: {:?}", result));
                         },
-                        Err(gdbmi::ExecuteError::Quit) => { self.add_message(format!("quit")); },
-                        Err(gdbmi::ExecuteError::Busy) => { self.add_message(format!("GDB is running!")); },
+                        Err(gdbmi::ExecuteError::Quit) => { self.write_to_log("quit"); },
+                        Err(gdbmi::ExecuteError::Busy) => { self.write_to_log("GDB is running!\n"); },
                         //Err(err) => { panic!("Unknown error {:?}", err) },
                     }
                 },

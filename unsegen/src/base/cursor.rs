@@ -6,6 +6,7 @@ use super::{
     Window,
 };
 use std::cmp::max;
+use std::ops::Range;
 use unicode_segmentation::UnicodeSegmentation;
 
 
@@ -90,6 +91,14 @@ impl<'c, 'g: 'c, T: 'c + CursorTarget> Cursor<'c, 'g, T> {
         self.state.y += y;
     }
 
+    pub fn move_to_x(&mut self, x: i32) {
+        self.state.x = x;
+    }
+
+    pub fn move_to_y(&mut self, y: i32) {
+        self.state.y = y;
+    }
+
     pub fn set_wrapping_mode(&mut self, wm: WrappingMode) {
         self.state.wrapping_mode = wm;
     }
@@ -122,6 +131,32 @@ impl<'c, 'g: 'c, T: 'c + CursorTarget> Cursor<'c, 'g, T> {
 
     pub fn set_tab_column_width(&mut self, width: u32) {
         self.state.tab_column_width = width;
+    }
+
+    fn clear_line_in_range(&mut self, range: Range<i32>) {
+        let style = self.active_style();
+        let saved_x = self.state.x;
+        for x in range {
+            self.move_to_x(x);
+            self.write_cluster(GraphemeCluster::space(), &style).expect("range should be in window size");
+        }
+        self.state.x = saved_x;
+    }
+
+    pub fn clear_line_left(&mut self) {
+        let end = self.state.x + 1;
+        self.clear_line_in_range(0 .. end);
+    }
+
+    pub fn clear_line_right(&mut self) {
+        let start = self.state.x;
+        let end = self.window.get_soft_width() as i32;
+        self.clear_line_in_range(start .. end);
+    }
+
+    pub fn clear_line(&mut self) {
+        let end = self.window.get_soft_width() as i32;
+        self.clear_line_in_range(0 .. end);
     }
 
     pub fn fill_and_wrap_line(&mut self) {

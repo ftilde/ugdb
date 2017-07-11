@@ -250,6 +250,14 @@ macro_rules! warn_unimplemented {
     }}
 }
 
+macro_rules! trace_ansi {
+    ($($arg:tt)*) => {{
+        use std::io::Write;
+        (write!(&mut ::std::io::stderr(), "INFO: Ansi trace: ")).expect("stderr");
+        (writeln!(&mut ::std::io::stderr(), $($arg)*)).expect("stderr");
+    }}
+}
+
 impl Handler for TerminalWindow {
 
     /// OSC to set window title
@@ -260,6 +268,7 @@ impl Handler for TerminalWindow {
     /// Set the cursor style
     fn set_cursor_style(&mut self, _: CursorStyle) {
         //TODO
+        warn_unimplemented!("set_cursor_style");
     }
 
     /// A character to be displayed
@@ -267,6 +276,7 @@ impl Handler for TerminalWindow {
         self.with_cursor(|cursor| {
             write!(cursor, "{}", c).unwrap();
         });
+        trace_ansi!("input {}", c);
     }
 
     /// Set cursor to position
@@ -344,9 +354,13 @@ impl Handler for TerminalWindow {
     }
 
     /// Put `count` tabs
-    fn put_tab(&mut self, _count: i64) {
-        //TODO
-        warn_unimplemented!("put_tab");
+    fn put_tab(&mut self, count: i64) {
+        self.with_cursor(|cursor| {
+            for _ in 0..count {
+                write!(cursor, "\t").unwrap();
+            }
+        });
+        trace_ansi!("put_tab {}", count);
     }
 
     /// Backspace `count` characters
@@ -360,6 +374,7 @@ impl Handler for TerminalWindow {
         self.with_cursor(|cursor| {
             cursor.carriage_return()
         });
+        trace_ansi!("carriage_return");
     }
 
     /// Linefeed
@@ -367,11 +382,13 @@ impl Handler for TerminalWindow {
         self.with_cursor(|cursor| {
             cursor.wrap_line()
         });
+        trace_ansi!("linefeed");
     }
 
     /// Ring the bell
     fn bell(&mut self) {
         //omitted
+        trace_ansi!("bell");
     }
 
     /// Substitute char under cursor
@@ -459,9 +476,20 @@ impl Handler for TerminalWindow {
     }
 
     /// Clear current line
-    fn clear_line(&mut self, _: ansi::LineClearMode) {
-        //TODO
-        warn_unimplemented!("clear_line");
+    fn clear_line(&mut self, mode: ansi::LineClearMode) {
+        self.with_cursor(|cursor| {
+            match mode {
+                ansi::LineClearMode::Right => {
+                    cursor.clear_line_right();
+                },
+                ansi::LineClearMode::Left => {
+                    cursor.clear_line_left();
+                },
+                ansi::LineClearMode::All => {
+                    cursor.clear_line();
+                },
+            }
+        });
     }
 
     /// Clear screen
@@ -517,6 +545,7 @@ impl Handler for TerminalWindow {
                 Attr::Background(color) => { c.apply_style_modifier(StyleModifier::new().bg_color(ansi_to_unsegen_color(color))); },
             }
         });
+        trace_ansi!("terminal_attribute {:?}", attr);
     }
 
     /// Set mode

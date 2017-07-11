@@ -13,7 +13,6 @@ use unsegen::widget::{
 };
 use unsegen::input::{
     Key,
-    WriteBehavior,
     ScrollBehavior,
 };
 use input::{
@@ -36,6 +35,7 @@ use super::console::Console;
 use super::srcview::CodeWindow;
 use unsegen_terminal::{
     Terminal,
+    PassthroughBehavior,
 };
 use super::expression_table::ExpressionTable;
 
@@ -150,7 +150,7 @@ impl<'a> Tui<'a> {
                 event.chain(ScrollBehavior::new(&mut self.process_pty)
                             .forwards_on(Key::PageDown)
                             .backwards_on(Key::PageUp))
-                    .chain(WriteBehavior::new(&mut self.process_pty));
+                    .chain(PassthroughBehavior::new(&mut self.process_pty));
             },
             InputEvent::SourcePagerEvent(event) => {
                 self.active_window = SubWindow::CodeWindow;

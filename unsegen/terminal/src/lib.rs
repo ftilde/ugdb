@@ -13,6 +13,10 @@ use unsegen::base::{
     Window,
 };
 use unsegen::input::{
+    Behavior,
+    Event,
+    Key,
+    Input,
     OperationResult,
     Scrollable,
     Writable,
@@ -54,6 +58,27 @@ fn read_slave_input_loop<S: SlaveInputSink>(sink: S, mut reader: PTYOutput) {
 pub trait SlaveInputSink : std::marker::Send {
     fn send(&self, data: Box<[u8]>);
 }
+
+// Passes all inputs through to the modelled terminal
+pub struct PassthroughBehavior<'a>{
+    term: &'a mut Terminal
+}
+
+impl<'a> PassthroughBehavior<'a> {
+    pub fn new(term: &'a mut Terminal) -> Self {
+        PassthroughBehavior {
+            term: term,
+        }
+    }
+}
+
+impl<'a> Behavior for PassthroughBehavior<'a> {
+    fn input(self, i: Input) -> Option<Input> {
+        self.term.process_input(i);
+        None
+    }
+}
+
 
 pub struct Terminal {
     terminal_window: TerminalWindow,
@@ -105,6 +130,21 @@ impl Terminal {
 
     pub fn get_slave_name(&self) -> &OsStr {
         self.slave_name.as_ref()
+    }
+
+    pub fn process_input(&mut self, i: Input) {
+        //TODO: implement more keys. Actually, we probably want to pass on the raw input bytes from
+        //termion to the sink. This requires work on the termion side...
+        use std::io::Write;
+        match i.event {
+            Event::Key(Key::Char(c)) => {
+                write!(self.master_input_sink, "{}", c)
+            },
+            Event::Key(Key::Backspace) => {
+                write!(self.master_input_sink, "\x7f")
+            },
+            _ => { Ok(()) }
+        }.expect("Write to terminal");
     }
 }
 

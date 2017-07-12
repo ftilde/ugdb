@@ -107,6 +107,52 @@ impl<'c, 'g: 'c, T: 'c + CursorTarget> Cursor<'c, 'g, T> {
         self.state.y = y;
     }
 
+    /// Move left, but skip empty clusters, also wrap to the line above if wrapping is active
+    pub fn move_left(&mut self) {
+        loop {
+            if self.state.wrapping_mode == WrappingMode::Wrap && self.state.x <= 0 {
+                self.move_by(0, -1);
+                let right_most_column = self.window.get_soft_width() as i32 - 1;
+                self.move_to_x(right_most_column);
+            } else {
+                self.state.x = self.state.x - 1;
+            }
+
+            // Exit conditions:
+            // - outside of window
+            if self.state.y < 0 {
+                break;
+            }
+            // on a non-zero width cluster
+            let current = self.get_current_grapheme_cluster_mut();
+            if current.is_some() && current.unwrap().grapheme_cluster.width() > 0 {
+                break;
+            }
+        }
+    }
+
+    /// Move right, but skip empty clusters, also wrap to the line below if wrapping is active
+    pub fn move_right(&mut self) {
+        loop {
+            if self.state.wrapping_mode == WrappingMode::Wrap && self.state.x > self.window.get_width() as i32 {
+                self.wrap_line();
+            } else {
+                self.state.x = self.state.x + 1;
+            }
+
+            // Exit conditions:
+            // - outside of window
+            if self.state.y >= self.window.get_width() as i32 {
+                break;
+            }
+            // on a non-zero width cluster
+            let current = self.get_current_grapheme_cluster_mut();
+            if current.is_some() && current.unwrap().grapheme_cluster.width() > 0 {
+                break;
+            }
+        }
+    }
+
     pub fn set_wrapping_mode(&mut self, wm: WrappingMode) {
         self.state.wrapping_mode = wm;
     }
@@ -146,13 +192,8 @@ impl<'c, 'g: 'c, T: 'c + CursorTarget> Cursor<'c, 'g, T> {
         let saved_x = self.state.x;
         self.write_cluster(GraphemeCluster::space(), &style).expect("Cursor should be on screen");
 
-        if self.state.wrapping_mode == WrappingMode::Wrap && self.state.x <= 0 {
-            self.move_by(0, -1);
-            let right_most_column = self.window.get_soft_width() as i32 - 1;
-            self.move_to_x(right_most_column);
-        } else {
-            self.state.x = saved_x - 1;
-        }
+        self.move_to_x(saved_x);
+        self.move_left();
     }
 
     fn clear_line_in_range(&mut self, range: Range<i32>) {
@@ -218,11 +259,19 @@ impl<'c, 'g: 'c, T: 'c + CursorTarget> Cursor<'c, 'g, T> {
         GraphemeCluster::from_str_unchecked(tab_string)
     }
 
+    fn get_current_grapheme_cluster_mut(&mut self) -> Option<&mut StyledGraphemeCluster> {
+        if self.state.x < 0 || self.state.y < 0 {
+            None
+        } else {
+            self.window.get_grapheme_cluster_mut(self.state.x as u32, self.state.y as u32)
+        }
+    }
+
     fn write_grapheme_cluster_unchecked(&mut self, cluster: GraphemeCluster, style: Style) {
         let target_cluster_x = self.state.x as u32;
         let y = self.state.y as u32;
         let old_target_cluster_width = {
-            let target_cluster = self.window.get_grapheme_cluster_mut(target_cluster_x, y).expect("in bounds");
+            let target_cluster = self.get_current_grapheme_cluster_mut().expect("in bounds");
             let w = target_cluster.grapheme_cluster.width() as u32;
             *target_cluster = StyledGraphemeCluster::new(cluster, style);
             w
@@ -284,7 +333,7 @@ impl<'c, 'g: 'c, T: 'c + CursorTarget> Cursor<'c, 'g, T> {
             && 0 <= self.state.y && (self.state.y as u32) < self.window.get_height() {
 
             if cluster_width == 0 {
-                self.window.get_grapheme_cluster_mut(self.state.x as u32, self.state.y as u32).expect("cursor in bounds").grapheme_cluster.merge_zero_width(grapheme_cluster);
+                self.get_current_grapheme_cluster_mut().expect("cursor in bounds").grapheme_cluster.merge_zero_width(grapheme_cluster);
                 return Ok(());
             }
 

@@ -1,4 +1,5 @@
 pub use termion::event::{Event, Key, MouseEvent, MouseButton};
+pub use termion::input::TermRead;
 use std::collections::HashSet;
 
 #[derive(Eq, PartialEq, Clone)]

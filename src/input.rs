@@ -2,6 +2,7 @@ pub use unsegen::input::{
     Input,
     Key,
     Event,
+    TermRead,
 };
 
 use chan::{
@@ -41,7 +42,6 @@ pub struct ViKeyboardInput {
 
 impl ViKeyboardInput {
     fn input_loop(output: Sender<InputEvent>) {
-        use termion::input::TermRead;
 
         let mut mode = Mode::Console;
         let stdin = ::std::io::stdin(); //TODO lock outside of thread?

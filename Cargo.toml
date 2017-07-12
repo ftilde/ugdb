@@ -21,7 +21,6 @@ pest = "^0.4.1"
 
 #unsegen
 syntect = "1.0"
-termion = "^1.3"
 
 [dependencies.unsegen]
 path = "unsegen/"

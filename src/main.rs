@@ -17,7 +17,6 @@ extern crate unicode_width; // For AssemblyLineDecorator
 // These are used because (due to lifetime issues) we have to manage SyntaxSet, TermRead etc. ourselves
 // TODO: maybe reexport types in unsegen?
 extern crate syntect;
-extern crate termion;
 
 mod tui;
 mod input;

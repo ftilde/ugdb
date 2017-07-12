@@ -215,9 +215,7 @@ impl<'c, 'g: 'c, T: 'c + CursorTarget> Cursor<'c, 'g, T> {
     fn create_tab_cluster(width: u32) -> GraphemeCluster {
         use std::iter::FromIterator;
         let tab_string = String::from_iter(::std::iter::repeat(" ").take(width as usize));
-        unsafe {
-            GraphemeCluster::from_str_unchecked(tab_string)
-        }
+        GraphemeCluster::from_str_unchecked(tab_string)
     }
 
     fn write_grapheme_cluster_unchecked(&mut self, cluster: GraphemeCluster, style: Style) {
@@ -285,15 +283,18 @@ impl<'c, 'g: 'c, T: 'c + CursorTarget> Cursor<'c, 'g, T> {
         if     0 <= self.state.x && (self.state.x as u32) < self.window.get_width()
             && 0 <= self.state.y && (self.state.y as u32) < self.window.get_height() {
 
+            if cluster_width == 0 {
+                self.window.get_grapheme_cluster_mut(self.state.x as u32, self.state.y as u32).expect("cursor in bounds").grapheme_cluster.merge_zero_width(grapheme_cluster);
+                return Ok(());
+            }
+
             self.write_grapheme_cluster_unchecked(grapheme_cluster, style.clone());
         }
         self.state.x += 1;
         if cluster_width > 1 && 0 <= self.state.y && (self.state.y as u32) < self.window.get_height() {
             for _ in 1..cluster_width {
                 if 0 <= self.state.x && (self.state.x as u32) < self.window.get_width() {
-                    self.write_grapheme_cluster_unchecked(unsafe {
-                        GraphemeCluster::empty()
-                    }, style.clone());
+                    self.write_grapheme_cluster_unchecked(GraphemeCluster::empty(), style.clone());
                 }
                 self.state.x += 1;
             }

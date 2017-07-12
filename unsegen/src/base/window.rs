@@ -175,7 +175,7 @@ impl<'w> Window<'w> {
     pub fn fill(&mut self, c: GraphemeCluster) {
         let cluster_width = c.width();
         let template = StyledGraphemeCluster::new(c, self.default_style);
-        let empty = StyledGraphemeCluster::new(unsafe {GraphemeCluster::empty()}, self.default_style);
+        let empty = StyledGraphemeCluster::new(GraphemeCluster::empty(), self.default_style);
         let space = StyledGraphemeCluster::new(GraphemeCluster::space(), self.default_style);
         let right_border = (self.get_width() - (self.get_width() % cluster_width as u32)) as usize;
         for ((_, x), cell) in self.values.indexed_iter_mut() {

@@ -19,26 +19,28 @@ impl GraphemeCluster {
         }
     }
 
-    unsafe fn from_bytes(slice: &[u8]) -> Self {
+    fn from_bytes(slice: &[u8]) -> Self {
         let vec = SmallVec::from_slice(slice);
         GraphemeCluster {
             bytes: vec,
         }
     }
 
-    pub unsafe fn from_str_unchecked<S: AsRef<str>>(string: S) -> Self {
+    pub(in base) fn from_str_unchecked<S: AsRef<str>>(string: S) -> Self {
         Self::from_bytes(&string.as_ref().as_bytes()[..])
     }
 
-    //TODO: use pub(base) once pub(restricted) is stable
-    pub unsafe fn empty() -> Self {
+    pub(in base) fn empty() -> Self {
         Self::from_str_unchecked("")
     }
 
+    pub(in base) fn merge_zero_width(&mut self, other: Self) {
+        assert!(other.width() == 0, "Invalid merge");
+        self.bytes.extend_from_slice(&other.bytes[..]);
+    }
+
     pub fn space() -> Self {
-        unsafe {
-            Self::from_str_unchecked(" ")
-        }
+        Self::from_str_unchecked(" ")
     }
 
     pub fn clear(&mut self) {
@@ -73,10 +75,10 @@ impl<'a> GraphemeClusterIter<'a> {
 impl<'a> Iterator for GraphemeClusterIter<'a> {
     type Item = GraphemeCluster;
     fn next(&mut self) -> Option<Self::Item> {
-        self.graphemes.next().map(|s| unsafe {
+        self.graphemes.next().map(|s|
             // We trust the implementation of unicode_segmentation
             GraphemeCluster::from_str_unchecked(s)
-        })
+        )
     }
 }
 

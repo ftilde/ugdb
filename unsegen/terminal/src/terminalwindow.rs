@@ -272,9 +272,11 @@ macro_rules! warn_unimplemented {
 
 macro_rules! trace_ansi {
     ($($arg:tt)*) => {{
-        //use std::io::Write;
-        //(write!(&mut ::std::io::stderr(), "INFO: Ansi trace: ")).expect("stderr");
-        //(writeln!(&mut ::std::io::stderr(), $($arg)*)).expect("stderr");
+        /*
+        use std::io::Write;
+        (write!(&mut ::std::io::stderr(), "INFO: Ansi trace: ")).expect("stderr");
+        (writeln!(&mut ::std::io::stderr(), $($arg)*)).expect("stderr");
+        */
     }}
 }
 
@@ -297,7 +299,7 @@ impl Handler for TerminalWindow {
         self.with_cursor(|cursor| {
             write!(cursor, "{}", c).unwrap();
         });
-        trace_ansi!("input {}", c);
+        //trace_ansi!("input {}", c);
     }
 
     /// Set cursor to position
@@ -596,21 +598,22 @@ impl Handler for TerminalWindow {
             match attr {
                 Attr::Reset => { c.set_style_modifier(StyleModifier::new()) },
                 Attr::Bold => { c.apply_style_modifier(StyleModifier::new().bold(true)); },
-                Attr::Dim => { /* What is this? */},
+                Attr::Dim => { /* What is this? */ warn_unimplemented!("attr Dim") },
                 Attr::Italic => { c.apply_style_modifier(StyleModifier::new().italic(true)); },
                 Attr::Underscore => { c.apply_style_modifier(StyleModifier::new().underline(true)); },
-                Attr::BlinkSlow => { /* Not supported (yet) */},
-                Attr::BlinkFast => { /* Not supported (yet) */},
-                Attr::Reverse => { /* Not supported (yet) */},
-                Attr::Hidden => { /* Not supported (yet) */},
-                Attr::Strike => { /* Not supported (yet) */},
-                Attr::CancelBoldDim => { c.apply_style_modifier(StyleModifier::new().bold(false)); },
+                Attr::BlinkSlow => { warn_unimplemented!("attr BlinkSlow") },
+                Attr::BlinkFast => { warn_unimplemented!("attr BlinkFast") },
+                Attr::Reverse => { c.apply_style_modifier(StyleModifier::new().invert(true)); },
+                Attr::Hidden => { warn_unimplemented!("attr Hidden") },
+                Attr::Strike => { warn_unimplemented!("attr Strike") },
+                Attr::CancelBold => { c.apply_style_modifier(StyleModifier::new().bold(false)); },
+                Attr::CancelBoldDim => { /*??*/c.apply_style_modifier(StyleModifier::new().bold(false)); },
                 Attr::CancelItalic => { c.apply_style_modifier(StyleModifier::new().italic(false)); },
                 Attr::CancelUnderline => { c.apply_style_modifier(StyleModifier::new().underline(false)); },
-                Attr::CancelBlink => { /* Not supported (yet) */},
-                Attr::CancelReverse => { /* Not supported (yet) */},
-                Attr::CancelHidden => { /* Not supported (yet) */},
-                Attr::CancelStrike => { /* Not supported (yet) */},
+                Attr::CancelBlink => { warn_unimplemented!("attr CancelBlink") },
+                Attr::CancelReverse => { c.apply_style_modifier(StyleModifier::new().invert(false)); },
+                Attr::CancelHidden => { warn_unimplemented!("attr CancelHidden") },
+                Attr::CancelStrike => { warn_unimplemented!("attr CancelStrike") },
                 Attr::Foreground(color) => { c.apply_style_modifier(StyleModifier::new().fg_color(ansi_to_unsegen_color(color))); },
                 Attr::Background(color) => { c.apply_style_modifier(StyleModifier::new().bg_color(ansi_to_unsegen_color(color))); },
             }

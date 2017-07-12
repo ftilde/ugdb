@@ -183,10 +183,10 @@ impl LineDecorator for AssemblyDecorator {
         };
         let mut style_modifier = StyleModifier::none();
         if self.breakpoint_addresses.contains(&line.address) {
-            style_modifier = style_modifier.or(&StyleModifier::new().fg_color(Color::Red));
+            style_modifier = StyleModifier::new().fg_color(Color::Red).on_top_of(&style_modifier);
         }
         if at_stop_position {
-            style_modifier = style_modifier.or(&StyleModifier::new().fg_color(Color::Green).bold(true));
+            style_modifier = StyleModifier::new().fg_color(Color::Green).bold(true).on_top_of(&style_modifier);
         }
         cursor.set_style_modifier(style_modifier);
         write!(cursor, " 0x{:0>width$x}{}", line.address.0, right_border, width=width).unwrap();
@@ -388,10 +388,10 @@ impl LineDecorator for SourceDecorator {
 
         let mut style_modifier = StyleModifier::none();
         if self.breakpoint_lines.contains(&index.into()) {
-            style_modifier = style_modifier.or(&StyleModifier::new().fg_color(Color::Red));
+            style_modifier = StyleModifier::new().fg_color(Color::Red).on_top_of(&style_modifier);
         }
         if at_stop_position {
-            style_modifier = style_modifier.or(&StyleModifier::new().fg_color(Color::Green).bold(true));
+            style_modifier = StyleModifier::new().fg_color(Color::Green).bold(true).on_top_of(&style_modifier);
         }
         cursor.set_style_modifier(style_modifier);
 

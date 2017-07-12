@@ -12,6 +12,7 @@ use base::{
     Color,
     Cursor,
     GraphemeCluster,
+    ModifyMode,
     StyleModifier,
     TextFormatModifier,
     Window,
@@ -136,10 +137,10 @@ fn to_unsegen_color(color: &highlighting::Color) -> Color {
 }
 fn to_unsegen_text_format(style: &highlighting::FontStyle) -> TextFormatModifier {
     TextFormatModifier {
-        bold: Some(style.contains(highlighting::FONT_STYLE_BOLD)), //TODO: maybe we want none here?
-        italic: Some(style.contains(highlighting::FONT_STYLE_ITALIC)),
-        invert: false,
-        underline: Some(style.contains(highlighting::FONT_STYLE_UNDERLINE)),
+        bold: style.contains(highlighting::FONT_STYLE_BOLD).into(),
+        italic: style.contains(highlighting::FONT_STYLE_ITALIC).into(),
+        invert: false.into(),
+        underline: style.contains(highlighting::FONT_STYLE_UNDERLINE).into(),
     }
 }
 fn to_unsegen_style_modifier(style: &highlighting::Style) -> StyleModifier {
@@ -386,14 +387,14 @@ impl<S, H, D> Widget for Pager<S, H, D>
 
             for (line_index, line) in content.storage.view(min_line..max_line) {
                 let base_style = if line_index == self.current_line {
-                    StyleModifier::new().invert().bold(true)
+                    StyleModifier::new().invert(ModifyMode::Toggle).bold(true)
                 } else {
                     StyleModifier::none()
                 };
 
                 let (_, start_y) = cursor.get_position();
                 for (style, region) in highlighter.highlight(line.get_content()) {
-                    cursor.set_style_modifier(base_style.or(&style));
+                    cursor.set_style_modifier(style.on_top_of(&base_style));
                     cursor.write(&region);
                 }
                 cursor.set_style_modifier(base_style);

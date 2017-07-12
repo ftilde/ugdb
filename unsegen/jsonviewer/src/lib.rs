@@ -17,6 +17,7 @@ use unsegen::base::{
     Color,
     Cursor,
     ExtentEstimationWindow,
+    ModifyMode,
     StyleModifier,
     Window,
 };
@@ -60,7 +61,7 @@ impl JsonViewer {
             value: DisplayValue::from_json(&value),
             active_element: Path::Scalar, //Will be fixed ...
             indentation: 2,
-            active_focused_style: StyleModifier::new().invert().bold(true),
+            active_focused_style: StyleModifier::new().invert(ModifyMode::Toggle).bold(true),
             inactive_focused_style: StyleModifier::new().bold(true),
             item_changed_style: StyleModifier::new().bg_color(Color::Red),
         };

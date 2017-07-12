@@ -134,7 +134,7 @@ impl<'c, 'g: 'c, T: 'c + CursorTarget> Cursor<'c, 'g, T> {
     }
 
     pub fn apply_style_modifier(&mut self, style_modifier: StyleModifier) {
-        self.state.style_modifier = self.state.style_modifier.if_not(style_modifier)
+        self.state.style_modifier = style_modifier.on_top_of(&self.state.style_modifier);
     }
 
     pub fn set_tab_column_width(&mut self, width: u32) {

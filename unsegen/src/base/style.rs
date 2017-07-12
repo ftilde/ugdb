@@ -1,5 +1,6 @@
 use termion;
 use termion::raw::RawTerminal;
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct TextFormat {
     pub bold: bool,
@@ -49,59 +50,93 @@ impl Default for TextFormat {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ModifyMode {
+    Yes,
+    No,
+    Toggle,
+    LeaveUnchanged,
+}
+
+impl ModifyMode {
+    fn on_top_of(&self, other: &Self) -> Self {
+        match (*self, *other) {
+            (ModifyMode::Yes, _) => ModifyMode::Yes,
+            (ModifyMode::No, _) => ModifyMode::No,
+            (ModifyMode::Toggle, ModifyMode::Yes) => ModifyMode::No,
+            (ModifyMode::Toggle, ModifyMode::No) => ModifyMode::Yes,
+            (ModifyMode::Toggle, ModifyMode::Toggle) => ModifyMode::No,
+            (ModifyMode::Toggle, ModifyMode::LeaveUnchanged) => ModifyMode::Toggle,
+            (ModifyMode::LeaveUnchanged, m) => m
+        }
+    }
+    fn modify(&self, should_invert: &mut bool) {
+        match *self {
+            ModifyMode::Yes => { *should_invert = true },
+            ModifyMode::No => { *should_invert = false },
+            ModifyMode::Toggle => { *should_invert ^= true },
+            ModifyMode::LeaveUnchanged => { },
+        }
+    }
+}
+
+impl ::std::convert::From<bool> for ModifyMode {
+    fn from(on: bool) -> Self {
+        if on {
+            ModifyMode::Yes
+        } else {
+            ModifyMode::No
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct TextFormatModifier {
-    pub bold: Option<bool>,
-    pub italic: Option<bool>,
-    pub invert: bool, //not optional, but false by default, as it will toggle
-    pub underline: Option<bool>,
+    pub bold: ModifyMode,
+    pub italic: ModifyMode,
+    pub invert: ModifyMode,
+    pub underline: ModifyMode,
 }
 
 impl TextFormatModifier {
     pub fn new() -> Self {
         TextFormatModifier {
-            bold: None,
-            italic: None,
-            invert: false,
-            underline: None,
+            bold: ModifyMode::LeaveUnchanged,
+            italic: ModifyMode::LeaveUnchanged,
+            invert: ModifyMode::LeaveUnchanged,
+            underline: ModifyMode::LeaveUnchanged,
         }
     }
-    pub fn bold(mut self, val: bool) -> Self {
-        self.bold = Some(val);
+    pub fn bold<M: Into<ModifyMode>>(mut self, val: M) -> Self {
+        self.bold = val.into();
         self
     }
-    pub fn italic(mut self, val: bool) -> Self {
-        self.italic = Some(val);
+    pub fn italic<M: Into<ModifyMode>>(mut self, val: M) -> Self {
+        self.italic = val.into();
         self
     }
-    pub fn invert(mut self) -> Self {
-        self.invert ^= true;
+    pub fn invert<M: Into<ModifyMode>>(mut self, val: M) -> Self {
+        self.invert = val.into();
         self
     }
-    pub fn underline(mut self, val: bool) -> Self {
-        self.underline = Some(val);
+    pub fn underline<M: Into<ModifyMode>>(mut self, val: M) -> Self {
+        self.underline = val.into();
         self
     }
-    fn or(&self, other: &TextFormatModifier) -> Self {
+    fn on_top_of(&self, other: &TextFormatModifier) -> Self {
         TextFormatModifier {
-            bold: self.bold.or(other.bold),
-            italic: self.italic.or(other.italic),
-            invert: self.invert ^ other.invert,
-            underline: self.underline.or(other.underline),
+            bold: self.bold.on_top_of(&other.bold),
+            italic: self.italic.on_top_of(&other.italic),
+            invert: self.invert.on_top_of(&other.invert),
+            underline: self.underline.on_top_of(&other.underline),
         }
     }
 
     fn modify(&self, format: &mut TextFormat) {
-        if let Some(bold) = self.bold {
-            format.bold = bold;
-        }
-        if let Some(italic) = self.italic {
-            format.italic = italic;
-        }
-        format.invert ^= self.invert;
-        if let Some(underline) = self.underline {
-            format.underline = underline;
-        }
+        self.bold.modify(&mut format.bold);
+        self.italic.modify(&mut format.italic);
+        self.invert.modify(&mut format.invert);
+        self.underline.modify(&mut format.underline);
     }
 }
 
@@ -268,33 +303,29 @@ impl StyleModifier {
     }
 
     // Convenience functions to access text format
-    pub fn bold(mut self, val: bool) -> Self {
-        self.format.bold = Some(val);
+    pub fn bold<M: Into<ModifyMode>>(mut self, val: M) -> Self {
+        self.format.bold = val.into();
         self
     }
-    pub fn italic(mut self, val: bool) -> Self {
-        self.format.italic = Some(val);
+    pub fn italic<M: Into<ModifyMode>>(mut self, val: M) -> Self {
+        self.format.italic = val.into();
         self
     }
-    pub fn invert(mut self) -> Self {
-        self.format.invert ^= true;
+    pub fn invert<M: Into<ModifyMode>>(mut self, val: M) -> Self {
+        self.format.invert = val.into();
         self
     }
-    pub fn underline(mut self, val: bool) -> Self {
-        self.format.underline = Some(val);
+    pub fn underline<M: Into<ModifyMode>>(mut self, val: M) -> Self {
+        self.format.underline = val.into();
         self
     }
 
-    pub fn or(&self, other: &StyleModifier) -> Self {
+    pub fn on_top_of(&self, other: &StyleModifier) -> Self {
         StyleModifier {
             fg_color: self.fg_color.or(other.fg_color),
             bg_color: self.bg_color.or(other.bg_color),
-            format: self.format.or(&other.format),
+            format: self.format.on_top_of(&other.format),
         }
-    }
-
-    pub fn if_not(&self, other: StyleModifier) -> Self {
-        other.or(&self)
     }
 
     pub fn apply_to_default(&self) -> Style {

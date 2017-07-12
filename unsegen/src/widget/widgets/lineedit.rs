@@ -6,6 +6,7 @@ use super::super::{
 };
 use base::{
     Cursor,
+    ModifyMode,
     StyleModifier,
     Window,
 };
@@ -29,7 +30,7 @@ pub struct LineEdit {
 
 impl LineEdit {
     pub fn new() -> Self {
-        Self::with_cursor_styles(StyleModifier::new().invert(), StyleModifier::new().underline(true))
+        Self::with_cursor_styles(StyleModifier::new().invert(ModifyMode::Toggle), StyleModifier::new().underline(true))
     }
 
     pub fn with_cursor_styles(active: StyleModifier, inactive: StyleModifier) -> Self {

@@ -296,8 +296,7 @@ fn ansi_to_unsegen_color(ansi_color: ansi::Color) -> UColor {
             ansi::NamedColor::DimWhite => UColor::White,
         },
         ansi::Color::Spec(c) => {
-            //TODO: Is this truecolor or ansi rgb? Probably ansi.
-            UColor::ansi_rgb(c.r, c.g, c.b)
+            UColor::Rgb{r: c.r, g: c.g, b: c.b}
         },
         ansi::Color::Indexed(c) => {
             //TODO: We might in the future implement a separate color table, but for new we "reuse"
@@ -345,7 +344,7 @@ impl Handler for TerminalWindow {
         self.with_cursor(|cursor| {
             write!(cursor, "{}", c).unwrap();
         });
-        //trace_ansi!("input {}", c);
+        trace_ansi!("input '{}'", c);
     }
 
     /// Set cursor to position
@@ -411,17 +410,21 @@ impl Handler for TerminalWindow {
     /// Move cursor forward `cols`
     fn move_forward(&mut self, cols: index::Column) {
         self.with_cursor(|cursor| {
-            cursor.move_by(cols.0 as i32, 0);
+            for _ in 0..cols.0 {
+                cursor.move_right();
+            }
         });
-        trace_ansi!("move_forward");
+        trace_ansi!("move_forward {}", cols.0);
     }
 
     /// Move cursor backward `cols`
     fn move_backward(&mut self, cols: index::Column) {
         self.with_cursor(|cursor| {
-            cursor.move_by(-(cols.0 as i32), 0);
+            for _ in 0..cols.0 {
+                cursor.move_left();
+            }
         });
-        trace_ansi!("move_backward");
+        trace_ansi!("move_backward {}", cols.0);
     }
 
     /// Move cursor down `rows` and set to column 1

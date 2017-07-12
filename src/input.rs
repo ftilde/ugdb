@@ -2,7 +2,6 @@ use unsegen::input::{
     Input,
     Key,
     Event,
-    TermRead,
 };
 
 use chan::{
@@ -46,38 +45,38 @@ impl ViKeyboardInput {
         let mut mode = Mode::Console;
         let stdin = ::std::io::stdin(); //TODO lock outside of thread?
         let stdin = stdin.lock();
-        for e in stdin.events() {
-            let event = e.expect("event");
-            if let Event::Key(Key::Ctrl('q')) = event {
+        for e in Input::real_all(stdin) {
+            let input = e.expect("event");
+            if let &Event::Key(Key::Ctrl('q')) = &input.event {
                 output.send(InputEvent::Quit);
             }
             let (new_mode, optional_event) = match mode {
                 Mode::SourcePager => {
-                    match event {
+                    match input.event.clone() {
                         Event::Key(Key::Esc) => { (Mode::SourcePager, None) },
                         Event::Key(Key::Char('i')) => { (Mode::Console, None) },
                         Event::Key(Key::Char('t')) => { (Mode::PTY, None) },
                         Event::Key(Key::Char('e')) => { (Mode::ExpressionTable, None) },
-                        e => { (mode, Some(InputEvent::SourcePagerEvent(Input::new(e)))) },
+                        _ => { (mode, Some(InputEvent::SourcePagerEvent(input))) },
                     }
                 },
                 Mode::Console => {
-                    match event {
+                    match input.event.clone() {
                         Event::Key(Key::Esc) => { (Mode::SourcePager, None) },
                         Event::Key(Key::F(1)) => { (mode, Some(InputEvent::ConsoleEvent(ConsoleEvent::ToggleLog))) },
-                        e => { (mode, Some(InputEvent::ConsoleEvent(ConsoleEvent::Raw(Input::new(e))))) },
+                        _ => { (mode, Some(InputEvent::ConsoleEvent(ConsoleEvent::Raw(input)))) },
                     }
                 },
                 Mode::PTY => {
-                    match event {
+                    match input.event.clone() {
                         Event::Key(Key::Esc) => { (Mode::SourcePager, None) },
-                        e => { (mode, Some(InputEvent::PseudoTerminalEvent(Input::new(e)))) },
+                        _ => { (mode, Some(InputEvent::PseudoTerminalEvent(input))) },
                     }
                 },
                 Mode::ExpressionTable => {
-                    match event {
+                    match input.event.clone() {
                         Event::Key(Key::Esc) => { (Mode::SourcePager, None) },
-                        e => { (mode, Some(InputEvent::ExpressionTableEvent(Input::new(e)))) },
+                        _ => { (mode, Some(InputEvent::ExpressionTableEvent(input))) },
                     }
                 },
             };

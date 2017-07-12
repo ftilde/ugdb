@@ -10,8 +10,8 @@ syntect = "1.0"
 unicode-segmentation = "1.0"
 unicode-width = "0.1"
 
-termion = "^1.3"
+#termion = "^1.3"
+[dependencies.termion]
+git = "https://github.com/ftilde/termion"
 #[dependencies.termion]
-#git = "https://github.com/ftilde/termion"
-#[dependencies.termion]
-#path = "../termion/"
+#path = "../../termion/"

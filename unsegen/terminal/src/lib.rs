@@ -14,8 +14,6 @@ use unsegen::base::{
 };
 use unsegen::input::{
     Behavior,
-    Event,
-    Key,
     Input,
     OperationResult,
     Scrollable,
@@ -136,15 +134,7 @@ impl Terminal {
         //TODO: implement more keys. Actually, we probably want to pass on the raw input bytes from
         //termion to the sink. This requires work on the termion side...
         use std::io::Write;
-        match i.event {
-            Event::Key(Key::Char(c)) => {
-                write!(self.master_input_sink, "{}", c)
-            },
-            Event::Key(Key::Backspace) => {
-                write!(self.master_input_sink, "\x7f")
-            },
-            _ => { Ok(()) }
-        }.expect("Write to terminal");
+        self.master_input_sink.write_all(i.raw.as_slice()).expect("Write to terminal");
     }
 
     fn ensure_size(&mut self, w: u32, h: u32) {

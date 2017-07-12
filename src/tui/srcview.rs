@@ -323,7 +323,7 @@ impl<'a> AssemblyView<'a> {
                     .backwards_on(Key::Char('k'))
                    )
             .chain(|evt| match evt {
-                Input { event: Event::Key(Key::Char(' ')) } => {
+                Input { event: Event::Key(Key::Char(' ')), raw: _ } => {
                     self.toggle_breakpoint(gdb, breakpoints);
                     None
                 }
@@ -557,7 +557,7 @@ impl<'a> SourceView<'a> {
                     .backwards_on(Key::Char('k'))
                    )
             .chain(|evt| match evt {
-                Input { event: Event::Key(Key::Char(' ')) } => {
+                Input { event: Event::Key(Key::Char(' ')), raw: _ } => {
                     self.toggle_breakpoint(gdb, breakpoints);
                     None
                 }

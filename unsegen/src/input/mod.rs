@@ -1,18 +1,34 @@
 pub use termion::event::{Event, Key, MouseEvent, MouseButton};
-pub use termion::input::TermRead;
+use termion::input::{EventsAndRaw, TermReadEventsAndRaw};
 use std::collections::HashSet;
+
+use std::io;
+
+pub struct InputIter<R: io::Read> {
+    inner: EventsAndRaw<R>,
+}
+
+impl<R: io::Read> Iterator for InputIter<R> {
+    type Item = Result<Input, io::Error>;
+
+    fn next(&mut self) -> Option<Result<Input, io::Error>> {
+        self.inner.next().map(|tuple| tuple.map(|(event, raw)| Input { event: event, raw: raw }))
+    }
+}
 
 #[derive(Eq, PartialEq, Clone)]
 pub struct Input {
     pub event: Event,
+    pub raw: Vec<u8>,
 }
 
 impl Input {
-    pub fn new(event: Event) -> Self {
-        Input {
-            event: event,
+    pub fn real_all<R: io::Read>(read: R) -> InputIter<R> {
+        InputIter {
+            inner: read.events_and_raw()
         }
     }
+
     pub fn chain<B: Behavior>(self, behavior: B) -> InputChain {
         let chain_begin = InputChain {
             input: Some(self),

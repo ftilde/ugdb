@@ -198,6 +198,7 @@ impl<'c, 'g: 'c, T: 'c + CursorTarget> Cursor<'c, 'g, T> {
         };
 
         self.write_cluster(GraphemeCluster::space(), &style).expect("Cursor should be on screen");
+        self.move_left();
     }
 
     fn clear_line_in_range(&mut self, range: Range<i32>) {

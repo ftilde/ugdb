@@ -7,6 +7,7 @@ use unsegen::base::{
 };
 use unsegen::input::{
     Event,
+    Input,
     Key,
     ScrollBehavior,
 };
@@ -30,9 +31,6 @@ use unsegen::widget::widgets::{
     PagerError,
     PagerLine,
     SyntectHighlighter,
-};
-use input::{
-    Input,
 };
 use syntect::highlighting::{
     Theme,

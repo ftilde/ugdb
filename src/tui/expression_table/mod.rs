@@ -26,11 +26,9 @@ use unsegen::base::{
 use unsegen::input::{
     NavigateBehavior,
     EditBehavior,
-    ScrollBehavior,
-    Key,
-};
-use input::{
     Input,
+    Key,
+    ScrollBehavior,
 };
 use gdbmi;
 use gdbmi::input::{

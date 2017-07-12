@@ -1,4 +1,4 @@
-pub use unsegen::input::{
+use unsegen::input::{
     Input,
     Key,
     Event,

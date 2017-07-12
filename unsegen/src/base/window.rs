@@ -213,7 +213,7 @@ impl<'a> CursorTarget for Window<'a> {
     fn get_height(&self) -> u32 {
         self.get_height()
     }
-    fn get_grapheme_cluster_mut(&mut self, x: u32, y: u32) -> Option<&mut StyledGraphemeCluster> {
+    fn get_cell_mut(&mut self, x: u32, y: u32) -> Option<&mut StyledGraphemeCluster> {
         self.values.get_mut((y as usize, x as usize))
     }
     fn get_default_style(&self) -> &Style {
@@ -268,7 +268,7 @@ impl CursorTarget for ExtentEstimationWindow {
     fn get_height(&self) -> u32 {
         UNBOUNDED_EXTENT
     }
-    fn get_grapheme_cluster_mut(&mut self, x: u32, y: u32) -> Option<&mut StyledGraphemeCluster> {
+    fn get_cell_mut(&mut self, x: u32, y: u32) -> Option<&mut StyledGraphemeCluster> {
         self.extent_x = max(self.extent_x, x+1);
         self.extent_y = max(self.extent_y, y+1);
         self.reset_value();

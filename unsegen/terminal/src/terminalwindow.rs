@@ -2,6 +2,7 @@ use unsegen::base::{
     Cursor,
     CursorState,
     CursorTarget,
+    ModifyMode,
     Style,
     StyleModifier,
     StyledGraphemeCluster,
@@ -60,7 +61,7 @@ impl Line {
         self.length().checked_sub(1).unwrap_or(0) as u32 / width + 1
     }
 
-    fn get_grapheme_cluster_mut(&mut self, x: u32) -> Option<&mut StyledGraphemeCluster> {
+    fn get_cell_mut(&mut self, x: u32) -> Option<&mut StyledGraphemeCluster> {
         // Grow horizontally to desired position
         let missing_elements = (x as usize+ 1).checked_sub(self.content.len()).unwrap_or(0);
         self.content.extend(::std::iter::repeat(StyledGraphemeCluster::default()).take(missing_elements));
@@ -103,14 +104,14 @@ impl CursorTarget for LineBuffer {
     fn get_height(&self) -> u32 {
         UNBOUNDED_EXTENT
     }
-    fn get_grapheme_cluster_mut(&mut self, x: u32, y: u32) -> Option<&mut StyledGraphemeCluster> {
+    fn get_cell_mut(&mut self, x: u32, y: u32) -> Option<&mut StyledGraphemeCluster> {
         // Grow vertically to desired position
         let missing_elements = (y as usize + 1).checked_sub(self.lines.len()).unwrap_or(0);
         self.lines.extend(::std::iter::repeat(Line::empty()).take(missing_elements));
 
         let line = self.lines.get_mut(y as usize).expect("line existence assured previously");
 
-        line.get_grapheme_cluster_mut(x)
+        line.get_cell_mut(x)
     }
     fn get_default_style(&self) -> &Style {
         &self.default_style
@@ -122,9 +123,11 @@ pub struct TerminalWindow {
     window_height: u32,
     buffer: LineBuffer,
     cursor_state: CursorState,
-    //input_buffer: Vec<u8>,
     scrollback_position: Option<u32>,
     scroll_step: u32,
+
+    // Terminal state
+    show_cursor: bool,
 }
 
 impl TerminalWindow {
@@ -134,9 +137,10 @@ impl TerminalWindow {
             window_height: 0,
             buffer: LineBuffer::new(),
             cursor_state: CursorState::default(),
-            //input_buffer: Vec::new(),
             scrollback_position: None,
             scroll_step: 1,
+
+            show_cursor: true,
         }
     }
 
@@ -188,6 +192,15 @@ impl Widget for TerminalWindow {
     }
 
     fn draw(&mut self, mut window: Window, _: RenderingHints) {
+        //temporarily change buffer to show cursor:
+        if self.show_cursor {
+            self.with_cursor(|cursor| {
+                if let Some(cell) = cursor.get_current_cell_mut() {
+                    StyleModifier::new().invert(ModifyMode::Toggle).modify(&mut cell.style);
+                }
+            });
+        }
+
         let height = window.get_height();
         let width = window.get_width();
 
@@ -206,6 +219,15 @@ impl Widget for TerminalWindow {
         for line in self.buffer.lines[line_range].iter() {
             cursor.write_preformatted(line.content.as_slice());
             cursor.wrap_line();
+        }
+
+        //revert cursor change
+        if self.show_cursor {
+            self.with_cursor(|cursor| {
+                if let Some(cell) = cursor.get_current_cell_mut() {
+                    StyleModifier::new().invert(ModifyMode::Toggle).modify(&mut cell.style);
+                }
+            });
         }
     }
 }
@@ -624,7 +646,15 @@ impl Handler for TerminalWindow {
     /// Set mode
     fn set_mode(&mut self, mode: ansi::Mode) {
         //TODO
-        warn_unimplemented!("set_mode {:?}", mode);
+        match mode {
+            ansi::Mode::ShowCursor => {
+                //TODO: we need to look for l/h, but this is currently not implemented (upstream)
+                // For this reason we toggle the cursor for now:
+                self.show_cursor ^= true;
+                trace_ansi!("set_mode {:?}", mode);
+            },
+            _ => { warn_unimplemented!("set_mode {:?}", mode); },
+        }
     }
 
     /// Unset mode

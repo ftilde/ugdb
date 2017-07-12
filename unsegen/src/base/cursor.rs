@@ -22,7 +22,7 @@ pub trait CursorTarget {
         self.get_width()
     }
     fn get_height(&self) -> u32;
-    fn get_grapheme_cluster_mut(&mut self, x: u32, y: u32) -> Option<&mut StyledGraphemeCluster>;
+    fn get_cell_mut(&mut self, x: u32, y: u32) -> Option<&mut StyledGraphemeCluster>;
     fn get_default_style(&self) -> &Style;
 }
 
@@ -124,7 +124,7 @@ impl<'c, 'g: 'c, T: 'c + CursorTarget> Cursor<'c, 'g, T> {
                 break;
             }
             // on a non-zero width cluster
-            let current = self.get_current_grapheme_cluster_mut();
+            let current = self.get_current_cell_mut();
             if current.is_some() && current.unwrap().grapheme_cluster.width() > 0 {
                 break;
             }
@@ -146,7 +146,7 @@ impl<'c, 'g: 'c, T: 'c + CursorTarget> Cursor<'c, 'g, T> {
                 break;
             }
             // on a non-zero width cluster
-            let current = self.get_current_grapheme_cluster_mut();
+            let current = self.get_current_cell_mut();
             if current.is_some() && current.unwrap().grapheme_cluster.width() > 0 {
                 break;
             }
@@ -259,11 +259,11 @@ impl<'c, 'g: 'c, T: 'c + CursorTarget> Cursor<'c, 'g, T> {
         GraphemeCluster::from_str_unchecked(tab_string)
     }
 
-    fn get_current_grapheme_cluster_mut(&mut self) -> Option<&mut StyledGraphemeCluster> {
+    pub fn get_current_cell_mut(&mut self) -> Option<&mut StyledGraphemeCluster> {
         if self.state.x < 0 || self.state.y < 0 {
             None
         } else {
-            self.window.get_grapheme_cluster_mut(self.state.x as u32, self.state.y as u32)
+            self.window.get_cell_mut(self.state.x as u32, self.state.y as u32)
         }
     }
 
@@ -271,7 +271,7 @@ impl<'c, 'g: 'c, T: 'c + CursorTarget> Cursor<'c, 'g, T> {
         let target_cluster_x = self.state.x as u32;
         let y = self.state.y as u32;
         let old_target_cluster_width = {
-            let target_cluster = self.get_current_grapheme_cluster_mut().expect("in bounds");
+            let target_cluster = self.get_current_cell_mut().expect("in bounds");
             let w = target_cluster.grapheme_cluster.width() as u32;
             *target_cluster = StyledGraphemeCluster::new(cluster, style);
             w
@@ -282,7 +282,7 @@ impl<'c, 'g: 'c, T: 'c + CursorTarget> Cursor<'c, 'g, T> {
             let mut current_width = old_target_cluster_width;
             while current_width == 0 {
                 current_x -= 1;
-                current_width = self.window.get_grapheme_cluster_mut(current_x, y).expect("finding wide cluster start: read in bounds").grapheme_cluster.width() as u32;
+                current_width = self.window.get_cell_mut(current_x, y).expect("finding wide cluster start: read in bounds").grapheme_cluster.width() as u32;
             }
 
             // Clear all cells (except the newly written one)
@@ -290,7 +290,7 @@ impl<'c, 'g: 'c, T: 'c + CursorTarget> Cursor<'c, 'g, T> {
             let start_cluster_width = current_width;
             for x_to_clear in start_cluster_x..start_cluster_x+start_cluster_width {
                 if x_to_clear != target_cluster_x {
-                    self.window.get_grapheme_cluster_mut(x_to_clear, y).expect("overwrite cluster cells in bounds").grapheme_cluster.clear();
+                    self.window.get_cell_mut(x_to_clear, y).expect("overwrite cluster cells in bounds").grapheme_cluster.clear();
                 }
             }
         }
@@ -333,7 +333,7 @@ impl<'c, 'g: 'c, T: 'c + CursorTarget> Cursor<'c, 'g, T> {
             && 0 <= self.state.y && (self.state.y as u32) < self.window.get_height() {
 
             if cluster_width == 0 {
-                self.get_current_grapheme_cluster_mut().expect("cursor in bounds").grapheme_cluster.merge_zero_width(grapheme_cluster);
+                self.get_current_cell_mut().expect("cursor in bounds").grapheme_cluster.merge_zero_width(grapheme_cluster);
                 return Ok(());
             }
 

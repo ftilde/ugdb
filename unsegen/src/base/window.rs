@@ -216,6 +216,9 @@ impl<'a> CursorTarget for Window<'a> {
     fn get_cell_mut(&mut self, x: u32, y: u32) -> Option<&mut StyledGraphemeCluster> {
         self.values.get_mut((y as usize, x as usize))
     }
+    fn get_cell(&self, x: u32, y: u32) -> Option<&StyledGraphemeCluster> {
+        self.values.get((y as usize, x as usize))
+    }
     fn get_default_style(&self) -> &Style {
         &self.default_style
     }
@@ -274,6 +277,14 @@ impl CursorTarget for ExtentEstimationWindow {
         self.reset_value();
         if x < self.width {
             Some(&mut self.some_value)
+        } else {
+            None
+        }
+    }
+
+    fn get_cell(&self, x: u32, _: u32) -> Option<&StyledGraphemeCluster> {
+        if x < self.width {
+            Some(&self.some_value)
         } else {
             None
         }

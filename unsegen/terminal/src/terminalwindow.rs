@@ -69,6 +69,18 @@ impl Line {
         let element = self.content.get_mut(x as usize).expect("element existent assured previously");
         Some(element)
     }
+
+    fn get_cell(&self, x: u32) -> Option<&StyledGraphemeCluster> {
+        /*
+        //TODO: maybe we want to grow? problems with mutability...
+        // Grow horizontally to desired position
+        let missing_elements = (x as usize+ 1).checked_sub(self.content.len()).unwrap_or(0);
+        self.content.extend(::std::iter::repeat(StyledGraphemeCluster::default()).take(missing_elements));
+        */
+
+        let element = self.content.get(x as usize).expect("element existent assured previously");
+        Some(element)
+    }
 }
 
 struct LineBuffer {
@@ -112,6 +124,18 @@ impl CursorTarget for LineBuffer {
         let line = self.lines.get_mut(y as usize).expect("line existence assured previously");
 
         line.get_cell_mut(x)
+    }
+    fn get_cell(&self, x: u32, y: u32) -> Option<&StyledGraphemeCluster> {
+        /*
+        //TODO: maybe we want to grow? problems with mutability...
+        // Grow vertically to desired position
+        let missing_elements = (y as usize + 1).checked_sub(self.lines.len()).unwrap_or(0);
+        self.lines.extend(::std::iter::repeat(Line::empty()).take(missing_elements));
+        */
+
+        let line = self.lines.get(y as usize).expect("line existence assured previously");
+
+        line.get_cell(x)
     }
     fn get_default_style(&self) -> &Style {
         &self.default_style
@@ -645,12 +669,9 @@ impl Handler for TerminalWindow {
 
     /// Set mode
     fn set_mode(&mut self, mode: ansi::Mode) {
-        //TODO
         match mode {
             ansi::Mode::ShowCursor => {
-                //TODO: we need to look for l/h, but this is currently not implemented (upstream)
-                // For this reason we toggle the cursor for now:
-                self.show_cursor ^= true;
+                self.show_cursor = true;
                 trace_ansi!("set_mode {:?}", mode);
             },
             _ => { warn_unimplemented!("set_mode {:?}", mode); },
@@ -659,8 +680,13 @@ impl Handler for TerminalWindow {
 
     /// Unset mode
     fn unset_mode(&mut self, mode: ansi::Mode) {
-        //TODO
-        warn_unimplemented!("unset_mode {:?}", mode);
+        match mode {
+            ansi::Mode::ShowCursor => {
+                self.show_cursor = false;
+                trace_ansi!("set_mode {:?}", mode);
+            },
+            _ => { warn_unimplemented!("set_mode {:?}", mode); },
+        }
     }
 
     /// DECSTBM - Set the terminal scrolling region

@@ -23,6 +23,7 @@ pub trait CursorTarget {
     }
     fn get_height(&self) -> u32;
     fn get_cell_mut(&mut self, x: u32, y: u32) -> Option<&mut StyledGraphemeCluster>;
+    fn get_cell(&self, x: u32, y: u32) -> Option<&StyledGraphemeCluster>;
     fn get_default_style(&self) -> &Style;
 }
 
@@ -188,12 +189,15 @@ impl<'c, 'g: 'c, T: 'c + CursorTarget> Cursor<'c, 'g, T> {
     }
 
     pub fn backspace(&mut self) {
-        let style = self.active_style();
-        let saved_x = self.state.x;
-        self.write_cluster(GraphemeCluster::space(), &style).expect("Cursor should be on screen");
-
-        self.move_to_x(saved_x);
         self.move_left();
+
+        let style = if let Some(c) = self.get_current_cell() {
+            c.style
+        } else {
+            self.active_style()
+        };
+
+        self.write_cluster(GraphemeCluster::space(), &style).expect("Cursor should be on screen");
     }
 
     fn clear_line_in_range(&mut self, range: Range<i32>) {
@@ -264,6 +268,13 @@ impl<'c, 'g: 'c, T: 'c + CursorTarget> Cursor<'c, 'g, T> {
             None
         } else {
             self.window.get_cell_mut(self.state.x as u32, self.state.y as u32)
+        }
+    }
+    pub fn get_current_cell(&self) -> Option<&StyledGraphemeCluster> {
+        if self.state.x < 0 || self.state.y < 0 {
+            None
+        } else {
+            self.window.get_cell(self.state.x as u32, self.state.y as u32)
         }
     }
 

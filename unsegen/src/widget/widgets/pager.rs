@@ -139,7 +139,7 @@ fn to_unsegen_text_format(style: &highlighting::FontStyle) -> TextFormatModifier
     TextFormatModifier {
         bold: style.contains(highlighting::FONT_STYLE_BOLD).into(),
         italic: style.contains(highlighting::FONT_STYLE_ITALIC).into(),
-        invert: false.into(),
+        invert: ModifyMode::LeaveUnchanged,
         underline: style.contains(highlighting::FONT_STYLE_UNDERLINE).into(),
     }
 }

@@ -11,13 +11,13 @@ name = "ugdb"
 debug = true
 
 [dependencies]
-chan = "^0.1"
-chan-signal = "^0.2"
-lazy_static = "0.2.2"
+chan = "0.1"
+chan-signal = "0.2"
+lazy_static = "0.2"
 unicode-width = "0.1"
 
 # For ExpressionTable (gdb expression parsing)
-pest = "^0.4.1"
+pest = "0.4"
 
 #unsegen
 syntect = "1.0"

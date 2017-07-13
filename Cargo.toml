@@ -13,7 +13,6 @@ debug = true
 [dependencies]
 chan = "0.1"
 chan-signal = "0.2"
-lazy_static = "0.2"
 unicode-width = "0.1"
 
 # For ExpressionTable (gdb expression parsing)

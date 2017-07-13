@@ -382,15 +382,19 @@ impl Handler for TerminalWindow {
     }
 
     /// Move cursor up `rows`
-    fn move_up(&mut self, _: index::Line) {
-        //TODO
-        warn_unimplemented!("move_up");
+    fn move_up(&mut self, line: index::Line) {
+        self.with_cursor(|cursor| {
+            cursor.move_by(0, -(line.0 as i32));
+        });
+        trace_ansi!("move_up");
     }
 
     /// Move cursor down `rows`
-    fn move_down(&mut self, _: index::Line) {
-        //TODO
-        warn_unimplemented!("move_down");
+    fn move_down(&mut self, line: index::Line) {
+        self.with_cursor(|cursor| {
+            cursor.move_by(0, line.0 as i32);
+        });
+        trace_ansi!("move_down");
     }
 
     /// Identify the terminal (should write back to the pty stream)

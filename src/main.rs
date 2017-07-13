@@ -4,6 +4,7 @@
 extern crate chan;
 extern crate chan_signal;
 extern crate gdbmi;
+extern crate time;
 
 extern crate unsegen;
 

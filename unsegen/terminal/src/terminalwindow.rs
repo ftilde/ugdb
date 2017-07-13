@@ -456,7 +456,7 @@ impl Handler for TerminalWindow {
     /// Backspace `count` characters
     fn backspace(&mut self) {
         self.with_cursor(|cursor| {
-            cursor.backspace();
+            cursor.move_left();
         });
         trace_ansi!("backspace");
     }

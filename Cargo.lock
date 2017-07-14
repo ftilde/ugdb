@@ -3,7 +3,7 @@ name = "ugdb"
 version = "0.1.0"
 dependencies = [
  "chan 0.1.19 (registry+https://github.com/rust-lang/crates.io-index)",
- "chan-signal 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "chan-signal 0.2.0 (git+https://github.com/ftilde/chan-signal)",
  "gdbmi 0.1.0",
  "pest 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "syntect 1.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -81,7 +81,7 @@ dependencies = [
 [[package]]
 name = "chan-signal"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
+source = "git+https://github.com/ftilde/chan-signal#16b2c6e6d0617565a5b02d95fda8f56de5334a29"
 dependencies = [
  "bit-set 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "chan 0.1.19 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -564,7 +564,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum byteorder 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "ff81738b726f5d099632ceaffe7fb65b90212e8dce59d518729e7e8634032d3d"
 "checksum cfg-if 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "d4c819a1287eb618df47cc647173c5c4c66ba19d888a6e50d605672aed3140de"
 "checksum chan 0.1.19 (registry+https://github.com/rust-lang/crates.io-index)" = "f93bfe971116428a9066c1c3c69a09ae3ef69432f8418be28ab50f96783e6a50"
-"checksum chan-signal 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "0f3bb6c3bc387004ad914f0c5b7f33ace8bf7604bbec35f228b1a017f52cd3a0"
+"checksum chan-signal 0.2.0 (git+https://github.com/ftilde/chan-signal)" = "<none>"
 "checksum chrono 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "158b0bd7d75cbb6bf9c25967a48a2e9f77da95876b858eadfabaa99cd069de6e"
 "checksum cmake 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)" = "b8ebbb35d3dc9cd09497168f33de1acb79b265d350ab0ac34133b98f8509af1f"
 "checksum dtoa 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)" = "80c8b71fd71146990a9742fc06dcbbde19161a267e0ad4e572c35162f4578c90"

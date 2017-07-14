@@ -60,6 +60,7 @@ fn main() {
     // Setup signal piping:
     // NOTE: This has to be set up before the creation of any other threads!
     // (See chan_signal documentation)
+    chan_signal::unblock_signals_by_default();
     let signal_event_source = chan_signal::notify(&[Signal::WINCH]);
 
     // Create terminal and setup slave input piping

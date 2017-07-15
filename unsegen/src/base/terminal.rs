@@ -2,28 +2,88 @@ use ndarray::{
     Axis,
 };
 use termion::raw::{IntoRawMode, RawTerminal};
-use termion::screen::{AlternateScreen};
 use termion;
 use base::{
     Style,
     Window,
     WindowBuffer,
 };
+use std::io;
+use std::io::{
+    Write,
+    StdoutLock,
+};
+
+use nix::sys::signal::{
+    SIGCONT,
+    SIGTSTP,
+    SigSet,
+    SigmaskHow,
+    kill,
+    pthread_sigmask,
+};
+use nix::unistd::getpid;
 
 pub struct Terminal<'a> {
     values: WindowBuffer,
-    terminal: AlternateScreen<RawTerminal<::std::io::StdoutLock<'a>>>,
+    terminal: RawTerminal<StdoutLock<'a>>,
 }
 
 impl<'a> Terminal<'a> {
-    pub fn new(stdout: ::std::io::StdoutLock<'a>) -> Self {
-        use std::io::Write;
-        let mut terminal = AlternateScreen::from(stdout.into_raw_mode().expect("raw terminal"));
-        write!(terminal, "{}", termion::cursor::Hide).expect("write: hide cursor");
-        Terminal {
+    pub fn new(stdout: StdoutLock<'a>) -> Self {
+        let mut term = Terminal {
             values: WindowBuffer::new(0, 0),
-            terminal: terminal,
+            terminal: stdout.into_raw_mode().expect("raw terminal"),
+        };
+        term.setup_terminal().expect("Setup terminal");
+        term
+    }
+
+    /// This method is intended to be called when the process received a SIGTSTP.
+    ///
+    /// The terminal state is restored, and the process is actually stopped within this function.
+    /// When the process then receives a SIGCONT it sets up the terminal state as expected again
+    /// and returns from the function.
+    ///
+    /// The usual way to deal with SIGTSTP (and signals in general) is to block them and `waidpid`
+    /// for them in a separate thread which sends the events into some fifo. The fifo can be polled
+    /// in an event loop. Then, if in the main event loop a SIGTSTP turn up, *this* function should
+    /// be called.
+    pub fn handle_sigtstp(&mut self) {
+        self.restore_terminal().expect("Restore terminal");
+
+        if let Ok(exe_path) = ::std::env::current_exe() {
+            writeln!(self.terminal, "{:?} has stopped.", exe_path.file_name().unwrap()).expect("Write stop info");
         }
+
+        let mut stop_and_cont = SigSet::empty();
+        stop_and_cont.add(SIGCONT);
+        stop_and_cont.add(SIGTSTP);
+
+        // 1. Unblock SIGTSTP and SIGCONT, so that we actually stop when we receive another SIGTSTP
+        pthread_sigmask(SigmaskHow::SIG_UNBLOCK, Some(&stop_and_cont), None).unwrap();
+
+        // 2. Reissue SIGSTP...
+        kill(getpid(), SIGTSTP).expect("SIGTSTP self");
+        // ... and stop!
+        // Now we are waiting for a SIGCONT.
+
+        // 3. Once we receive a SIGCONT we block SIGTSTP and SIGCONT again and resume.
+        pthread_sigmask(SigmaskHow::SIG_BLOCK, Some(&stop_and_cont), None).unwrap();
+
+        self.setup_terminal().expect("Setup terminal");
+    }
+
+    fn setup_terminal(&mut self) -> io::Result<()> {
+        write!(self.terminal, "{}{}", termion::screen::ToAlternateScreen, termion::cursor::Hide)?;
+        self.terminal.flush()?;
+        Ok(())
+    }
+
+    fn restore_terminal(&mut self) -> io::Result<()> {
+        write!(self.terminal, "{}{}", termion::screen::ToMainScreen, termion::cursor::Show)?;
+        self.terminal.flush()?;
+        Ok(())
     }
 
     pub fn create_root_window(&mut self) -> Window {
@@ -71,8 +131,7 @@ impl<'a> Terminal<'a> {
 
 impl<'a> Drop for Terminal<'a> {
     fn drop(&mut self) {
-        use std::io::Write;
-        write!(self.terminal, "{}", termion::cursor::Show).expect("show cursor");
+        let _ = self.restore_terminal();
     }
 }
 

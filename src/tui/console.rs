@@ -1,4 +1,3 @@
-use unsegen;
 use gdbmi;
 
 use unsegen::base::{
@@ -22,10 +21,6 @@ use unsegen::widget::{
 use unsegen::widget::widgets::{
     LogViewer,
     PromptLine,
-};
-
-use input::{
-    ConsoleEvent,
 };
 
 enum ActiveLog {
@@ -62,7 +57,7 @@ impl Console {
         write!(self.debug_log.storage, " -=- {}\n", msg).expect("Write message");
     }
 
-    pub fn toggle_active_log(&mut self) {
+    fn toggle_active_log(&mut self) {
         self.active_log = match self.active_log {
             ActiveLog::Debug => ActiveLog::Gdb,
             ActiveLog::Gdb => ActiveLog::Debug,
@@ -83,68 +78,73 @@ impl Console {
         }
     }
 
-    pub fn event(&mut self, event: ::input::ConsoleEvent, gdb: &mut gdbmi::GDB) { //TODO more console events
+    fn handle_newline(&mut self, gdb: &mut gdbmi::GDB) {
+        let line = if self.prompt_line.active_line().is_empty() {
+            self.prompt_line.previous_line(1).unwrap_or("").to_owned()
+        } else {
+            self.prompt_line.finish_line().to_owned()
+        };
+        match line.as_ref() {
+            "!stop" => {
+                gdb.interrupt_execution().expect("interrupted gdb");
 
-        match event {
-            ConsoleEvent::Raw(e) => self.handle_raw_input(e, gdb),
-            ConsoleEvent::ToggleLog => self.toggle_active_log(),
+                // This does not always seem to unblock gdb, but only hang it
+                //use gdbmi::input::MiCommand;
+                //gdb.execute(&MiCommand::exec_interrupt()).expect("Interrupt ");
+            },
+            // Gdb commands
+            _ => {
+                self.write_to_log(format!("(gdb) {}\n", line));
+                match gdb.execute(&gdbmi::input::MiCommand::cli_exec(line)) {
+                    Ok(result) => {
+                        self.add_debug_message(format!("Result: {:?}", result));
+                    },
+                    Err(gdbmi::ExecuteError::Quit) => { self.write_to_log("quit"); },
+                    Err(gdbmi::ExecuteError::Busy) => { self.write_to_log("GDB is running!\n"); },
+                    //Err(err) => { panic!("Unknown error {:?}", err) },
+                }
+            },
         }
     }
 
-    fn handle_raw_input(&mut self, input: unsegen::input::Input, gdb: &mut gdbmi::GDB) { //TODO more console events
-        if input.event == Event::Key(Key::Char('\n')) {
-            let line = if self.prompt_line.active_line().is_empty() {
-                self.prompt_line.previous_line(1).unwrap_or("").to_owned()
-            } else {
-                self.prompt_line.finish_line().to_owned()
-            };
-            match line.as_ref() {
-                "!stop" => {
-                    gdb.interrupt_execution().expect("interrupted gdb");
-
-                    // This does not always seem to unblock gdb, but only hang it
-                    //use gdbmi::input::MiCommand;
-                    //gdb.execute(&MiCommand::exec_interrupt()).expect("Interrupt ");
-                },
-                // Gdb commands
-                _ => {
-                    self.write_to_log(format!("(gdb) {}\n", line));
-                    match gdb.execute(&gdbmi::input::MiCommand::cli_exec(line)) {
-                        Ok(result) => {
-                            self.add_debug_message(format!("Result: {:?}", result));
-                        },
-                        Err(gdbmi::ExecuteError::Quit) => { self.write_to_log("quit"); },
-                        Err(gdbmi::ExecuteError::Busy) => { self.write_to_log("GDB is running!\n"); },
-                        //Err(err) => { panic!("Unknown error {:?}", err) },
-                    }
-                },
-            }
-        } else {
-            let _ = input
-                .chain(
-                    EditBehavior::new(&mut self.prompt_line)
-                        .left_on(Key::Left)
-                        .right_on(Key::Right)
-                        .up_on(Key::Up)
-                        .down_on(Key::Down)
-                        .delete_symbol_on(Key::Delete)
-                        .remove_symbol_on(Key::Backspace)
-                        .clear_on(Key::Ctrl('c'))
-                    )
-                .chain(
-                    |i: Input| if let Event::Key(Key::Ctrl('c')) = i.event {
-                        gdb.interrupt_execution().expect("interrupted gdb");
+    pub fn event(&mut self, input: Input, gdb: &mut gdbmi::GDB) {
+        input
+            .chain(|input: Input| {
+                match input.event {
+                    Event::Key(Key::F(1)) => {
+                        self.toggle_active_log();
                         None
-                    } else {
-                        Some(i)
+                    },
+                    Event::Key(Key::Char('\n')) => {
+                        self.handle_newline(gdb);
+                        None
                     }
-                    )
-                .chain(
-                    ScrollBehavior::new(self.get_active_log_viewer_mut())
-                        .forwards_on(Key::PageDown)
-                        .backwards_on(Key::PageUp)
-                    );
-        }
+                    _ => Some(input)
+                }
+            })
+            .chain(
+                EditBehavior::new(&mut self.prompt_line)
+                .left_on(Key::Left)
+                .right_on(Key::Right)
+                .up_on(Key::Up)
+                .down_on(Key::Down)
+                .delete_symbol_on(Key::Delete)
+                .remove_symbol_on(Key::Backspace)
+                .clear_on(Key::Ctrl('c'))
+                )
+            .chain(|i: Input| {
+                   if let Event::Key(Key::Ctrl('c')) = i.event {
+                       gdb.interrupt_execution().expect("interrupted gdb");
+                       None
+                   } else {
+                       Some(i)
+                   }
+            })
+            .chain(
+                ScrollBehavior::new(self.get_active_log_viewer_mut())
+                .forwards_on(Key::PageDown)
+                .backwards_on(Key::PageUp)
+                );
     }
 }
 

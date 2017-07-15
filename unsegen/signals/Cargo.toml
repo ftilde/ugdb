@@ -1,0 +1,10 @@
+[package]
+name = "unsegen-signals"
+version = "0.1.0"
+authors = ["ftilde <ftilde@protonmail.com>"]
+
+[dependencies]
+libc = "0.2"
+
+[dependencies.unsegen]
+path = "../"

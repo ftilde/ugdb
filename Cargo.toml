@@ -25,6 +25,9 @@ syntect = "1.0"
 [dependencies.unsegen]
 path = "unsegen/"
 
+[dependencies.unsegen-signals]
+path = "unsegen/signals"
+
 [dependencies.unsegen-terminal]
 path = "unsegen/terminal"
 

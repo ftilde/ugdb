@@ -1,5 +1,5 @@
 use termion;
-use termion::raw::RawTerminal;
+use std::io::Write;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct TextFormat {
@@ -10,9 +10,7 @@ pub struct TextFormat {
 }
 
 impl TextFormat {
-    fn set_terminal_attributes(&self, terminal: &mut RawTerminal<::std::io::StdoutLock>) {
-        use std::io::Write;
-
+    fn set_terminal_attributes<W: Write>(&self, terminal: &mut W) {
         if self.bold {
             write!(terminal, "{}", termion::style::Bold).expect("set bold style");
         } else {
@@ -180,9 +178,8 @@ impl Color {
         Color::Ansi(termion::color::AnsiValue::grayscale(v).0)
     }
 
-    fn set_terminal_attributes_fg(&self, terminal: &mut RawTerminal<::std::io::StdoutLock>) -> ::std::io::Result<()> {
+    fn set_terminal_attributes_fg<W: Write>(&self, terminal: &mut W) -> ::std::io::Result<()> {
         use termion::color::Fg as Target;
-        use std::io::Write;
         match self {
             &Color::Rgb { r, g, b } => write!(terminal, "{}", Target(termion::color::Rgb(r, g, b))),
             &Color::Ansi(v) => write!(terminal, "{}", Target(termion::color::AnsiValue(v))),
@@ -204,9 +201,8 @@ impl Color {
             &Color::LightYellow  => write!(terminal, "{}", Target(termion::color::LightYellow)),
         }
     }
-    fn set_terminal_attributes_bg(&self, terminal: &mut RawTerminal<::std::io::StdoutLock>) -> ::std::io::Result<()> {
+    fn set_terminal_attributes_bg<W: Write>(&self, terminal: &mut W) -> ::std::io::Result<()> {
         use termion::color::Bg as Target;
-        use std::io::Write;
         match self {
             &Color::Rgb { r, g, b } => write!(terminal, "{}", Target(termion::color::Rgb(r, g, b))),
             &Color::Ansi(v) => write!(terminal, "{}", Target(termion::color::AnsiValue(v))),
@@ -260,7 +256,7 @@ impl Style {
         Self::default()
     }
 
-    pub fn set_terminal_attributes(&self, terminal: &mut RawTerminal<::std::io::StdoutLock>) {
+    pub fn set_terminal_attributes<W: Write>(&self, terminal: &mut W) {
         self.fg_color.set_terminal_attributes_fg(terminal).expect("write fg_color");
         self.bg_color.set_terminal_attributes_bg(terminal).expect("write bg_color");
         self.format.set_terminal_attributes(terminal);

@@ -8,6 +8,7 @@ extern crate time;
 
 extern crate unsegen;
 
+extern crate unsegen_signals;
 extern crate unsegen_terminal;
 extern crate unsegen_jsonviewer; // For ExpressionTable
 #[macro_use]
@@ -56,12 +57,17 @@ impl ::unsegen_terminal::SlaveInputSink for MpscSlaveInputSink {
     }
 }
 
+fn kill_gdb(gdb: &mut GDB) {
+    gdb.interrupt_execution().expect("interrupt worked");
+    gdb.execute_later(&gdbmi::input::MiCommand::exit());
+}
+
 fn main() {
     // Setup signal piping:
     // NOTE: This has to be set up before the creation of any other threads!
     // (See chan_signal documentation)
-    chan_signal::unblock_signals_by_default();
-    let signal_event_source = chan_signal::notify(&[Signal::WINCH]);
+    let signal_event_source = chan_signal::notify(&[Signal::WINCH, Signal::TSTP, Signal::TERM]);
+    chan_signal::block(&[Signal::CONT]);
 
     // Create terminal and setup slave input piping
     let (pts_sink, pts_source) = chan::async();
@@ -80,7 +86,6 @@ fn main() {
 
     let stdout = std::io::stdout();
     {
-
         let mut terminal = Terminal::new(stdout.lock());
         let theme_set = syntect::highlighting::ThemeSet::load_defaults();
         let mut tui = tui::Tui::new(tui_terminal, &theme_set.themes["base16-ocean.dark"]);
@@ -101,8 +106,7 @@ fn main() {
                 keyboard_source.recv() -> evt => {
                     match evt.expect("read keyboard event") {
                         input::InputEvent::Quit => {
-                            gdb.interrupt_execution().expect("interrupt worked");
-                            gdb.execute_later(&gdbmi::input::MiCommand::exit());
+                            kill_gdb(&mut gdb);
                         },
                         event => {
                             tui.event(event, &mut gdb);
@@ -113,10 +117,14 @@ fn main() {
                     tui.add_pty_input(pty_output.expect("get pty input"));
                 },
                 signal_event_source.recv() -> signal_event => {
-                    match signal_event.expect("get signal event") {
+                    let sig = signal_event.expect("get signal event");
+                    match sig {
                         Signal::WINCH => { /* Ignore, we just want to redraw */ },
-                        sig => { panic!(format!("unexpected {:?}", sig)) },
+                        Signal::TSTP => { terminal.handle_sigtstp() },
+                        Signal::TERM => { kill_gdb(&mut gdb); },
+                        _ => {}
                     }
+                    tui.console.add_debug_message(format!("received signal {:?}", sig));
                 }
             }
             tui.draw(terminal.create_root_window());

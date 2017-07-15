@@ -5,6 +5,7 @@ authors = ["ftilde <ftilde@protonmail.com>"]
 
 [dependencies]
 ndarray = "0.8"
+nix = "0.8"
 smallvec = "0.3"
 syntect = "1.0"
 unicode-segmentation = "1.0"

@@ -40,7 +40,7 @@ use unsegen_terminal::{
 use super::expression_table::ExpressionTable;
 
 pub struct Tui<'a> {
-    console: Console,
+    pub console: Console,
     expression_table: ExpressionTable,
     process_pty: Terminal,
     src_view: CodeWindow<'a>,
@@ -140,10 +140,14 @@ impl<'a> Tui<'a> {
     }
 
     pub fn event(&mut self, event: InputEvent, gdb: &mut gdbmi::GDB) { //TODO more console events
+        let sig_behavior = ::unsegen_signals::SignalBehavior::new().sig_default::<::unsegen_signals::SIGTSTP>();
         match event {
             InputEvent::ConsoleEvent(event) => {
                 self.active_window = SubWindow::Console;
-                self.console.event(event, gdb);
+                event.chain(sig_behavior).chain(|event| {
+                    self.console.event(event, gdb);
+                    None
+                });
             },
             InputEvent::PseudoTerminalEvent(event) => {
                 self.active_window = SubWindow::Terminal;
@@ -154,11 +158,17 @@ impl<'a> Tui<'a> {
             },
             InputEvent::SourcePagerEvent(event) => {
                 self.active_window = SubWindow::CodeWindow;
-                self.src_view.event(event, gdb);
+                event.chain(sig_behavior).chain(|event| {
+                    self.src_view.event(event, gdb);
+                    None
+                });
             },
             InputEvent::ExpressionTableEvent(event) => {
                 self.active_window = SubWindow::ExpressionTable;
-                self.expression_table.event(event, gdb);
+                event.chain(sig_behavior).chain(|event| {
+                    self.expression_table.event(event, gdb);
+                    None
+                });
             },
             InputEvent::Quit => {
                 unreachable!("quit should have been caught in main" )

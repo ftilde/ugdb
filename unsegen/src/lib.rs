@@ -1,5 +1,6 @@
 #[macro_use]
 extern crate ndarray;
+extern crate nix;
 extern crate smallvec;
 extern crate syntect;
 extern crate termion;

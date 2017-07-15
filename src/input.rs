@@ -14,14 +14,8 @@ use time::{
 };
 
 #[derive(Eq, PartialEq, Clone)]
-pub enum ConsoleEvent {
-    Raw(Input),
-    ToggleLog,
-}
-
-#[derive(Eq, PartialEq, Clone)]
 pub enum InputEvent {
-    ConsoleEvent(ConsoleEvent),
+    ConsoleEvent(Input),
     PseudoTerminalEvent(Input),
     SourcePagerEvent(Input),
     ExpressionTableEvent(Input),
@@ -80,8 +74,7 @@ impl ViKeyboardInput {
                 Mode::Console => {
                     match input.event.clone() {
                         Event::Key(Key::Esc) => { (Mode::SourcePager, None) },
-                        Event::Key(Key::F(1)) => { (mode, Some(InputEvent::ConsoleEvent(ConsoleEvent::ToggleLog))) },
-                        _ => { (mode, Some(InputEvent::ConsoleEvent(ConsoleEvent::Raw(input)))) },
+                        _ => { (mode, Some(InputEvent::ConsoleEvent(input))) },
                     }
                 },
                 Mode::PTY => {

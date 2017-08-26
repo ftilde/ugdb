@@ -12,7 +12,7 @@ debug = true
 
 [dependencies]
 chan = "0.1"
-#chan-signal = "0.2"
+chan-signal = "0.3"
 time = "0.1"
 unicode-width = "0.1"
 
@@ -42,6 +42,3 @@ path = "unsegen/jsonviewer"
 
 [dependencies.gdbmi]
 path = "gdbmi-rs/"
-
-[dependencies.chan-signal]
-git = "https://github.com/ftilde/chan-signal"

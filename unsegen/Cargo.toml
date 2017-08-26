@@ -8,11 +8,6 @@ ndarray = "0.8"
 nix = "0.8"
 smallvec = "0.3"
 syntect = "1.0"
+termion = "1.5"
 unicode-segmentation = "1.0"
 unicode-width = "0.1"
-
-#termion = "1.3"
-[dependencies.termion]
-git = "https://github.com/ftilde/termion"
-#[dependencies.termion]
-#path = "../../termion/"

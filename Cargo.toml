@@ -13,8 +13,13 @@ debug = true
 [dependencies]
 chan = "0.1"
 #chan-signal = "0.2"
-unicode-width = "0.1"
 time = "0.1"
+unicode-width = "0.1"
+
+# For IPC
+json = "0.11"
+rand = "0.3"
+unix_socket = "0.5"
 
 # For ExpressionTable (gdb expression parsing)
 pest = "0.4"

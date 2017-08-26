@@ -3,8 +3,14 @@
 #[macro_use]
 extern crate chan;
 extern crate chan_signal;
-extern crate gdbmi;
 extern crate time;
+extern crate gdbmi;
+
+// For ipc
+#[macro_use]
+extern crate json;
+extern crate rand;
+extern crate unix_socket;
 
 extern crate unsegen;
 
@@ -20,8 +26,9 @@ extern crate unicode_width; // For AssemblyLineDecorator
 // TODO: maybe reexport types in unsegen?
 extern crate syntect;
 
-mod tui;
 mod input;
+mod ipc;
+mod tui;
 
 use ::std::ffi::OsString;
 
@@ -73,6 +80,9 @@ fn main() {
     let (pts_sink, pts_source) = chan::async();
     let tui_terminal = ::unsegen_terminal::Terminal::new(MpscSlaveInputSink(pts_sink));
 
+    // Setup ipc
+    let mut ipc = ipc::IPC::setup().expect("Setup ipc");
+
     // Start gdb and setup output event piping
     let (oob_sink, oob_source) = chan::async();
     let all_args: Vec<OsString> = ::std::env::args_os().collect();
@@ -93,6 +103,9 @@ fn main() {
         tui.draw(terminal.create_root_window());
         terminal.present();
 
+        // Somehow ipc.requests does not work in the chan_select macro...
+        let ipc_requests = &mut ipc.requests;
+
         loop {
             chan_select! {
                 oob_source.recv() -> oob_evt => {
@@ -102,6 +115,9 @@ fn main() {
                         // OOB pipe has closed. => gdb will be stopping soon
                         break;
                     }
+                },
+                ipc_requests.recv() -> request => {
+                    request.expect("receive request").respond(&mut gdb);
                 },
                 keyboard_source.recv() -> evt => {
                     match evt.expect("read keyboard event") {

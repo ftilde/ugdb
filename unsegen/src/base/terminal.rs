@@ -22,7 +22,7 @@ use nix::sys::signal::{
     kill,
     pthread_sigmask,
 };
-use nix::unistd::getpid;
+use nix::unistd::getpgrp;
 
 pub struct Terminal<'a> {
     values: WindowBuffer,
@@ -52,24 +52,20 @@ impl<'a> Terminal<'a> {
     pub fn handle_sigtstp(&mut self) {
         self.restore_terminal().expect("Restore terminal");
 
-        if let Ok(exe_path) = ::std::env::current_exe() {
-            writeln!(self.terminal, "{:?} has stopped.", exe_path.file_name().unwrap()).expect("Write stop info");
-        }
-
         let mut stop_and_cont = SigSet::empty();
         stop_and_cont.add(SIGCONT);
         stop_and_cont.add(SIGTSTP);
 
         // 1. Unblock SIGTSTP and SIGCONT, so that we actually stop when we receive another SIGTSTP
-        pthread_sigmask(SigmaskHow::SIG_UNBLOCK, Some(&stop_and_cont), None).unwrap();
+        pthread_sigmask(SigmaskHow::SIG_UNBLOCK, Some(&stop_and_cont), None).expect("Unblock signals");
 
-        // 2. Reissue SIGSTP...
-        kill(getpid(), SIGTSTP).expect("SIGTSTP self");
+        // 2. Reissue SIGTSTP (this time to whole the process group!)...
+        kill(-getpgrp(), SIGTSTP).expect("SIGTSTP self");
         // ... and stop!
         // Now we are waiting for a SIGCONT.
 
         // 3. Once we receive a SIGCONT we block SIGTSTP and SIGCONT again and resume.
-        pthread_sigmask(SigmaskHow::SIG_BLOCK, Some(&stop_and_cont), None).unwrap();
+        pthread_sigmask(SigmaskHow::SIG_BLOCK, Some(&stop_and_cont), None).expect("Block signals");
 
         self.setup_terminal().expect("Setup terminal");
     }

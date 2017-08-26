@@ -11,7 +11,7 @@ use unsegen::input::{
 
 use libc::{
     kill,
-    getpgrp,
+    getpid,
 };
 
 use std::collections::HashMap;
@@ -79,7 +79,7 @@ impl SignalBehavior {
 impl<'a> Behavior for SignalBehavior {
     fn input(self, i: Input) -> Option<Input> {
         if let Some(sig) = self.mapping.get(&i.event) {
-            unsafe { kill(-getpgrp(), *sig); }
+            unsafe { kill(getpid(), *sig); }
             None
         } else {
             Some(i)

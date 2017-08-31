@@ -18,23 +18,21 @@ use widget::{
 };
 
 pub struct Column<T: ?Sized> {
-    // This will be SO much more convenient to implement once this is stablized:
-    // https://github.com/rust-lang/rust/issues/39817
     pub access: fn(&T) -> &Widget,
     pub access_mut: fn(&mut T) -> &mut Widget,
     pub behavior: fn(&mut T, Input) -> Option<Input>,
 }
 
-pub trait TableRow {
-    fn columns() -> &'static [Column<Self>];
+pub trait TableRow: 'static {
+    const COLUMNS: &'static [Column<Self>];
 
-    fn num_columns() -> usize where Self: 'static {
-        Self::columns().len()
+    fn num_columns() -> usize {
+        Self::COLUMNS.len()
     }
 
-    fn height_demand(&self) -> Demand where Self: 'static {
+    fn height_demand(&self) -> Demand {
         let mut y_demand = Demand::zero();
-        for col in Self::columns().iter() {
+        for col in Self::COLUMNS.iter() {
             let demand2d = (col.access)(self).space_demand();
             y_demand.max_assign(demand2d.height);
         }
@@ -99,7 +97,7 @@ impl<R: TableRow + 'static> Table<R> {
     fn layout_columns(&self, window: &Window) -> Box<[u32]> {
         let mut x_demands = vec![Demand::zero(); R::num_columns()];
         for row in self.rows.iter() {
-            for (col_num, col) in R::columns().iter().enumerate() {
+            for (col_num, col) in R::COLUMNS.iter().enumerate() {
                 let demand2d = (col.access)(row).space_demand();
                 x_demands[col_num].max_assign(demand2d.width);
             }
@@ -133,7 +131,7 @@ impl<R: TableRow + 'static> Table<R> {
     }
 
     pub fn current_col(&self) -> &'static Column<R> {
-        &R::columns()[self.col_pos as usize]
+        &R::COLUMNS[self.col_pos as usize]
     }
 
     fn pass_event_to_current_cell(&mut self, i: Input) -> Option<Input> {
@@ -170,7 +168,7 @@ impl<R: TableRow + 'static> Widget for Table<R> {
         let mut row_iter = self.rows.iter().peekable();
         while let Some(row) = row_iter.next() {
             let mut row_max_y = Demand::exact(0);
-            for (col_num, col) in R::columns().iter().enumerate() {
+            for (col_num, col) in R::COLUMNS.iter().enumerate() {
                 let demand2d = (col.access)(row).space_demand();
                 x_demands[col_num].max_assign(demand2d.width);
                 row_max_y.max_assign(demand2d.height)
@@ -208,7 +206,7 @@ impl<R: TableRow + 'static> Widget for Table<R> {
                 row_window.modify_default_style(&modifier);
             }
 
-            let mut iter = R::columns().iter().zip(column_widths.iter()).enumerate().peekable();
+            let mut iter = R::COLUMNS.iter().zip(column_widths.iter()).enumerate().peekable();
             while let Some((col_index, (col, &pos))) = iter.next() {
                 let (mut cell_window, r) = row_window.split_h(pos).expect("valid split pos from layout");
                 row_window = r;

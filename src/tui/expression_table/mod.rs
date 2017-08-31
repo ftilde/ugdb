@@ -58,72 +58,49 @@ impl ExpressionRow {
     fn is_empty(&self) -> bool {
         self.expression.get().is_empty()
     }
-
-    fn get_expression_as_widget(&self) -> &Widget {
-        &self.expression
-    }
-
-    fn get_expression_as_widget_mut(&mut self) -> &mut Widget {
-        &mut self.expression
-    }
-
-    fn pass_event_to_expression(&mut self, input: Input) -> Option<Input>{
-        input.chain(EditBehavior::new(&mut self.expression)
-                    .left_on(Key::Left)
-                    .right_on(Key::Right)
-                    .up_on(Key::Up)
-                    .down_on(Key::Down)
-                    .delete_symbol_on(Key::Delete)
-                    .remove_symbol_on(Key::Backspace)
-                    .clear_on(Key::Ctrl('c'))
-                    ).finish()
-    }
-
-    fn get_result_as_widget(&self) -> &Widget {
-        &self.result
-    }
-
-    fn get_result_as_widget_mut(&mut self) -> &mut Widget {
-        &mut self.result
-    }
-
-    fn pass_event_to_result(&mut self, input: Input) -> Option<Input> {
-        input.chain(ScrollBehavior::new(&mut self.result)
-                    .forwards_on(Key::PageDown)
-                    .backwards_on(Key::PageUp)
-                    .forwards_on(Key::Down)
-                    .backwards_on(Key::Up)
-                    )
-            .chain(|evt: Input| {
-                if evt.matches(Key::Char(' ')) {
-                    if self.result.toggle_active_element().is_ok() {
-                        None
-                    } else {
-                        Some(evt)
-                    }
-                } else {
-                    Some(evt)
-                }
-            })
-            .finish()
-    }
 }
 impl TableRow for ExpressionRow {
-    fn columns() -> &'static [Column<ExpressionRow>] {
-        const W: &'static [Column<ExpressionRow>] = &[
-            Column {
-                access: ExpressionRow::get_expression_as_widget,
-                access_mut: ExpressionRow::get_expression_as_widget_mut,
-                behavior: ExpressionRow::pass_event_to_expression,
-            },
-            Column {
-                access: ExpressionRow::get_result_as_widget,
-                access_mut: ExpressionRow::get_result_as_widget_mut,
-                behavior: ExpressionRow::pass_event_to_result,
-            },
-        ];
-        W
-    }
+    const COLUMNS: &'static [Column<ExpressionRow>] = &[
+        Column {
+            access: |r| &r.expression,
+            access_mut: |r| &mut r.expression,
+            behavior: |r, input| {
+                input.chain(EditBehavior::new(&mut r.expression)
+                            .left_on(Key::Left)
+                            .right_on(Key::Right)
+                            .up_on(Key::Up)
+                            .down_on(Key::Down)
+                            .delete_symbol_on(Key::Delete)
+                            .remove_symbol_on(Key::Backspace)
+                            .clear_on(Key::Ctrl('c'))
+                           ).finish()
+            }
+        },
+        Column {
+            access: |r| &r.result,
+            access_mut: |r| &mut r.result,
+            behavior: |r, input| {
+                input.chain(ScrollBehavior::new(&mut r.result)
+                            .forwards_on(Key::PageDown)
+                            .backwards_on(Key::PageUp)
+                            .forwards_on(Key::Down)
+                            .backwards_on(Key::Up)
+                           )
+                    .chain(|evt: Input| {
+                        if evt.matches(Key::Char(' ')) {
+                            if r.result.toggle_active_element().is_ok() {
+                                None
+                            } else {
+                                Some(evt)
+                            }
+                        } else {
+                            Some(evt)
+                        }
+                    })
+                .finish()
+            }
+        },
+    ];
 }
 
 pub struct ExpressionTable {

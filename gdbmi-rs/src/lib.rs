@@ -83,7 +83,7 @@ impl GDB {
     }
 
     pub fn is_running(&self) -> bool {
-        self.is_running.load(Ordering::Relaxed) /* TODO: maybe some other ordering? */
+        self.is_running.load(Ordering::SeqCst)
     }
 
     pub fn execute<C: std::borrow::Borrow<input::MiCommand>>(&mut self, command: C) -> Result<output::ResultRecord, ExecuteError> {

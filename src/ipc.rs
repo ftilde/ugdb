@@ -95,6 +95,7 @@ impl IPCRequest {
     fn dispatch(function_name: &str) -> Result<fn(&mut GDB, &json::JsonValue) -> Result<json::JsonValue, IPCError>, IPCError> {
         match function_name {
             "set_breakpoint" => Ok(Self::set_breakpoint),
+            "get_instance_info" => Ok(Self::get_instance_info),
             _ => Err(IPCError::new("unknown function", function_name)),
         }
     }
@@ -106,7 +107,7 @@ impl IPCRequest {
             return Err(IPCError::new("Parameters is not an object", parameters.dump()));
         };
         let file = parameters_obj.get("file").and_then(|o| o.as_str()).ok_or(IPCError::new("Missing file name", parameters.dump()))?;
-        let line = parameters_obj.get("line").and_then(|o| o.as_u32()).ok_or(IPCError::new("Missing line number", parameters.dump()))?;
+        let line = parameters_obj.get("line").and_then(|o| o.as_u32()).ok_or(IPCError::new("Missing integer line number", parameters.dump()))?;
         let bp_result = gdb.execute(MiCommand::insert_breakpoint(BreakPointLocation::Line(Path::new(file), line as usize))).map_err(|e| match e {
             ExecuteError::Busy => {
                 //TODO: we may want to investigate if we can interrupt execution, insert
@@ -125,6 +126,23 @@ impl IPCRequest {
                 Err(IPCError::new("Could not insert breakpoint", format!("{}", json::JsonValue::Object(bp_result.results).dump())))
             },
         }
+    }
+
+    fn get_instance_info(gdb: &mut GDB, _: &json::JsonValue) -> Result<json::JsonValue, IPCError>{
+        let result = gdb.execute(MiCommand::environment_pwd()).map_err(|e| match e {
+            ExecuteError::Busy => {
+                //TODO: we may want to investigate if we can interrupt execution, get information
+                //and resume execution thereafter.
+                IPCError::new("Could not get working directory", "GDB is busy")
+            },
+            ExecuteError::Quit => {
+                IPCError::new("Could not get working directory", "GDB quit")
+            },
+        })?;
+        let working_directory = result.results["cwd"].as_str().expect("no cwd in result");
+        Ok(object!{
+            "working_directory" => working_directory
+        })
     }
 }
 

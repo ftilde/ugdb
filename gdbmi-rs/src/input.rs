@@ -147,6 +147,14 @@ impl MiCommand {
         }
     }
 
+    pub fn environment_pwd() -> MiCommand {
+        MiCommand {
+            operation: "environment-pwd".to_owned(),
+            options: Vec::new(),
+            parameters: Vec::new(),
+        }
+    }
+
     // Be aware: This does not seem to always interrupt execution.
     // Use gdb.interrupt_execution instead.
     pub fn exec_interrupt(/*TODO incorporate all & threadgroup? */) -> MiCommand {

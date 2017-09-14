@@ -10,6 +10,9 @@ Add IPC framework
 Add MemoryViewer:
  - It may be useful to use a table, or just use split windows
 
+Smaller QoL-changes:
+ - Add a "running" indicator in prompt
+
 Fix bugs:
  - Insert breakpoint when running results in crash
  - Invalid breakpoint when setting bp in function which is inlined (maybe?). There may be other similar bugs.

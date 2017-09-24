@@ -26,6 +26,7 @@ extern crate unicode_width; // For AssemblyLineDecorator
 // TODO: maybe reexport types in unsegen?
 extern crate syntect;
 
+mod gdb;
 mod input;
 mod ipc;
 mod tui;
@@ -35,8 +36,8 @@ use ::std::ffi::OsString;
 use chan::Sender;
 use chan_signal::Signal;
 
+use gdb::GDB;
 use gdbmi::{
-    GDB,
     OutOfBandRecordSink,
 };
 
@@ -64,9 +65,10 @@ impl ::unsegen_terminal::SlaveInputSink for MpscSlaveInputSink {
     }
 }
 
-fn kill_gdb(gdb: &mut GDB) {
-    gdb.interrupt_execution().expect("interrupt worked");
-    gdb.execute_later(&gdbmi::input::MiCommand::exit());
+type UpdateParameters<'a, 'b: 'a> = &'b mut UpdateParametersStruct<'a>;
+
+pub struct UpdateParametersStruct<'a> {
+    pub gdb: &'a mut GDB,
 }
 
 fn main() {
@@ -87,12 +89,20 @@ fn main() {
     let (oob_sink, oob_source) = chan::async();
     let all_args: Vec<OsString> = ::std::env::args_os().collect();
     let gdb_arguments = &all_args[1..];
-    let mut gdb = GDB::spawn(gdb_arguments, tui_terminal.get_slave_name(), MpscOobRecordSink(oob_sink)).expect("spawn gdb");
+    let mut gdb = GDB::new(gdbmi::GDB::spawn(gdb_arguments, tui_terminal.get_slave_name(), MpscOobRecordSink(oob_sink)).expect("spawn gdb"));
 
     // Setup input piping
     let (keyboard_sink, keyboard_source) = chan::async();
     use input::InputSource;
     /* let keyboard_input = */ input::ViKeyboardInput::start_loop(keyboard_sink);
+
+    macro_rules! update_parameters {
+        () => {
+            &mut UpdateParametersStruct {
+                gdb: &mut gdb
+            }
+        }
+    }
 
     let stdout = std::io::stdout();
     {
@@ -110,22 +120,22 @@ fn main() {
             chan_select! {
                 oob_source.recv() -> oob_evt => {
                     if let Some(record) = oob_evt {
-                        tui.add_out_of_band_record(record, &mut gdb);
+                        tui.add_out_of_band_record(record, update_parameters!());
                     } else {
                         // OOB pipe has closed. => gdb will be stopping soon
                         break;
                     }
                 },
                 ipc_requests.recv() -> request => {
-                    request.expect("receive request").respond(&mut gdb);
+                    request.expect("receive request").respond(update_parameters!());
                 },
                 keyboard_source.recv() -> evt => {
                     match evt.expect("read keyboard event") {
                         input::InputEvent::Quit => {
-                            kill_gdb(&mut gdb);
+                            gdb.kill();
                         },
                         event => {
-                            tui.event(event, &mut gdb);
+                            tui.event(event, update_parameters!());
                         },
                     }
                 },
@@ -137,12 +147,13 @@ fn main() {
                     match sig {
                         Signal::WINCH => { /* Ignore, we just want to redraw */ },
                         Signal::TSTP => { terminal.handle_sigtstp() },
-                        Signal::TERM => { kill_gdb(&mut gdb); },
+                        Signal::TERM => { gdb.kill() },
                         _ => {}
                     }
                     tui.console.add_debug_message(format!("received signal {:?}", sig));
                 }
             }
+            tui.update_after_event(update_parameters!());
             tui.draw(terminal.create_root_window());
             terminal.present();
         }
@@ -150,6 +161,6 @@ fn main() {
 
     //keyboard_input.stop_loop(); //TODO make sure all loops stop?
 
-    let child_exit_status = gdb.process.wait().expect("gdb exited");
+    let child_exit_status = gdb.mi.process.wait().expect("gdb exited");
     println!("GDB exited with status {}.", child_exit_status);
 }

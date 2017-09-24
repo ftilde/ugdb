@@ -22,7 +22,6 @@ use syntect::highlighting::{
     Theme,
 };
 
-use gdbmi;
 use gdbmi::output::{
     OutOfBandRecord,
     AsyncKind,
@@ -73,18 +72,19 @@ impl<'a> Tui<'a> {
         }
     }
 
-    fn handle_async_record(&mut self, kind: AsyncKind, class: AsyncClass, results: &Object, gdb: &mut gdbmi::GDB) {
+    fn handle_async_record(&mut self, kind: AsyncKind, class: AsyncClass, results: &Object, p: ::UpdateParameters) {
         match (kind, class) {
             (AsyncKind::Exec, AsyncClass::Stopped) => {
                 self.console.add_debug_message(format!("stopped: {}", JsonValue::Object(results.clone()).pretty(2)));
                 if let JsonValue::Object(ref frame) = results["frame"] {
-                    self.src_view.show_frame(frame, gdb);
+                    self.src_view.show_frame(frame, p);
                 }
-                self.expression_table.update_results(gdb);
+                self.expression_table.update_results(p);
             },
             (AsyncKind::Notify, AsyncClass::BreakPoint(event)) => {
                 self.console.add_debug_message(format!("bkpoint {:?}: {}", event, JsonValue::Object(results.clone()).pretty(2)));
-                self.src_view.handle_breakpoint_event(event, &results);
+                p.gdb.handle_breakpoint_event(event, &results);
+                //TODO update srcview somehow
             },
             (kind, class) => {
                 self.console.add_debug_message(format!("unhandled async_record: [{:?}, {:?}] {}", kind, class, JsonValue::Object(results.clone()).pretty(2)));
@@ -92,13 +92,13 @@ impl<'a> Tui<'a> {
         }
     }
 
-    pub fn add_out_of_band_record(&mut self, record: OutOfBandRecord, gdb: &mut gdbmi::GDB) {
+    pub fn add_out_of_band_record(&mut self, record: OutOfBandRecord, p: ::UpdateParameters) {
         match record {
             OutOfBandRecord::StreamRecord{ kind: _, data} => {
                 self.console.write_to_log(data);
             },
             OutOfBandRecord::AsyncRecord{token: _, kind, class, results} => {
-                self.handle_async_record(kind, class, &results, gdb);
+                self.handle_async_record(kind, class, &results, p);
             },
 
         }
@@ -139,13 +139,13 @@ impl<'a> Tui<'a> {
         self.right_layout.draw(window_r, &mut right_widgets);
     }
 
-    pub fn event(&mut self, event: InputEvent, gdb: &mut gdbmi::GDB) { //TODO more console events
+    pub fn event(&mut self, event: InputEvent, p: ::UpdateParameters) { //TODO more console events
         let sig_behavior = ::unsegen_signals::SignalBehavior::new().sig_default::<::unsegen_signals::SIGTSTP>();
         match event {
             InputEvent::ConsoleEvent(event) => {
                 self.active_window = SubWindow::Console;
                 event.chain(sig_behavior).chain(|event| {
-                    self.console.event(event, gdb);
+                    self.console.event(event, p);
                     None
                 });
             },
@@ -159,14 +159,14 @@ impl<'a> Tui<'a> {
             InputEvent::SourcePagerEvent(event) => {
                 self.active_window = SubWindow::CodeWindow;
                 event.chain(sig_behavior).chain(|event| {
-                    self.src_view.event(event, gdb);
+                    self.src_view.event(event, p);
                     None
                 });
             },
             InputEvent::ExpressionTableEvent(event) => {
                 self.active_window = SubWindow::ExpressionTable;
                 event.chain(sig_behavior).chain(|event| {
-                    self.expression_table.event(event, gdb);
+                    self.expression_table.event(event, p);
                     None
                 });
             },
@@ -174,5 +174,9 @@ impl<'a> Tui<'a> {
                 unreachable!("quit should have been caught in main" )
             }, //TODO this is ugly
         }
+    }
+
+    pub fn update_after_event(&mut self, p: ::UpdateParameters) {
+        self.src_view.update_after_event(p);
     }
 }

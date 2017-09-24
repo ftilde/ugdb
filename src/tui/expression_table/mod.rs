@@ -30,7 +30,6 @@ use unsegen::input::{
     Key,
     ScrollBehavior,
 };
-use gdbmi;
 use gdbmi::input::{
     MiCommand,
 };
@@ -118,7 +117,7 @@ impl ExpressionTable {
             table: table,
         }
     }
-    pub fn event(&mut self, event: Input, gdb: &mut gdbmi::GDB) {
+    pub fn event(&mut self, event: Input, p: ::UpdateParameters) {
         event
             .chain(|i: Input| match i.event {
                 _ => Some(i),
@@ -135,7 +134,7 @@ impl ExpressionTable {
                  );
 
         self.shrink_to_fit();
-        self.update_results(gdb);
+        self.update_results(p);
     }
 
     fn shrink_to_fit(&mut self) {
@@ -153,13 +152,13 @@ impl ExpressionTable {
         rows.push(ExpressionRow::new());
     }
 
-    pub fn update_results(&mut self, gdb: &mut gdbmi::GDB) {
+    pub fn update_results(&mut self, p: ::UpdateParameters) {
         for row in self.table.rows_mut().iter_mut() {
             let expr = row.expression.get().to_owned();
             let result = if expr.is_empty() {
                 JsonValue::Null
             } else {
-                let res = gdb.execute(MiCommand::data_evaluate_expression(expr)).expect("expression evaluation successful");
+                let res = p.gdb.mi.execute(MiCommand::data_evaluate_expression(expr)).expect("expression evaluation successful");
                 match res.class {
                     ResultClass::Error => {
                         res.results["msg"].clone()

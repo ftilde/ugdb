@@ -20,4 +20,3 @@ Fix bugs:
  - Support showing code when only assembly is available
  - Detect changes in active file and reload if needed
  - Hitting enter in LineEdit
- - Adding breakpoints via IPC does not add them in codeview. Maybe gdb(mi-rs?) should collect breakpoints, or we should just reread them every frame.

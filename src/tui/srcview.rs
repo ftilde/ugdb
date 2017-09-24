@@ -38,12 +38,14 @@ use syntect::highlighting::{
 use syntect::parsing::{
     SyntaxSet,
 };
-use gdbmi;
 use gdbmi::output::{
-    BreakPointEvent,
     JsonValue,
     Object,
-    ResultClass,
+};
+use gdb::{
+    SrcPosition,
+    Address,
+    BreakPoint,
 };
 use gdbmi::input::{
     MiCommand,
@@ -57,53 +59,16 @@ use std::path::{
     PathBuf,
 };
 use std::collections::{
-    HashMap,
     HashSet,
 };
 use std::ops::{
-    Add,
     Range,
 };
-use std::fmt;
 
 #[derive(Debug)]
 pub enum PagerShowError {
     CouldNotOpenFile(PathBuf, io::Error),
     LineDoesNotExist(LineIndex),
-}
-
-#[derive(Debug, Clone)]
-struct SrcPosition {
-    file: PathBuf,
-    line: LineNumber,
-}
-
-impl SrcPosition {
-    fn new(file: PathBuf, line: LineNumber) -> Self {
-        SrcPosition {
-            file: file,
-            line: line,
-        }
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-struct Address(usize);
-impl Address {
-    fn parse(string: &str) -> Result<Self, (::std::num::ParseIntError, String)> {
-        usize::from_str_radix(&string[2..],16).map(|u| Address(u)).map_err(|e| (e, string.to_owned()))
-    }
-}
-impl fmt::Display for Address {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, " 0x{:0$x} ", self.0)
-    }
-}
-impl Add<usize> for Address {
-    type Output = Self;
-    fn add(self, rhs: usize) -> Self {
-        Address(self.0 + rhs)
-    }
 }
 
 #[derive(Clone)]
@@ -235,19 +200,19 @@ impl<'a> AssemblyView<'a> {
         }
     }
 
-    fn update_decoration<'b, I: Iterator<Item=&'b BreakPoint>>(&mut self, breakpoints: I) {
+    fn update_decoration(&mut self, p: ::UpdateParameters) {
         if let Some(ref mut content) = self.pager.content {
             if let Some(first_line) = content.storage.view_line(LineIndex(0)) {
                 let min_address = first_line.address;
                 let max_address = content.storage.view(LineIndex(0)..).last().expect("we know we have at least one line").1.address;
-                content.decorator = AssemblyDecorator::new(min_address..max_address, self.last_stop_position, breakpoints)
+                content.decorator = AssemblyDecorator::new(min_address..max_address, self.last_stop_position, p.gdb.breakpoints.values())
             }
         }
     }
 
-    fn show<'b, P: AsRef<Path>, L: Into<LineNumber>, I: Iterator<Item=&'b BreakPoint>>(&mut self, file: P, line: L, breakpoints: I, gdb: &mut gdbmi::GDB) -> Result<(), () /* Disassembly unsuccessful */> {
+    fn show<'b, P: AsRef<Path>, L: Into<LineNumber>>(&mut self, file: P, line: L, p: ::UpdateParameters) -> Result<(), () /* Disassembly unsuccessful */> {
         let line_u: usize = line.into().into();
-        let ref disass_object = gdb.execute(MiCommand::data_disassemble_file(file, line_u, None, DisassembleMode::MixedSourceAndDisassembly)).expect("disassembly successful").results["asm_insns"];
+        let ref disass_object = p.gdb.mi.execute(MiCommand::data_disassemble_file(file, line_u, None, DisassembleMode::MixedSourceAndDisassembly)).expect("disassembly successful").results["asm_insns"];
         if let &JsonValue::Array(ref line_objs) = disass_object {
             let mut asm_storage = MemoryLineStorage::<AssemblyLine>::new();
             for line_obj in line_objs {
@@ -271,7 +236,7 @@ impl<'a> AssemblyView<'a> {
             self.pager.load(
                 PagerContent::create(asm_storage)
                 .with_highlighter(SyntectHighlighter::new(syntax, self.highlighting_theme))
-                .with_decorator(AssemblyDecorator::new(min_address..max_address, self.last_stop_position, breakpoints)));
+                .with_decorator(AssemblyDecorator::new(min_address..max_address, self.last_stop_position, p.gdb.breakpoints.values())));
             Ok(())
         } else {
             // Disassembly object is not an array:
@@ -279,9 +244,9 @@ impl<'a> AssemblyView<'a> {
             return Err(());
         }
     }
-    fn toggle_breakpoint(&self, gdb: &mut gdbmi::GDB, breakpoints: &mut BreakPointSet) {
+    fn toggle_breakpoint(&self, p: ::UpdateParameters) {
         if let Some(line) = self.pager.current_line() {
-            let active_bps: Vec<BreakPointNumber> = breakpoints.values().filter_map(|bp| if let Some(ref address) = bp.address {
+            let active_bps: Vec<BreakPointNumber> = p.gdb.breakpoints.values().filter_map(|bp| if let Some(ref address) = bp.address {
                 if *address == line.address {
                     Some(bp.number)
                 } else {
@@ -291,31 +256,13 @@ impl<'a> AssemblyView<'a> {
                 None
             }).collect();
             if active_bps.is_empty() {
-                let bp_result = gdb.execute(&MiCommand::insert_breakpoint(BreakPointLocation::Address(line.address.0))).expect("insert successful");
-                match bp_result.class {
-                    ResultClass::Done => {
-                        for bp in BreakPoint::all_from_json(&bp_result.results["bkpt"]) {
-                            breakpoints.update_breakpoint(bp)
-                        }
-                    },
-                    ResultClass::Error => {
-                        // Cannot create breakpoint
-                        // TODO: display error msg somehow?
-                    },
-                    _ => {
-                        panic!("Unexpected result class");
-                    },
-                }
+                p.gdb.insert_breakpoint(BreakPointLocation::Address(line.address.0)).expect("path-breakpoint insert successful");
             } else {
-                for &number in active_bps.iter() {
-                    breakpoints.remove_breakpoint(number);
-                }
-                let bp_result = gdb.execute(MiCommand::delete_breakpoints(active_bps.into_iter())).expect("path-breakpoint insert successful");
-                debug_assert!(bp_result.class == ResultClass::Done, "Incorrect result class");
+                p.gdb.delete_breakpoints(active_bps.into_iter()).expect("breakpoint removal successful");
             }
         }
     }
-    fn event(&mut self, event: Input, gdb: &mut gdbmi::GDB, breakpoints: &mut BreakPointSet) {
+    fn event(&mut self, event: Input, p: ::UpdateParameters) {
         event.chain(ScrollBehavior::new(&mut self.pager)
                     .forwards_on(Key::PageDown)
                     .forwards_on(Key::Char('j'))
@@ -324,7 +271,7 @@ impl<'a> AssemblyView<'a> {
                    )
             .chain(|evt| match evt {
                 Input { event: Event::Key(Key::Char(' ')), raw: _ } => {
-                    self.toggle_breakpoint(gdb, breakpoints);
+                    self.toggle_breakpoint(p);
                     None
                 }
                 e => Some(e)
@@ -449,7 +396,7 @@ impl<'a> SourceView<'a> {
         })
     }
 
-    fn update_decoration<'b, I: Iterator<Item=&'b BreakPoint>>(&mut self, breakpoints: I) {
+    fn update_decoration(&mut self, p: ::UpdateParameters) {
         if let Some(ref mut content) = self.pager.content {
             let path = content.storage.get_file_path();
 
@@ -462,11 +409,11 @@ impl<'a> SourceView<'a> {
                     None
                 }
             });
-            content.decorator = SourceDecorator::new(path, last_line_number, breakpoints)
+            content.decorator = SourceDecorator::new(path, last_line_number, p.gdb.breakpoints.values())
         }
     }
 
-    fn show<'b, P: AsRef<Path>, L: Into<LineIndex>, I: Iterator<Item=&'b BreakPoint>>(&mut self, path: P, line: L, breakpoints: I) -> Result<(), PagerShowError> {
+    fn show<'b, P: AsRef<Path>, L: Into<LineIndex>>(&mut self, path: P, line: L, p: ::UpdateParameters) -> Result<(), PagerShowError> {
         let need_to_reload = if let Some(ref content) = self.pager.content {
             content.storage.get_file_path() != path.as_ref()
         } else {
@@ -474,11 +421,11 @@ impl<'a> SourceView<'a> {
         };
         if need_to_reload {
             let path_ref = path.as_ref();
-            try!{self.load(path_ref, breakpoints).map_err(|e| PagerShowError::CouldNotOpenFile(path_ref.to_path_buf(), e))};
+            try!{self.load(path_ref, p.gdb.breakpoints.values()).map_err(|e| PagerShowError::CouldNotOpenFile(path_ref.to_path_buf(), e))};
         } else {
             let last_line_number = self.get_last_line_number_for(path.as_ref());
             if let Some(ref mut content) = self.pager.content {
-                content.decorator = SourceDecorator::new(path.as_ref(), last_line_number, breakpoints);
+                content.decorator = SourceDecorator::new(path.as_ref(), last_line_number, p.gdb.breakpoints.values());
             }
         }
         let line = line.into();
@@ -511,10 +458,10 @@ impl<'a> SourceView<'a> {
         }
     }
 
-    fn toggle_breakpoint(&self, gdb: &mut gdbmi::GDB, breakpoints: &mut BreakPointSet) {
+    fn toggle_breakpoint(&self, p: ::UpdateParameters) {
         let line = self.current_line_number();
         if let Some(path) = self.current_file() {
-            let active_bps: Vec<BreakPointNumber> = breakpoints.values().filter_map(|bp| if let Some(ref src_pos) = bp.src_pos {
+            let active_bps: Vec<BreakPointNumber> = p.gdb.breakpoints.values().filter_map(|bp| if let Some(ref src_pos) = bp.src_pos {
                 if src_pos.file == path && src_pos.line == line {
                     Some(bp.number)
                 } else {
@@ -524,32 +471,14 @@ impl<'a> SourceView<'a> {
                 None
             }).collect();
             if active_bps.is_empty() {
-                let bp_result = gdb.execute(MiCommand::insert_breakpoint(BreakPointLocation::Line(path, line.into()))).expect("path-breakpoint insert successful");
-                match bp_result.class {
-                    ResultClass::Done => {
-                        for bp in BreakPoint::all_from_json(&bp_result.results["bkpt"]) {
-                            breakpoints.update_breakpoint(bp)
-                        }
-                    },
-                    ResultClass::Error => {
-                        // Cannot create breakpoint
-                        // TODO: display error msg somehow?
-                    },
-                    _ => {
-                        panic!("Unexpected result class");
-                    },
-                }
+                p.gdb.insert_breakpoint(BreakPointLocation::Line(path, line.into())).expect("path-breakpoint insert successful");
             } else {
-                for &number in active_bps.iter() {
-                    breakpoints.remove_breakpoint(number);
-                }
-                let bp_result = gdb.execute(MiCommand::delete_breakpoints(active_bps.into_iter())).expect("path-breakpoint insert successful");
-                debug_assert!(bp_result.class == ResultClass::Done, "Incorrect result class");
+                p.gdb.delete_breakpoints(active_bps.into_iter()).expect("breakpoint removal successful");
             }
         }
     }
 
-    fn event(&mut self, event: Input, gdb: &mut gdbmi::GDB, breakpoints: &mut BreakPointSet) {
+    fn event(&mut self, event: Input, p: ::UpdateParameters) {
         event.chain(ScrollBehavior::new(&mut self.pager)
                     .forwards_on(Key::PageDown)
                     .forwards_on(Key::Char('j'))
@@ -558,7 +487,7 @@ impl<'a> SourceView<'a> {
                    )
             .chain(|evt| match evt {
                 Input { event: Event::Key(Key::Char(' ')), raw: _ } => {
-                    self.toggle_breakpoint(gdb, breakpoints);
+                    self.toggle_breakpoint(p);
                     None
                 }
                 e => Some(e)
@@ -575,90 +504,6 @@ impl<'a> Widget for SourceView<'a> {
     }
 }
 
-struct BreakPoint {
-    number: BreakPointNumber,
-    address: Option<Address>,
-    enabled: bool,
-    src_pos: Option<SrcPosition>, // May not be present if debug information is missing!
-}
-
-
-impl BreakPoint {
-    fn from_json(bkpt: &Object) -> Self {
-        let number = bkpt["number"].as_str().expect("find bp number").parse::<BreakPointNumber>().expect("Parse usize");
-        let enabled = bkpt["enabled"].as_str().expect("find enabled") == "y";
-        let address = bkpt["addr"].as_str().and_then(|addr| Address::parse(addr).ok()); //addr may not be present or contain
-        let src_pos = {
-            let maybe_file = bkpt["fullname"].as_str();
-            let maybe_line = bkpt["line"].as_str().map(|l_nr| LineNumber(l_nr.parse::<usize>().expect("Parse usize")));
-            if let (Some(file), Some(line)) = (maybe_file, maybe_line) {
-                Some(SrcPosition::new(PathBuf::from(file), line))
-            } else {
-                None
-            }
-        };
-        BreakPoint {
-            number: number,
-            address: address,
-            enabled: enabled,
-            src_pos: src_pos,
-        }
-    }
-
-    fn all_from_json(bkpt_obj: &JsonValue) -> Box<Iterator<Item=BreakPoint>> {
-        match bkpt_obj {
-            &JsonValue::Object(ref bp) => {
-                Box::new(Some(Self::from_json(&bp)).into_iter())
-            },
-            &JsonValue::Array(ref bp_array) => {
-                Box::new(bp_array.iter().map(|bp| {
-                    if let &JsonValue::Object(ref bp) = bp {
-                        Self::from_json(&bp)
-                    } else {
-                        panic!("Invalid breakpoint object in array");
-                    }
-                }).collect::<Vec<BreakPoint>>().into_iter())
-            },
-            _ => {
-                panic!("Invalid breakpoint object")
-            },
-        }
-    }
-}
-
-struct BreakPointSet {
-    breakpoints: HashMap<BreakPointNumber, BreakPoint>,
-    changed: bool,
-}
-
-impl BreakPointSet {
-    fn new() -> Self {
-        BreakPointSet {
-            breakpoints: HashMap::new(),
-            changed: false,
-        }
-    }
-
-    fn update_breakpoint(&mut self, new_bp: BreakPoint) {
-        let _ = self.breakpoints.insert(new_bp.number, new_bp);
-        //debug_assert!(res.is_some(), "Modified non-existent breakpoint");
-        self.changed = true;
-    }
-
-    fn remove_breakpoint(&mut self, bp_num: BreakPointNumber) {
-        self.breakpoints.remove(&bp_num);
-        self.changed = true;
-    }
-}
-
-impl ::std::ops::Deref for BreakPointSet {
-    type Target = HashMap<BreakPointNumber, BreakPoint>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.breakpoints
-    }
-}
-
 
 enum CodeWindowMode {
     Source,
@@ -670,7 +515,7 @@ pub struct CodeWindow<'a> {
     asm_view: AssemblyView<'a>,
     layout: HorizontalLayout,
     mode: CodeWindowMode,
-    breakpoints: BreakPointSet,
+    last_bp_update: ::std::time::Instant,
 }
 
 impl<'a> CodeWindow<'a> {
@@ -680,21 +525,21 @@ impl<'a> CodeWindow<'a> {
             asm_view: AssemblyView::new(highlighting_theme),
             layout: HorizontalLayout::new(SeparatingStyle::Draw(GraphemeCluster::try_from('|').unwrap())),
             mode: CodeWindowMode::Source,
-            breakpoints: BreakPointSet::new(),
+            last_bp_update: ::std::time::Instant::now(),
         }
     }
-    pub fn show_frame(&mut self, frame: &Object, gdb: &mut gdbmi::GDB) {
+    pub fn show_frame(&mut self, frame: &Object, p: ::UpdateParameters) {
         if let Some(path) = frame["fullname"].as_str() { // File information may not be present
             let line = LineNumber(frame["line"].as_str().expect("line present").parse::<usize>().expect("Parse usize"));
             let address = Address::parse(frame["addr"].as_str().expect("address present")).expect("Parse address");
             self.src_view.set_last_stop_position(path, line);
             // GDB may give out invalid paths, so we just ignore them (at least for now)
-            if self.src_view.show(path, line, self.breakpoints.values()).is_ok() {
+            if self.src_view.show(path, line, p).is_ok() {
                 self.src_view.go_to_last_stop_position().expect("We just set a last stop pos!");
             }
 
             self.asm_view.set_last_stop_position(address);
-            if self.asm_view.show(path, line, self.breakpoints.values(), gdb).is_err() {
+            if self.asm_view.show(path, line, p).is_err() {
                 self.mode = CodeWindowMode::Source;
             } else {
                 self.asm_view.go_to_last_stop_position().expect("We just set a last stop pos and it must be valid!");
@@ -702,33 +547,14 @@ impl<'a> CodeWindow<'a> {
         }
     }
 
-    pub fn handle_breakpoint_event(&mut self, bp_type: BreakPointEvent, info: &Object) {
-        match bp_type {
-            BreakPointEvent::Created | BreakPointEvent::Modified => {
-                if let JsonValue::Object(ref bkpt) = info["bkpt"] {
-                    let bp = BreakPoint::from_json(bkpt);
-                    self.breakpoints.update_breakpoint(bp);
-                    //debug_assert!(bp_type != BreakPointEvent::Modified || res.is_some(), "Modified non-existent id");
-                } else {
-                    panic!("Invalid bkpt");
-                }
-            },
-            BreakPointEvent::Deleted => {
-                let id = info["id"].as_str().expect("find id").parse::<BreakPointNumber>().expect("Parse usize");
-                self.breakpoints.remove_breakpoint(id);
-            },
-        }
-        self.synchronize_breakpoints();
-    }
-
-    fn toggle_mode(&mut self, gdb: &mut gdbmi::GDB) {
+    fn toggle_mode(&mut self, p: ::UpdateParameters) {
         self.mode = match self.mode {
             CodeWindowMode::Assembly => {
                 CodeWindowMode::Source
             },
             CodeWindowMode::Source => {
                 if let Some(path) = self.src_view.current_file() {
-                    if self.asm_view.show(path, self.src_view.current_line_number(), self.breakpoints.values(), gdb).is_ok() {
+                    if self.asm_view.show(path, self.src_view.current_line_number(), p).is_ok() {
 
                         // The current line may not have associated assembly!
                         // TODO: Maybe we want to try the next line or something...
@@ -745,36 +571,35 @@ impl<'a> CodeWindow<'a> {
         }
     }
 
-    fn synchronize_breakpoints(&mut self) {
-        if self.breakpoints.changed {
-            self.asm_view.update_decoration(self.breakpoints.values());
-            self.src_view.update_decoration(self.breakpoints.values());
-            self.breakpoints.changed = false;
-        }
-    }
-
-    pub fn event(&mut self, event: Input, gdb: &mut gdbmi::GDB) {
+    pub fn event(&mut self, event: Input, p: ::UpdateParameters) {
         event.chain(|i: Input| match i.event {
             Event::Key(Key::Char('d')) => {
-                self.toggle_mode(gdb);
+                self.toggle_mode(p);
                 None
             },
             _ => Some(i),
         }).chain(|i: Input| {
             match self.mode {
                 CodeWindowMode::Assembly => {
-                    self.asm_view.event(i, gdb, &mut self.breakpoints);
+                    self.asm_view.event(i, p);
                     if let Some(src_pos) = self.asm_view.pager.current_line().and_then(|line| line.src_position) {
-                        let _  = self.src_view.show(src_pos.file, src_pos.line, self.breakpoints.values());
+                        let _  = self.src_view.show(src_pos.file, src_pos.line, p);
                     }
                 },
                 CodeWindowMode::Source => {
-                    self.src_view.event(i, gdb, &mut self.breakpoints);
+                    self.src_view.event(i, p);
                 },
             }
             None
         });
-        self.synchronize_breakpoints();
+    }
+
+    pub fn update_after_event(&mut self, p: ::UpdateParameters) {
+        if p.gdb.breakpoints.last_change > self.last_bp_update {
+            self.asm_view.update_decoration(p);
+            self.src_view.update_decoration(p);
+            self.last_bp_update = p.gdb.breakpoints.last_change;
+        }
     }
 }
 

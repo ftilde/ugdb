@@ -1,7 +1,3 @@
-use gdbmi::{
-    GDB,
-};
-
 use unix_socket::{
     UnixListener,
     UnixStream,
@@ -20,9 +16,6 @@ use std::path::{
 use gdbmi::input::{
     MiCommand,
     BreakPointLocation,
-};
-use gdbmi::output::{
-    ResultClass,
 };
 use gdbmi::{
     ExecuteError,
@@ -58,8 +51,8 @@ pub struct IPCRequest {
 }
 
 impl IPCRequest {
-    pub fn respond(mut self, gdb: &mut GDB) {
-        let reply = match Self::handle(gdb, self.raw_request) {
+    pub fn respond(mut self, p: ::UpdateParameters) {
+        let reply = match Self::handle(p, self.raw_request) {
             Ok(reply_success) => reply_success,
             Err(reply_fail) => reply_fail.into_json(),
         };
@@ -68,7 +61,7 @@ impl IPCRequest {
         let _ = write_ipc_response(&mut self.response_channel, reply.dump().as_bytes());
     }
 
-    fn handle(gdb: &mut GDB, raw_request: Vec<u8>) -> Result<json::JsonValue, IPCError>{
+    fn handle(p: ::UpdateParameters, raw_request: Vec<u8>) -> Result<json::JsonValue, IPCError>{
         let str_request = ::std::str::from_utf8(raw_request.as_slice()).map_err(|_| IPCError::new("Malformed utf8.", ""))?;
         let json_request = json::parse(str_request).map_err(|_| IPCError::new("Malformed json.", str_request))?;
 
@@ -84,7 +77,7 @@ impl IPCRequest {
                 return Err(IPCError::new("Malformed (non-object) request", json_request.dump()));
             },
         };
-        let result = Self::dispatch(function_name)?(gdb, parameters)?;
+        let result = Self::dispatch(function_name)?(p, parameters)?;
 
         Ok(object!{
             "type" => "success",
@@ -92,7 +85,7 @@ impl IPCRequest {
         })
     }
 
-    fn dispatch(function_name: &str) -> Result<fn(&mut GDB, &json::JsonValue) -> Result<json::JsonValue, IPCError>, IPCError> {
+    fn dispatch(function_name: &str) -> Result<fn(p: ::UpdateParameters, &json::JsonValue) -> Result<json::JsonValue, IPCError>, IPCError> {
         match function_name {
             "set_breakpoint" => Ok(Self::set_breakpoint),
             "get_instance_info" => Ok(Self::get_instance_info),
@@ -100,7 +93,7 @@ impl IPCRequest {
         }
     }
 
-    fn set_breakpoint(gdb: &mut GDB, parameters: &json::JsonValue) -> Result<json::JsonValue, IPCError>{
+    fn set_breakpoint(p: ::UpdateParameters, parameters: &json::JsonValue) -> Result<json::JsonValue, IPCError> {
         let parameters_obj = if let &json::JsonValue::Object(ref parameters_obj) = parameters {
             parameters_obj
         } else {
@@ -108,28 +101,20 @@ impl IPCRequest {
         };
         let file = parameters_obj.get("file").and_then(|o| o.as_str()).ok_or(IPCError::new("Missing file name", parameters.dump()))?;
         let line = parameters_obj.get("line").and_then(|o| o.as_u32()).ok_or(IPCError::new("Missing integer line number", parameters.dump()))?;
-        let bp_result = gdb.execute(MiCommand::insert_breakpoint(BreakPointLocation::Line(Path::new(file), line as usize))).map_err(|e| match e {
-            ExecuteError::Busy => {
+        match p.gdb.insert_breakpoint(BreakPointLocation::Line(Path::new(file), line as usize)) {
+            Ok(()) => {
+                Ok(json::JsonValue::String(format!("Inserted breakpoint at {}:{}", file, line)))
+            },
+            Err(()) => {
                 //TODO: we may want to investigate if we can interrupt execution, insert
                 //breakpoint, and resume execution thereafter.
-                IPCError::new("Could not insert breakpoint", "GDB is busy")
-            },
-            ExecuteError::Quit => {
-                IPCError::new("Could not insert breakpoint", "GDB quit")
-            },
-        })?;
-        match bp_result.class {
-            ResultClass::Done => {
-                Ok(json::JsonValue::String(format!("{:?}", bp_result.results)))
-            },
-            _ => {
-                Err(IPCError::new("Could not insert breakpoint", format!("{}", json::JsonValue::Object(bp_result.results).dump())))
+                Err(IPCError::new("Could not insert breakpoint", "GDB is busy"))
             },
         }
     }
 
-    fn get_instance_info(gdb: &mut GDB, _: &json::JsonValue) -> Result<json::JsonValue, IPCError>{
-        let result = gdb.execute(MiCommand::environment_pwd()).map_err(|e| match e {
+    fn get_instance_info(p: ::UpdateParameters, _: &json::JsonValue) -> Result<json::JsonValue, IPCError>{
+        let result = p.gdb.mi.execute(MiCommand::environment_pwd()).map_err(|e| match e {
             ExecuteError::Busy => {
                 //TODO: we may want to investigate if we can interrupt execution, get information
                 //and resume execution thereafter.

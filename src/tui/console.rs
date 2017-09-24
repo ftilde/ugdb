@@ -78,7 +78,7 @@ impl Console {
         }
     }
 
-    fn handle_newline(&mut self, gdb: &mut gdbmi::GDB) {
+    fn handle_newline(&mut self, p: ::UpdateParameters) {
         let line = if self.prompt_line.active_line().is_empty() {
             self.prompt_line.previous_line(1).unwrap_or("").to_owned()
         } else {
@@ -86,7 +86,7 @@ impl Console {
         };
         match line.as_ref() {
             "!stop" => {
-                gdb.interrupt_execution().expect("interrupted gdb");
+                p.gdb.mi.interrupt_execution().expect("interrupted gdb");
 
                 // This does not always seem to unblock gdb, but only hang it
                 //use gdbmi::input::MiCommand;
@@ -95,7 +95,7 @@ impl Console {
             // Gdb commands
             _ => {
                 self.write_to_log(format!("(gdb) {}\n", line));
-                match gdb.execute(&gdbmi::input::MiCommand::cli_exec(line)) {
+                match p.gdb.mi.execute(&gdbmi::input::MiCommand::cli_exec(line)) {
                     Ok(result) => {
                         self.add_debug_message(format!("Result: {:?}", result));
                     },
@@ -107,7 +107,7 @@ impl Console {
         }
     }
 
-    pub fn event(&mut self, input: Input, gdb: &mut gdbmi::GDB) {
+    pub fn event(&mut self, input: Input, p: ::UpdateParameters) {
         input
             .chain(|input: Input| {
                 match input.event {
@@ -116,7 +116,7 @@ impl Console {
                         None
                     },
                     Event::Key(Key::Char('\n')) => {
-                        self.handle_newline(gdb);
+                        self.handle_newline(p);
                         None
                     }
                     _ => Some(input)
@@ -134,7 +134,7 @@ impl Console {
                 )
             .chain(|i: Input| {
                    if let Event::Key(Key::Ctrl('c')) = i.event {
-                       gdb.interrupt_execution().expect("interrupted gdb");
+                       p.gdb.mi.interrupt_execution().expect("interrupted gdb");
                        None
                    } else {
                        Some(i)

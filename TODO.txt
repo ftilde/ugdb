@@ -1,11 +1,7 @@
 Add Container management:
  - Top level layouting as a tree of containers (cf. i3)
  - Different kinds of containers (hsplit, vsplit, widget (or extension), grid?
- - Configurable by layout file (json)
-
-Add IPC framework
- - Get current src position
- - Implement corresponding vim plugin:
+ - Configurable by layout file (yaml), use serde
 
 Add MemoryViewer:
  - It may be useful to use a table, or just use split windows
@@ -17,6 +13,5 @@ Fix bugs:
  - Insert breakpoint when running results in crash
  - Invalid breakpoint when setting bp in function which is inlined (maybe?). There may be other similar bugs.
  - Show portion of code code when frame changes
- - Support showing code when only assembly is available
  - Detect changes in active file and reload if needed
  - Hitting enter in LineEdit

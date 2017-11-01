@@ -220,8 +220,12 @@ pub struct MemoryLineStorage<L> {
 
 impl<L> MemoryLineStorage<L> {
     pub fn new() -> Self {
+        Self::with_lines(Vec::new())
+    }
+
+    pub fn with_lines(lines: Vec<L>) -> Self {
         MemoryLineStorage {
-            lines: Vec::new(),
+            lines: lines,
         }
     }
 

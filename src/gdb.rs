@@ -28,6 +28,7 @@ use std::collections::{
 };
 use std::ops::{
     Add,
+    Sub,
 };
 use std::fmt;
 
@@ -62,6 +63,13 @@ impl Add<usize> for Address {
     type Output = Self;
     fn add(self, rhs: usize) -> Self {
         Address(self.0 + rhs)
+    }
+}
+
+impl Sub<usize> for Address {
+    type Output = Self;
+    fn sub(self, rhs: usize) -> Self {
+        Address(self.0 - rhs)
     }
 }
 

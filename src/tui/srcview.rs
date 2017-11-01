@@ -72,18 +72,34 @@ pub enum PagerShowError {
 }
 
 #[derive(Clone)]
+struct AssemblyDebugLocation {
+    func_name: String,
+    offset: usize,
+}
+
+impl AssemblyDebugLocation {
+    fn try_from_value(val: &JsonValue) -> Option<Self> {
+        let func_name = val["func-name"].as_str();
+        let offset = val["offset"].as_str().map(|o| o.parse::<usize>().expect("parse offset"));
+        func_name.and_then(|f| offset.map(|o| AssemblyDebugLocation { func_name: f.to_owned(), offset: o }))
+    }
+}
+
+#[derive(Clone)]
 struct AssemblyLine {
     content: String,
     address: Address,
     src_position: Option<SrcPosition>,
+    debug_location: Option<AssemblyDebugLocation>,
 }
 
 impl AssemblyLine {
-    fn new(content: String, address: Address, src_position: Option<SrcPosition>) -> Self {
+    fn new(content: String, address: Address, src_position: Option<SrcPosition>, debug_location: Option<AssemblyDebugLocation>) -> Self {
         AssemblyLine {
             content: content,
             address: address,
             src_position: src_position,
+            debug_location: debug_location,
         }
     }
 }
@@ -134,7 +150,7 @@ impl LineDecorator for AssemblyDecorator {
         Demand::from_to(0, max_space as u32)
     }
     fn decorate(&self, line: &Self::Line, _: LineIndex, mut window: Window) {
-        let width = window.get_width() as usize - 4;
+        let width = window.get_width() as usize;
         let mut cursor = Cursor::new(&mut window).position(0,0);
 
         use std::fmt::Write;
@@ -152,7 +168,22 @@ impl LineDecorator for AssemblyDecorator {
             style_modifier = StyleModifier::new().fg_color(Color::Green).bold(true).on_top_of(&style_modifier);
         }
         cursor.set_style_modifier(style_modifier);
-        write!(cursor, " 0x{:0>width$x}{}", line.address.0, right_border, width=width).unwrap();
+        let offset_to_draw = if let Some(ref dl) = line.debug_location {
+            if dl.offset == 0 {
+                None
+            } else {
+                Some(dl.offset)
+            }
+        } else {
+            None
+        };
+
+        if let Some(offset) = offset_to_draw {
+            let formatted_offset = format!("<+{}>", offset);
+            write!(cursor, "{:>width$}{}", formatted_offset, right_border, width=width-1).unwrap();
+        } else {
+            write!(cursor, " 0x{:0>width$x}{}", line.address.0, right_border, width=width - 4).unwrap();
+        }
     }
 }
 
@@ -210,11 +241,26 @@ impl<'a> AssemblyView<'a> {
         }
     }
 
-    fn show<'b, P: AsRef<Path>, L: Into<LineNumber>>(&mut self, file: P, line: L, p: ::UpdateParameters) -> Result<(), () /* Disassembly unsuccessful */> {
+    fn show_lines(&mut self, lines: Vec<AssemblyLine>, p: ::UpdateParameters) {
+        let asm_storage = MemoryLineStorage::with_lines(lines);
+
+        let min_address = asm_storage.lines.first().expect("At least one instruction").address;
+        //TODO: use RangeInclusive when available on stable
+        let max_address = asm_storage.lines.last().expect("At least one instruction").address + 1;
+
+        let syntax = self.syntax_set.find_syntax_by_extension("s")
+            .unwrap_or(self.syntax_set.find_syntax_plain_text());
+        self.pager.load(
+            PagerContent::create(asm_storage)
+            .with_highlighter(SyntectHighlighter::new(syntax, self.highlighting_theme))
+            .with_decorator(AssemblyDecorator::new(min_address..max_address, self.last_stop_position, p.gdb.breakpoints.values())));
+    }
+
+    fn show_file<P: AsRef<Path>, L: Into<LineNumber>>(&mut self, file: P, line: L, p: ::UpdateParameters) -> Result<(), () /* Disassembly unsuccessful */> {
         let line_u: usize = line.into().into();
         let ref disass_object = p.gdb.mi.execute(MiCommand::data_disassemble_file(file, line_u, None, DisassembleMode::MixedSourceAndDisassembly)).expect("disassembly successful").results["asm_insns"];
         if let &JsonValue::Array(ref line_objs) = disass_object {
-            let mut asm_storage = MemoryLineStorage::<AssemblyLine>::new();
+            let mut lines = Vec::<AssemblyLine>::new();
             for line_obj in line_objs {
                 let line = LineNumber(line_obj["line"].as_str().expect("line present").parse::<usize>().expect("parse line"));
                 let file = line_obj["fullname"].as_str().expect("full name present");
@@ -223,20 +269,11 @@ impl<'a> AssemblyView<'a> {
                     let instruction = tuple["inst"].as_str().expect("No instruction in disassembly object");
                     let address_str = tuple["address"].as_str().expect("No address in disassembly object");
                     let address = Address::parse(address_str).expect("Parse address");
-                    asm_storage.lines.push(AssemblyLine::new(instruction.to_owned(), address, src_pos.clone()));
+                    lines.push(AssemblyLine::new(instruction.to_owned(), address, src_pos.clone(), AssemblyDebugLocation::try_from_value(tuple)));
                 }
             }
-            asm_storage.lines.sort_by_key(|l| l.address);
-            let min_address = asm_storage.lines.first().expect("At least one instruction").address;
-            //TODO: use RangeInclusive when available on stable
-            let max_address = asm_storage.lines.last().expect("At least one instruction").address + 1;
-
-            let syntax = self.syntax_set.find_syntax_by_extension("s")
-                .unwrap_or(self.syntax_set.find_syntax_plain_text());
-            self.pager.load(
-                PagerContent::create(asm_storage)
-                .with_highlighter(SyntectHighlighter::new(syntax, self.highlighting_theme))
-                .with_decorator(AssemblyDecorator::new(min_address..max_address, self.last_stop_position, p.gdb.breakpoints.values())));
+            lines.sort_by_key(|l| l.address);
+            self.show_lines(lines, p);
             Ok(())
         } else {
             // Disassembly object is not an array:
@@ -244,6 +281,21 @@ impl<'a> AssemblyView<'a> {
             return Err(());
         }
     }
+
+    fn show_address(&mut self, address_start: Address, address_end: Address, p: ::UpdateParameters) -> Result<(), () /* Disassembly unsuccessful */> {
+        let line_objs = disassemble_address(address_start, address_end, p)?;
+
+        let mut lines = Vec::<AssemblyLine>::new();
+        for line_tuple in line_objs {
+            let instruction = line_tuple["inst"].as_str().expect("Instruction in disassembly object");
+            let address_str = line_tuple["address"].as_str().expect("Address in disassembly object");
+            let address = Address::parse(address_str).expect("Parse address");
+            lines.push(AssemblyLine::new(instruction.to_owned(), address, None, AssemblyDebugLocation::try_from_value(&line_tuple)));
+        }
+        self.show_lines(lines, p);
+        Ok(())
+    }
+
     fn toggle_breakpoint(&self, p: ::UpdateParameters) {
         if let Some(line) = self.pager.current_line() {
             let active_bps: Vec<BreakPointNumber> = p.gdb.breakpoints.values().filter_map(|bp| if let Some(ref address) = bp.address {
@@ -505,9 +557,12 @@ impl<'a> Widget for SourceView<'a> {
 }
 
 
+#[derive(Clone)]
 enum CodeWindowMode {
     Source,
     Assembly,
+    SideBySide,
+    Message(String),
 }
 
 pub struct CodeWindow<'a> {
@@ -518,55 +573,149 @@ pub struct CodeWindow<'a> {
     last_bp_update: ::std::time::Instant,
 }
 
+fn disassemble_address(address_start: Address, address_end: Address, p: ::UpdateParameters) -> Result<Vec<JsonValue>, ()> {
+    let disass_object = p.gdb.mi.execute(MiCommand::data_disassemble_address(address_start.0, address_end.0, DisassembleMode::DissassemblyOnly)).expect("disassembly successful").results["asm_insns"].take();
+    if let JsonValue::Array(mut line_objs) = disass_object {
+        //I'm not sure if GDB does this already, but we better not rely on it...
+        line_objs.sort_by_key(|l| Address::parse(l["address"].as_str().expect("address present")).expect("Parse address"));
+
+        Ok(line_objs)
+    } else {
+        Err(())
+    }
+}
+
 impl<'a> CodeWindow<'a> {
-    pub fn new(highlighting_theme: &'a Theme) -> Self {
+    pub fn new(highlighting_theme: &'a Theme, welcome_msg: &'static str) -> Self {
         CodeWindow {
             src_view: SourceView::new(highlighting_theme),
             asm_view: AssemblyView::new(highlighting_theme),
             layout: HorizontalLayout::new(SeparatingStyle::Draw(GraphemeCluster::try_from('|').unwrap())),
-            mode: CodeWindowMode::Source,
+            mode: CodeWindowMode::Message(welcome_msg.to_owned()),
             last_bp_update: ::std::time::Instant::now(),
         }
     }
-    pub fn show_frame(&mut self, frame: &Object, p: ::UpdateParameters) {
+
+    fn show_from_file(&mut self, frame: &Object, p: ::UpdateParameters) -> Result<(),()> {
+        let address = Address::parse(frame["addr"].as_str().expect("Address should always be present")).expect("Parse address");
         if let Some(path) = frame["fullname"].as_str() { // File information may not be present
-            let line = LineNumber(frame["line"].as_str().expect("line present").parse::<usize>().expect("Parse usize"));
-            let address = Address::parse(frame["addr"].as_str().expect("address present")).expect("Parse address");
+            let line = LineNumber(frame["line"].as_str().expect("line should be present with file").parse::<usize>().expect("Parse line number"));
             self.src_view.set_last_stop_position(path, line);
-            // GDB may give out invalid paths, so we just ignore them (at least for now)
-            if self.src_view.show(path, line, p).is_ok() {
-                self.src_view.go_to_last_stop_position().expect("We just set a last stop pos!");
+
+            match self.src_view.show(path, line, p) {
+                Ok(()) => {
+                    self.src_view.go_to_last_stop_position().expect("We just set a last stop pos!");
+                },
+                Err(PagerShowError::CouldNotOpenFile(_,_)) => {
+                    return Err(())
+                },
+                Err(PagerShowError::LineDoesNotExist(_)) => {
+                    //Ignore
+                },
             }
 
             self.asm_view.set_last_stop_position(address);
-            if self.asm_view.show(path, line, p).is_err() {
-                self.mode = CodeWindowMode::Source;
-            } else {
+            if self.asm_view.show_file(path, line, p).is_ok() {
                 self.asm_view.go_to_last_stop_position().expect("We just set a last stop pos and it must be valid!");
+            } else {
+                self.mode = CodeWindowMode::Source;
             }
+
+            self.mode = match &self.mode {
+                &CodeWindowMode::Message(_) | &CodeWindowMode::Assembly => CodeWindowMode::Source,
+                &ref other => other.clone(),
+            };
+            Ok(())
+        } else {
+            Err(())
+        }
+    }
+    fn find_function_range(at: Address, p: ::UpdateParameters) -> Result<(Address, Address), ()> {
+        let first_lines = disassemble_address(at, at+16, p)?;
+        let current = first_lines.first().expect("line at address");
+        let asm_debug_location = AssemblyDebugLocation::try_from_value(current).ok_or(())?;
+        let begin = at - asm_debug_location.offset;
+
+        let block_size = 128;
+        let mut current = at;
+        let func_change_block = loop {
+            let current_block_lines = disassemble_address(current, current+block_size, p)?;
+            {
+                let penultimate_index = current_block_lines.len().checked_sub(2).ok_or(())?;
+                let penultimate = current_block_lines.get(penultimate_index).expect("At least two instructions in block");
+                if let Some(penultimate_func_name) = penultimate["func-name"].as_str() {
+                    if penultimate_func_name == asm_debug_location.func_name {
+                        current = Address::parse(penultimate["address"].as_str().expect("address is a string")).expect("Well formed address");
+                        continue;
+                    }
+                }
+            }
+            //func-name is None or different => we found our block
+            break current_block_lines;
+        };
+        for line in func_change_block {
+            if line["func-name"] != asm_debug_location.func_name {
+                let end = Address::parse(line["address"].as_str().expect("address is a string")).expect("Well formed address");
+                return Ok((begin, end));
+            }
+        }
+        unreachable!("func_change_block has to contain changing line");
+    }
+    fn find_valid_address_range(at: Address, approx_byte_size: usize, p: ::UpdateParameters) -> Result<(Address, Address), ()> {
+        let block_lines = disassemble_address(at, at+approx_byte_size, p)?;
+
+        let penultimate_index = block_lines.len().checked_sub(2).ok_or(())?;
+        let penultimate = block_lines.get(penultimate_index).ok_or(())?;
+        let end_address = Address::parse(penultimate["address"].as_str().ok_or(())?).map_err(|_| ())?;
+        Ok((at, end_address))
+    }
+
+    fn show_from_address(&mut self, frame: &Object, p: ::UpdateParameters) {
+        let address = Address::parse(frame["addr"].as_str().expect("Address should always be present")).expect("Parse address");
+
+        let (begin, end) = Self::find_function_range(address, p).unwrap_or_else(|_| Self::find_valid_address_range(address, 128, p).unwrap_or((address, address)));
+
+        self.asm_view.set_last_stop_position(address);
+
+        if self.asm_view.show_address(begin, end, p).is_ok() {
+            self.asm_view.go_to_last_stop_position().expect("We just set a last stop pos and it must be valid!");
+            self.mode = CodeWindowMode::Assembly;
+        } else {
+            self.mode = CodeWindowMode::Message("Disassembly failed!".to_owned());
+        }
+    }
+    pub fn show_frame(&mut self, frame: &Object, p: ::UpdateParameters) {
+        if self.show_from_file(frame, p).is_err() {
+            self.show_from_address(frame, p);
         }
     }
 
     fn toggle_mode(&mut self, p: ::UpdateParameters) {
         self.mode = match self.mode {
             CodeWindowMode::Assembly => {
-                CodeWindowMode::Source
+                if self.src_view.current_file().is_some() {
+                    CodeWindowMode::Source
+                } else {
+                    CodeWindowMode::Assembly
+                }
+            },
+            CodeWindowMode::SideBySide => {
+                CodeWindowMode::Assembly
             },
             CodeWindowMode::Source => {
                 if let Some(path) = self.src_view.current_file() {
-                    if self.asm_view.show(path, self.src_view.current_line_number(), p).is_ok() {
+                    if self.asm_view.show_file(path, self.src_view.current_line_number(), p).is_ok() {
 
                         // The current line may not have associated assembly!
                         // TODO: Maybe we want to try the next line or something...
                         let _ = self.asm_view.go_to_first_applicable_line(path, self.src_view.current_line_number());
 
-                        CodeWindowMode::Assembly
-                    } else {
-                        CodeWindowMode::Source
                     }
-                } else {
-                    CodeWindowMode::Source
                 }
+                CodeWindowMode::SideBySide
+            },
+            CodeWindowMode::Message(ref m) => {
+                CodeWindowMode::Message(m.clone())
             },
         }
     }
@@ -580,7 +729,7 @@ impl<'a> CodeWindow<'a> {
             _ => Some(i),
         }).chain(|i: Input| {
             match self.mode {
-                CodeWindowMode::Assembly => {
+                CodeWindowMode::Assembly | CodeWindowMode::SideBySide => {
                     self.asm_view.event(i, p);
                     if let Some(src_pos) = self.asm_view.pager.current_line().and_then(|line| line.src_position) {
                         let _  = self.src_view.show(src_pos.file, src_pos.line, p);
@@ -589,6 +738,8 @@ impl<'a> CodeWindow<'a> {
                 CodeWindowMode::Source => {
                     self.src_view.event(i, p);
                 },
+                CodeWindowMode::Message(_) => {
+                }
             }
             None
         });
@@ -605,18 +756,56 @@ impl<'a> CodeWindow<'a> {
 
 impl<'a> Widget for CodeWindow<'a> {
     fn space_demand(&self) -> Demand2D {
-        let widgets: Vec<&Widget> = match self.mode {
-            CodeWindowMode::Assembly => vec![&self.asm_view, &self.src_view],
-            CodeWindowMode::Source => vec![&self.src_view],
-        };
-        self.layout.space_demand(widgets.as_slice())
+        match &self.mode {
+            &CodeWindowMode::Assembly => self.asm_view.space_demand(),
+            &CodeWindowMode::SideBySide => self.layout.space_demand(&[&self.asm_view, &self.src_view]),
+            &CodeWindowMode::Source => self.src_view.space_demand(),
+            &CodeWindowMode::Message(ref m) => MsgWindow::new(&m).space_demand(),
+        }
     }
     fn draw(&mut self, window: Window, hints: RenderingHints) {
-        let mut widgets: Vec<(&mut Widget, RenderingHints)> = match self.mode {
-            CodeWindowMode::Assembly => vec![(&mut self.asm_view, hints), (&mut self.src_view, hints)],
-            CodeWindowMode::Source => vec![(&mut self.src_view, hints)],
-        };
-        self.layout.draw(window, &mut widgets)
+        match &self.mode {
+            &CodeWindowMode::Assembly => self.asm_view.draw(window, hints),
+            &CodeWindowMode::SideBySide => self.layout.draw(window, &mut [(&mut self.asm_view, hints), (&mut self.src_view, RenderingHints{ active: false, ..hints})]),
+            &CodeWindowMode::Source => self.src_view.draw(window, hints),
+            &CodeWindowMode::Message(ref m) => MsgWindow::new(&m).draw(window, hints),
+        }
     }
 }
 
+struct MsgWindow<'a> {
+    msg: &'a str,
+}
+
+impl<'a> MsgWindow<'a> {
+    fn new(msg: &'a str) -> Self {
+        MsgWindow {
+            msg: msg,
+        }
+    }
+}
+
+impl<'a> Widget for MsgWindow<'a> {
+    fn space_demand(&self) -> Demand2D {
+        Demand2D {
+            width: Demand::at_least(1),
+            height: Demand::at_least(1),
+        }
+    }
+    fn draw(&mut self, mut window: Window, _: RenderingHints) {
+        let lines: Vec<_> =  self.msg.lines().collect();
+        let num_lines = lines.len();
+
+        let start_line = (window.get_height() as i32 - num_lines as i32) / 2;
+        let window_width = window.get_width() as i32;
+
+        let mut c = Cursor::new(&mut window);
+        c.set_position_y(start_line);
+        for line in lines {
+            let start_x = (window_width - ::unicode_width::UnicodeWidthStr::width(line) as i32) / 2;
+            c.set_position_x(start_x);
+            c.write(line);
+            c.wrap_line();
+        }
+    }
+}

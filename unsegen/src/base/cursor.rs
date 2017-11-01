@@ -78,6 +78,14 @@ impl<'c, 'g: 'c, T: 'c + CursorTarget> Cursor<'c, 'g, T> {
         self.state.y = y;
     }
 
+    pub fn set_position_x(&mut self, x: i32) {
+        self.state.x = x;
+    }
+
+    pub fn set_position_y(&mut self, y: i32) {
+        self.state.y = y;
+    }
+
     pub fn position(mut self, x: i32, y: i32) -> Self {
         self.set_position(x, y);
         self

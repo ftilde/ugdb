@@ -58,6 +58,15 @@ enum SubWindow {
     ExpressionTable,
 }
 
+const WELCOME_MSG: &'static str = r#"
+       Welcome to          
+ _   _  __ _  __| | |__    
+| | | |/ _` |/ _` | '_ \   
+| |_| | (_| | (_| | |_) |  
+ \__,_|\__, |\__,_|_.__/   
+       |___/               
+"#;
+
 impl<'a> Tui<'a> {
 
     pub fn new(terminal: Terminal, highlighting_theme: &'a Theme) -> Self {
@@ -65,7 +74,7 @@ impl<'a> Tui<'a> {
             console: Console::new(),
             expression_table: ExpressionTable::new(),
             process_pty: terminal,
-            src_view: CodeWindow::new(highlighting_theme),
+            src_view: CodeWindow::new(highlighting_theme, WELCOME_MSG),
             left_layout: VerticalLayout::new(SeparatingStyle::Draw(GraphemeCluster::try_from('=').unwrap())),
             right_layout: VerticalLayout::new(SeparatingStyle::Draw(GraphemeCluster::try_from('=').unwrap())),
             active_window: SubWindow::CodeWindow,

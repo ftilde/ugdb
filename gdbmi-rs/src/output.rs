@@ -27,6 +27,7 @@ pub enum ThreadEvent {
     GroupStarted,
     Exited,
     GroupExited,
+    Selected,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -266,6 +267,7 @@ named!(
             value!(AsyncClass::Thread(ThreadEvent::GroupStarted), tag!("thread-group-started")) |
             value!(AsyncClass::Thread(ThreadEvent::Exited), tag!("thread-exited")) |
             value!(AsyncClass::Thread(ThreadEvent::GroupExited), tag!("thread-group-exited")) |
+            value!(AsyncClass::Thread(ThreadEvent::Selected), tag!("thread-selected")) |
             value!(AsyncClass::CmdParamChanged, tag!("cmd-param-changed")) |
             value!(AsyncClass::LibraryLoaded, tag!("library-loaded")) |
             value!(AsyncClass::BreakPoint(BreakPointEvent::Created), tag!("breakpoint-created")) |

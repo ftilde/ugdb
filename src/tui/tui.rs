@@ -23,11 +23,12 @@ use syntect::highlighting::{
 };
 
 use gdbmi::output::{
-    OutOfBandRecord,
-    AsyncKind,
     AsyncClass,
-    Object,
+    AsyncKind,
     JsonValue,
+    Object,
+    OutOfBandRecord,
+    ThreadEvent,
 };
 
 use super::console::Console;
@@ -83,7 +84,7 @@ impl<'a> Tui<'a> {
 
     fn handle_async_record(&mut self, kind: AsyncKind, class: AsyncClass, results: &Object, p: ::UpdateParameters) {
         match (kind, class) {
-            (AsyncKind::Exec, AsyncClass::Stopped) => {
+            (AsyncKind::Exec, AsyncClass::Stopped) | (AsyncKind::Notify, AsyncClass::Thread(ThreadEvent::Selected))=> {
                 self.console.add_debug_message(format!("stopped: {}", JsonValue::Object(results.clone()).pretty(2)));
                 if let JsonValue::Object(ref frame) = results["frame"] {
                     self.src_view.show_frame(frame, p);

@@ -12,6 +12,5 @@ Smaller QoL-changes:
 Fix bugs:
  - Insert breakpoint when running results in crash
  - Invalid breakpoint when setting bp in function which is inlined (maybe?). There may be other similar bugs.
- - Show portion of code code when frame changes
  - Detect changes in active file and reload if needed
  - Hitting enter in LineEdit

@@ -18,6 +18,9 @@ use unsegen::input::{
 use input::{
     InputEvent,
 };
+use logging::{
+    LogMsgType,
+};
 use syntect::highlighting::{
     Theme,
 };
@@ -85,19 +88,18 @@ impl<'a> Tui<'a> {
     fn handle_async_record(&mut self, kind: AsyncKind, class: AsyncClass, results: &Object, p: ::UpdateParameters) {
         match (kind, class) {
             (AsyncKind::Exec, AsyncClass::Stopped) | (AsyncKind::Notify, AsyncClass::Thread(ThreadEvent::Selected))=> {
-                self.console.add_debug_message(format!("stopped: {}", JsonValue::Object(results.clone()).pretty(2)));
+                p.logger.log(LogMsgType::Debug, format!("stopped: {}", JsonValue::Object(results.clone()).pretty(2)));
                 if let JsonValue::Object(ref frame) = results["frame"] {
                     self.src_view.show_frame(frame, p);
                 }
                 self.expression_table.update_results(p);
             },
             (AsyncKind::Notify, AsyncClass::BreakPoint(event)) => {
-                self.console.add_debug_message(format!("bkpoint {:?}: {}", event, JsonValue::Object(results.clone()).pretty(2)));
+                p.logger.log(LogMsgType::Debug, format!("bkpoint {:?}: {}", event, JsonValue::Object(results.clone()).pretty(2)));
                 p.gdb.handle_breakpoint_event(event, &results);
-                //TODO update srcview somehow
             },
             (kind, class) => {
-                self.console.add_debug_message(format!("unhandled async_record: [{:?}, {:?}] {}", kind, class, JsonValue::Object(results.clone()).pretty(2)));
+                p.logger.log(LogMsgType::Debug, format!("unhandled async_record: [{:?}, {:?}] {}", kind, class, JsonValue::Object(results.clone()).pretty(2)));
             },
         }
     }
@@ -105,7 +107,7 @@ impl<'a> Tui<'a> {
     pub fn add_out_of_band_record(&mut self, record: OutOfBandRecord, p: ::UpdateParameters) {
         match record {
             OutOfBandRecord::StreamRecord{ kind: _, data} => {
-                self.console.write_to_log(data);
+                self.console.write_to_gdb_log(data);
             },
             OutOfBandRecord::AsyncRecord{token: _, kind, class, results} => {
                 self.handle_async_record(kind, class, &results, p);
@@ -149,7 +151,7 @@ impl<'a> Tui<'a> {
         self.right_layout.draw(window_r, &mut right_widgets);
     }
 
-    pub fn event(&mut self, event: InputEvent, p: ::UpdateParameters) { //TODO more console events
+    pub fn event(&mut self, event: InputEvent, p: ::UpdateParameters) {
         let sig_behavior = ::unsegen_signals::SignalBehavior::new().sig_default::<::unsegen_signals::SIGTSTP>();
         match event {
             InputEvent::ConsoleEvent(event) => {

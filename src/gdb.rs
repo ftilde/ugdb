@@ -168,6 +168,11 @@ pub struct GDB {
     pub breakpoints: BreakPointSet,
 }
 
+pub enum BreakpointOperationError {
+    Busy,
+    ExecutionError(String),
+}
+
 impl GDB {
     pub fn new(mi: gdbmi::GDB) -> Self {
         GDB {
@@ -181,9 +186,10 @@ impl GDB {
         self.mi.execute_later(&gdbmi::input::MiCommand::exit());
     }
 
-    pub fn insert_breakpoint(&mut self, location: BreakPointLocation) -> Result<(), ()> {
+    pub fn insert_breakpoint(&mut self, location: BreakPointLocation) -> Result<(), BreakpointOperationError> {
         let bp_result = self.mi.execute(&MiCommand::insert_breakpoint(location)).map_err(|e| match e {
             ExecuteError::Busy => {
+                BreakpointOperationError::Busy
             },
             ExecuteError::Quit => {
                 panic!("Could not insert breakpoint: GDB quit")
@@ -194,15 +200,24 @@ impl GDB {
                 self.handle_breakpoint_event(BreakPointEvent::Created, &bp_result.results);
                 Ok(())
             },
+            ResultClass::Error => {
+                Err(BreakpointOperationError::ExecutionError(
+                        bp_result.results.get("msg")
+                            .and_then(|msg_obj| msg_obj.as_str())
+                            .map(|s| s.to_owned())
+                            .unwrap_or(bp_result.results.dump())
+                ))
+            },
             _ => {
                 panic!("Unexpected resultclass: {:?}", bp_result.class);
             },
         }
     }
 
-    pub fn delete_breakpoints<I: Clone + Iterator<Item=BreakPointNumber>>(&mut self, bp_numbers: I) -> Result<(), ()> {
+    pub fn delete_breakpoints<I: Clone + Iterator<Item=BreakPointNumber>>(&mut self, bp_numbers: I) -> Result<(), BreakpointOperationError> {
         let bp_result = self.mi.execute(MiCommand::delete_breakpoints(bp_numbers.clone())).map_err(|e| match e {
             ExecuteError::Busy => {
+                BreakpointOperationError::Busy
             },
             ExecuteError::Quit => {
                 panic!("Could not insert breakpoint: GDB quit")
@@ -222,6 +237,14 @@ impl GDB {
                     self.breakpoints.remove_breakpoint(bkpt);
                 }
                 Ok(())
+            },
+            ResultClass::Error => {
+                Err(BreakpointOperationError::ExecutionError(
+                        bp_result.results.get("msg")
+                            .and_then(|msg_obj| msg_obj.as_str())
+                            .map(|s| s.to_owned())
+                            .unwrap_or(bp_result.results.dump())
+                ))
             },
             _ => {
                 panic!("Unexpected resultclass: {:?}", bp_result.class);

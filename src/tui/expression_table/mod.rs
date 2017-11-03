@@ -30,15 +30,10 @@ use unsegen::input::{
     Key,
     ScrollBehavior,
 };
-use gdbmi::input::{
-    MiCommand,
-};
-use gdbmi::output::{
-    ResultClass,
-};
-use self::expression_parsing::{
-    parse_gdb_value,
-};
+use gdbmi::ExecuteError;
+use gdbmi::input::MiCommand;
+use gdbmi::output::ResultClass;
+use self::expression_parsing::parse_gdb_value;
 
 mod expression_parsing;
 
@@ -158,17 +153,26 @@ impl ExpressionTable {
             let result = if expr.is_empty() {
                 JsonValue::Null
             } else {
-                let res = p.gdb.mi.execute(MiCommand::data_evaluate_expression(expr)).expect("expression evaluation successful");
-                match res.class {
-                    ResultClass::Error => {
-                        res.results["msg"].clone()
+                match p.gdb.mi.execute(MiCommand::data_evaluate_expression(expr)) {
+                    Ok(res) => {
+                        match res.class {
+                            ResultClass::Error => {
+                                res.results["msg"].clone()
+                            },
+                            ResultClass::Done => {
+                                parse_gdb_value(res.results["value"].as_str().expect("value present"))
+                            },
+                            other => {
+                                panic!("unexpected result class: {:?}", other)
+                            },
+                        }
                     },
-                    ResultClass::Done => {
-                        parse_gdb_value(res.results["value"].as_str().expect("value present"))
-                    },
-                    other => {
-                        panic!("unexpected result class: {:?}", other)
-                    },
+                    Err(ExecuteError::Busy) => {
+                        return;
+                    }
+                    Err(ExecuteError::Quit) => {
+                        panic!("GDB quit!");
+                    }
                 }
             };
             row.result.replace(&result);

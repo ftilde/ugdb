@@ -20,6 +20,7 @@ use gdbmi::input::{
 use gdbmi::{
     ExecuteError,
 };
+use gdb::BreakpointOperationError;
 use std::fs;
 use std::thread;
 use std::io::Read;
@@ -105,10 +106,15 @@ impl IPCRequest {
             Ok(()) => {
                 Ok(json::JsonValue::String(format!("Inserted breakpoint at {}:{}", file, line)))
             },
-            Err(()) => {
+            Err(BreakpointOperationError::Busy) => {
                 //TODO: we may want to investigate if we can interrupt execution, insert
                 //breakpoint, and resume execution thereafter.
                 Err(IPCError::new("Could not insert breakpoint", "GDB is busy"))
+            },
+            Err(BreakpointOperationError::ExecutionError(msg)) => {
+                //TODO: we may want to investigate if we can interrupt execution, insert
+                //breakpoint, and resume execution thereafter.
+                Err(IPCError::new("Could not insert breakpoint:", msg))
             },
         }
     }

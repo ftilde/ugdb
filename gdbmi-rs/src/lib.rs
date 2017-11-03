@@ -94,8 +94,7 @@ impl GDB {
         command.borrow().write_interpreter_string(&mut self.stdin).expect("write interpreter command");
         match self.result_output.recv() {
             Ok(record) => Ok(record),
-            Err(e) => {
-                println!("Execute error: {}", e);
+            Err(_) => {
                 Err(ExecuteError::Quit)
             },
         }

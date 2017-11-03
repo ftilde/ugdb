@@ -1,4 +1,8 @@
 use gdbmi;
+use logging::{
+    Logger,
+    LogMsgType,
+};
 
 use unsegen::base::{
     GraphemeCluster,
@@ -47,14 +51,23 @@ impl Console {
         }
     }
 
-    pub fn write_to_log<S: AsRef<str>>(&mut self, msg: S) {
+    pub fn display_log(&mut self, logger: Logger) {
         use std::fmt::Write;
-        write!(self.gdb_log.storage, "{}", msg.as_ref()).expect("Write message");
+        for (msg_type, msg) in logger.into_messages() {
+            match msg_type {
+                LogMsgType::Debug => {
+                    writeln!(self.debug_log.storage, " -=- {}", msg).expect("Write Debug Message");
+                },
+                LogMsgType::Message => {
+                    writeln!(self.gdb_log.storage, "{}", msg).expect("Write Message");
+                },
+            }
+        }
     }
 
-    pub fn add_debug_message(&mut self, msg: String) {
+    pub fn write_to_gdb_log(&mut self, msg: String) {
         use std::fmt::Write;
-        write!(self.debug_log.storage, " -=- {}\n", msg).expect("Write message");
+        write!(self.gdb_log.storage, "{}", msg).expect("Write Message");
     }
 
     fn toggle_active_log(&mut self) {
@@ -94,13 +107,17 @@ impl Console {
             },
             // Gdb commands
             _ => {
-                self.write_to_log(format!("(gdb) {}\n", line));
+                p.logger.log(LogMsgType::Message, format!("(gdb) {}", line));
                 match p.gdb.mi.execute(&gdbmi::input::MiCommand::cli_exec(line)) {
                     Ok(result) => {
-                        self.add_debug_message(format!("Result: {:?}", result));
+                        p.logger.log(LogMsgType::Debug, format!("Result: {:?}", result));
                     },
-                    Err(gdbmi::ExecuteError::Quit) => { self.write_to_log("quit"); },
-                    Err(gdbmi::ExecuteError::Busy) => { self.write_to_log("GDB is running!\n"); },
+                    Err(gdbmi::ExecuteError::Quit) => {
+                        p.logger.log(LogMsgType::Message, "quit");
+                    },
+                    Err(gdbmi::ExecuteError::Busy) => {
+                        p.logger.log(LogMsgType::Message, "GDB is running!");
+                    },
                     //Err(err) => { panic!("Unknown error {:?}", err) },
                 }
             },

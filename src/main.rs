@@ -29,6 +29,7 @@ extern crate syntect;
 mod gdb;
 mod input;
 mod ipc;
+mod logging;
 mod tui;
 
 use ::std::ffi::OsString;
@@ -37,17 +38,13 @@ use chan::Sender;
 use chan_signal::Signal;
 
 use gdb::GDB;
-use gdbmi::{
-    OutOfBandRecordSink,
+use logging::{
+    Logger,
+    LogMsgType,
 };
-
-use gdbmi::output::{
-    OutOfBandRecord,
-};
-
-use unsegen::base::{
-    Terminal,
-};
+use gdbmi::OutOfBandRecordSink;
+use gdbmi::output::OutOfBandRecord;
+use unsegen::base::Terminal;
 
 struct MpscOobRecordSink(Sender<OutOfBandRecord>);
 
@@ -65,10 +62,11 @@ impl ::unsegen_terminal::SlaveInputSink for MpscSlaveInputSink {
     }
 }
 
-type UpdateParameters<'a, 'b: 'a> = &'b mut UpdateParametersStruct<'a>;
+type UpdateParameters<'g, 'l, 'u: 'g + 'l> = &'u mut UpdateParametersStruct<'g, 'l>;
 
-pub struct UpdateParametersStruct<'a> {
-    pub gdb: &'a mut GDB,
+pub struct UpdateParametersStruct<'g, 'l> {
+    pub gdb: &'g mut GDB,
+    pub logger: &'l mut Logger,
 }
 
 fn main() {
@@ -96,14 +94,6 @@ fn main() {
     use input::InputSource;
     /* let keyboard_input = */ input::ViKeyboardInput::start_loop(keyboard_sink);
 
-    macro_rules! update_parameters {
-        () => {
-            &mut UpdateParametersStruct {
-                gdb: &mut gdb
-            }
-        }
-    }
-
     let stdout = std::io::stdout();
     {
         let mut terminal = Terminal::new(stdout.lock());
@@ -117,6 +107,17 @@ fn main() {
         let ipc_requests = &mut ipc.requests;
 
         loop {
+            let mut logger = Logger::new();
+
+            macro_rules! update_parameters {
+                () => {
+                    &mut UpdateParametersStruct {
+                        gdb: &mut gdb,
+                        logger: &mut logger,
+                    }
+                }
+            }
+
             chan_select! {
                 oob_source.recv() -> oob_evt => {
                     if let Some(record) = oob_evt {
@@ -150,10 +151,11 @@ fn main() {
                         Signal::TERM => { gdb.kill() },
                         _ => {}
                     }
-                    tui.console.add_debug_message(format!("received signal {:?}", sig));
+                    logger.log(LogMsgType::Debug, format!("received signal {:?}", sig));
                 }
             }
             tui.update_after_event(update_parameters!());
+            tui.console.display_log(logger);
             tui.draw(terminal.create_root_window());
             terminal.present();
         }

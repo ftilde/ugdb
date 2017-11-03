@@ -42,10 +42,12 @@ use gdbmi::output::{
     JsonValue,
     Object,
 };
+use logging::LogMsgType;
 use gdb::{
     SrcPosition,
     Address,
     BreakPoint,
+    BreakpointOperationError,
 };
 use gdbmi::input::{
     MiCommand,
@@ -308,9 +310,25 @@ impl<'a> AssemblyView<'a> {
                 None
             }).collect();
             if active_bps.is_empty() {
-                p.gdb.insert_breakpoint(BreakPointLocation::Address(line.address.0)).expect("path-breakpoint insert successful");
+                match p.gdb.insert_breakpoint(BreakPointLocation::Address(line.address.0)) {
+                    Ok(()) => { },
+                    Err(BreakpointOperationError::Busy) => {
+                        p.logger.log(LogMsgType::Message, "Cannot insert breakpoint: Gdb is busy.");
+                    },
+                    Err(BreakpointOperationError::ExecutionError(msg)) => {
+                        p.logger.log(LogMsgType::Message, format!("Cannot insert breakpoint: {}", msg));
+                    },
+                }
             } else {
-                p.gdb.delete_breakpoints(active_bps.into_iter()).expect("breakpoint removal successful");
+                match p.gdb.delete_breakpoints(active_bps.into_iter()) {
+                    Ok(()) => { },
+                    Err(BreakpointOperationError::Busy) => {
+                        p.logger.log(LogMsgType::Message, "Cannot remove breakpoint: Gdb is busy.");
+                    },
+                    Err(BreakpointOperationError::ExecutionError(msg)) => {
+                        p.logger.log(LogMsgType::Message, format!("Cannot remove breakpoint: {}", msg));
+                    },
+                }
             }
         }
     }
@@ -523,9 +541,13 @@ impl<'a> SourceView<'a> {
                 None
             }).collect();
             if active_bps.is_empty() {
-                p.gdb.insert_breakpoint(BreakPointLocation::Line(path, line.into())).expect("path-breakpoint insert successful");
+                if p.gdb.insert_breakpoint(BreakPointLocation::Line(path, line.into())).is_err() {
+                    p.logger.log(LogMsgType::Message, "Cannot insert breakpoint: Gdb is busy.");
+                }
             } else {
-                p.gdb.delete_breakpoints(active_bps.into_iter()).expect("breakpoint removal successful");
+                if p.gdb.delete_breakpoints(active_bps.into_iter()).is_err() {
+                    p.logger.log(LogMsgType::Message, "Cannot remove breakpoint: Gdb is busy.");
+                }
             }
         }
     }

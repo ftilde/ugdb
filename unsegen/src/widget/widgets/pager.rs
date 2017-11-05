@@ -137,10 +137,10 @@ fn to_unsegen_color(color: &highlighting::Color) -> Color {
 }
 fn to_unsegen_text_format(style: &highlighting::FontStyle) -> TextFormatModifier {
     TextFormatModifier {
-        bold: style.contains(highlighting::FONT_STYLE_BOLD).into(),
-        italic: style.contains(highlighting::FONT_STYLE_ITALIC).into(),
+        bold: style.contains(highlighting::FontStyle::BOLD).into(),
+        italic: style.contains(highlighting::FontStyle::ITALIC).into(),
         invert: ModifyMode::LeaveUnchanged,
-        underline: style.contains(highlighting::FONT_STYLE_UNDERLINE).into(),
+        underline: style.contains(highlighting::FontStyle::UNDERLINE).into(),
     }
 }
 fn to_unsegen_style_modifier(style: &highlighting::Style) -> StyleModifier {

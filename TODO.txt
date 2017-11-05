@@ -11,4 +11,3 @@ Smaller QoL-changes:
  - Detect changes in active file and reload if needed
 
 Fix bugs:
- - Hitting enter in LineEdit

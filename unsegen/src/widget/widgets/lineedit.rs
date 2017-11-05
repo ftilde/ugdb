@@ -175,9 +175,12 @@ impl Navigatable for LineEdit {
 
 impl Writable for LineEdit {
     fn write(&mut self, c: char) -> OperationResult {
-        self.insert(&c.to_string());
-        let _ = self.move_cursor_right();
-        Ok(())
+        if c == '\n' {
+            Err(())
+        } else {
+            self.insert(&c.to_string());
+            self.move_cursor_right()
+        }
     }
 }
 

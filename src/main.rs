@@ -32,9 +32,11 @@ mod ipc;
 mod logging;
 mod tui;
 
-use ::std::ffi::OsString;
+use std::ffi::OsString;
+use std::ops::{Deref, DerefMut};
+use std::time::Duration;
 
-use chan::Sender;
+use chan::{Sender, Receiver};
 use chan_signal::Signal;
 
 use gdb::GDB;
@@ -45,6 +47,10 @@ use logging::{
 use gdbmi::OutOfBandRecordSink;
 use gdbmi::output::OutOfBandRecord;
 use unsegen::base::Terminal;
+
+
+const EVENT_BUFFER_DURATION_MS: u64 = 10;
+
 
 struct MpscOobRecordSink(Sender<OutOfBandRecord>);
 
@@ -68,6 +74,45 @@ pub struct UpdateParametersStruct<'g, 'l> {
     pub gdb: &'g mut GDB,
     pub logger: &'l mut Logger,
 }
+
+// A timer that can be used to receive an event at any time,
+// but will never send until started via try_start_ms.
+struct Timer {
+    receiver: Receiver<()>,
+    sender: Option<Sender<()>>,
+}
+impl Timer {
+    fn new() -> Self {
+        let (sender, receiver) = chan::sync(0);
+        Timer {
+            receiver: receiver,
+            sender: Some(sender),
+        }
+    }
+
+    // Try to start the timer if it has not been started already.
+    fn try_start(&mut self, duration: Duration) {
+        if let Some(sender) = self.sender.take() {
+            std::thread::spawn(move || {
+                std::thread::sleep(duration);
+                drop(sender);
+            });
+        }
+    }
+}
+impl Deref for Timer {
+    type Target = Receiver<()>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.receiver
+    }
+}
+impl DerefMut for Timer {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.receiver
+    }
+}
+
 
 fn main() {
     // Setup signal piping:
@@ -117,16 +162,11 @@ fn main() {
                     }
                 }
             }
-            let tick = chan::tick_ms(10);
-            let mut update_happened = false;
+            let mut timer = Timer::new();
             'displayloop: loop {
                 chan_select! {
-                    tick.recv() => {
-                        if update_happened {
-                            break 'displayloop;
-                        } else {
-                            continue 'displayloop;
-                        }
+                    timer.recv() => {
+                        break 'displayloop;
                     },
                     keyboard_source.recv() -> evt => {
                         match evt.expect("read keyboard event") {
@@ -164,7 +204,7 @@ fn main() {
                     },
                 }
                 tui.update_after_event(update_parameters!());
-                update_happened = true;
+                timer.try_start(Duration::from_millis(EVENT_BUFFER_DURATION_MS));
             }
             tui.console.display_log(logger);
             tui.draw(terminal.create_root_window());

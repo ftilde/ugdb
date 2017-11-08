@@ -106,7 +106,7 @@ fn main() {
         // Somehow ipc.requests does not work in the chan_select macro...
         let ipc_requests = &mut ipc.requests;
 
-        loop {
+        'runloop: loop {
             let mut logger = Logger::new();
 
             macro_rules! update_parameters {
@@ -117,44 +117,55 @@ fn main() {
                     }
                 }
             }
-
-            chan_select! {
-                oob_source.recv() -> oob_evt => {
-                    if let Some(record) = oob_evt {
-                        tui.add_out_of_band_record(record, update_parameters!());
-                    } else {
-                        // OOB pipe has closed. => gdb will be stopping soon
-                        break;
-                    }
-                },
-                ipc_requests.recv() -> request => {
-                    request.expect("receive request").respond(update_parameters!());
-                },
-                keyboard_source.recv() -> evt => {
-                    match evt.expect("read keyboard event") {
-                        input::InputEvent::Quit => {
-                            gdb.kill();
-                        },
-                        event => {
-                            tui.event(event, update_parameters!());
-                        },
-                    }
-                },
-                pts_source.recv() -> pty_output => {
-                    tui.add_pty_input(pty_output.expect("get pty input"));
-                },
-                signal_event_source.recv() -> signal_event => {
-                    let sig = signal_event.expect("get signal event");
-                    match sig {
-                        Signal::WINCH => { /* Ignore, we just want to redraw */ },
-                        Signal::TSTP => { terminal.handle_sigtstp() },
-                        Signal::TERM => { gdb.kill() },
-                        _ => {}
-                    }
-                    logger.log(LogMsgType::Debug, format!("received signal {:?}", sig));
+            let tick = chan::tick_ms(10);
+            let mut update_happened = false;
+            'displayloop: loop {
+                chan_select! {
+                    tick.recv() => {
+                        if update_happened {
+                            break 'displayloop;
+                        } else {
+                            continue 'displayloop;
+                        }
+                    },
+                    keyboard_source.recv() -> evt => {
+                        match evt.expect("read keyboard event") {
+                            input::InputEvent::Quit => {
+                                gdb.kill();
+                            },
+                            event => {
+                                tui.event(event, update_parameters!());
+                            },
+                        }
+                    },
+                    oob_source.recv() -> oob_evt => {
+                        if let Some(record) = oob_evt {
+                            tui.add_out_of_band_record(record, update_parameters!());
+                        } else {
+                            // OOB pipe has closed. => gdb will be stopping soon
+                            break 'runloop;
+                        }
+                    },
+                    ipc_requests.recv() -> request => {
+                        request.expect("receive request").respond(update_parameters!());
+                    },
+                    pts_source.recv() -> pty_output => {
+                        tui.add_pty_input(pty_output.expect("get pty input"));
+                    },
+                    signal_event_source.recv() -> signal_event => {
+                        let sig = signal_event.expect("get signal event");
+                        match sig {
+                            Signal::WINCH => { /* Ignore, we just want to redraw */ },
+                            Signal::TSTP => { terminal.handle_sigtstp() },
+                            Signal::TERM => { gdb.kill() },
+                            _ => {}
+                        }
+                        logger.log(LogMsgType::Debug, format!("received signal {:?}", sig));
+                    },
                 }
+                tui.update_after_event(update_parameters!());
+                update_happened = true;
             }
-            tui.update_after_event(update_parameters!());
             tui.console.display_log(logger);
             tui.draw(terminal.create_root_window());
             terminal.present();

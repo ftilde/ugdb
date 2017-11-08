@@ -65,18 +65,18 @@ impl fmt::Display for BreakPointNumber {
 }
 
 impl MiCommand {
-    pub fn write_interpreter_string<F: Write>(&self, formatter: &mut F) -> Result<(), Error> {
-        try!{write!(formatter, "-{}", self.operation)};
+    pub fn write_interpreter_string<S: Write>(&self, sink: &mut S, token: super::Token) -> Result<(), Error> {
+        try!{write!(sink, "{}-{}", token, self.operation)};
         for option in &self.options {
-            try!{write!(formatter, " {}", option)};
+            try!{write!(sink, " {}", option)};
         }
         if !self.parameters.is_empty() {
-            try!{write!(formatter, " --")};
+            try!{write!(sink, " --")};
             for parameter in &self.parameters {
-                try!{write!(formatter, " {}", parameter)};
+                try!{write!(sink, " {}", parameter)};
             }
         }
-        try!{write!(formatter, "\n")};
+        try!{write!(sink, "\n")};
         Ok(())
     }
     pub fn interpreter_exec(interpreter: String, command: String) -> MiCommand {

@@ -4,6 +4,7 @@ pub use json::{
 pub use json::object::{
     Object,
 };
+use super::Token;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResultClass {
@@ -55,11 +56,9 @@ pub enum StreamKind {
     Log,
 }
 
-pub type Token = u64;
-
 #[derive(Debug)]
 pub struct ResultRecord {
-    token: Option<Token>,
+    pub(crate) token: Option<Token>,
     pub class: ResultClass,
     pub results: Object,
 }
@@ -229,8 +228,16 @@ named!(
     );
 
 named!(
+    token<Token>,
+    map!(::nom::digit, |values: &[u8]| {
+        values.iter().fold(0, |acc, &ascii_digit| 10*acc + (ascii_digit - b'0') as u64)
+    })
+    );
+
+named!(
     result_record<Output>,
         chain!(
+            t: opt!(token) ~
             tag!("^") ~
             c: result_class ~
             res: many0!(
@@ -242,7 +249,7 @@ named!(
                 ),
             || {
                 Output::Result(ResultRecord {
-                    token: None,
+                    token: t,
                     class: c,
                     results: to_map(res),
                 })

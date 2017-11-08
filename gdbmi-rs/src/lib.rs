@@ -26,11 +26,14 @@ use std::ffi::{
     OsString
 };
 
+type Token = u64;
+
 pub struct GDB {
     pub process: Child,
     stdin: ChildStdin,
     is_running: Arc<AtomicBool>,
     result_output: mpsc::Receiver<output::ResultRecord>,
+    current_command_token: Token,
     //outputThread: thread::Thread,
 }
 
@@ -72,6 +75,7 @@ impl GDB {
                 stdin: stdin,
                 is_running: is_running,
                 result_output: result_output,
+                current_command_token: 0,
                 //outputThread: outputThread,
             }
           )
@@ -85,15 +89,26 @@ impl GDB {
     pub fn is_running(&self) -> bool {
         self.is_running.load(Ordering::SeqCst)
     }
+    pub fn get_usable_token(&mut self) -> Token {
+        self.current_command_token = self.current_command_token.wrapping_add(1);
+        self.current_command_token
+    }
 
     pub fn execute<C: std::borrow::Borrow<input::MiCommand>>(&mut self, command: C) -> Result<output::ResultRecord, ExecuteError> {
         if self.is_running() {
             return Err(ExecuteError::Busy)
         }
+        let command_token = self.get_usable_token();
 
-        command.borrow().write_interpreter_string(&mut self.stdin).expect("write interpreter command");
+        command.borrow().write_interpreter_string(&mut self.stdin, command_token).expect("write interpreter command");
         match self.result_output.recv() {
-            Ok(record) => Ok(record),
+            Ok(record) => {
+                let token = record.token;
+                if token.is_none() || token.unwrap() != command_token {
+                    panic!("Input token ({}) does not match output token ({:?})", command_token, token);
+                }
+                Ok(record)
+            },
             Err(_) => {
                 Err(ExecuteError::Quit)
             },
@@ -101,7 +116,8 @@ impl GDB {
     }
 
     pub fn execute_later(&mut self, command: &input::MiCommand) {
-        command.write_interpreter_string(&mut self.stdin).expect("write interpreter command");
+        let command_token = self.get_usable_token();
+        command.write_interpreter_string(&mut self.stdin, command_token).expect("write interpreter command");
         let _ = self.result_output.recv();
     }
 }

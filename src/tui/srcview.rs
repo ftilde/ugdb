@@ -170,17 +170,8 @@ impl LineDecorator for AssemblyDecorator {
             style_modifier = StyleModifier::new().fg_color(Color::Green).bold(true).on_top_of(&style_modifier);
         }
         cursor.set_style_modifier(style_modifier);
-        let offset_to_draw = if let Some(ref dl) = line.debug_location {
-            if dl.offset == 0 {
-                None
-            } else {
-                Some(dl.offset)
-            }
-        } else {
-            None
-        };
 
-        if let Some(offset) = offset_to_draw {
+        if let Some(offset) = line.debug_location.iter().map(|l| l.offset).filter(|&offset| offset != 0).next() {
             let formatted_offset = format!("<+{}>", offset);
             write!(cursor, "{:>width$}{}", formatted_offset, right_border, width=width-1).unwrap();
         } else {

@@ -49,6 +49,7 @@ use gdb::{
     BreakPoint,
     BreakpointOperationError,
 };
+use gdbmi::ExecuteError;
 use gdbmi::input::{
     MiCommand,
     BreakPointLocation,
@@ -263,8 +264,20 @@ impl<'a> AssemblyView<'a> {
 
     fn show_file<P: AsRef<Path>, L: Into<LineNumber>>(&mut self, file: P, line: L, p: ::UpdateParameters) -> Result<(), () /* Disassembly unsuccessful */> {
         let line_u: usize = line.into().into();
-        let ref disass_object = p.gdb.mi.execute(MiCommand::data_disassemble_file(file, line_u, None, DisassembleMode::MixedSourceAndDisassembly)).expect("disassembly successful").results["asm_insns"];
-        if let &JsonValue::Array(ref line_objs) = disass_object {
+        let disass_results = match { p.gdb.mi.execute(MiCommand::data_disassemble_file(file, line_u, None, DisassembleMode::MixedSourceAndDisassembly)) } {
+            Ok(o) => { o.results },
+            Err(ExecuteError::Busy) => {
+                // that's okay, we will try again next time. This may occur if the user is
+                // hammering "n", the disassembly has not yet finished, but gdb is already
+                // executing the next step.
+                return Err(());
+            },
+            Err(ExecuteError::Quit) => {
+                // If GDB has quit the ugdb will shut down soon as well
+                return Err(());
+            },
+        };
+        if let &JsonValue::Array(ref line_objs) = &disass_results["asm_insns"] {
             let mut lines = Vec::<AssemblyLine>::new();
             for line_obj in line_objs {
                 let line = LineNumber(line_obj["line"].as_str().expect("line present").parse::<usize>().expect("parse line"));
@@ -600,8 +613,18 @@ pub struct CodeWindow<'a> {
 }
 
 fn disassemble_address(address_start: Address, address_end: Address, p: ::UpdateParameters) -> Result<Vec<JsonValue>, ()> {
-    let disass_object = p.gdb.mi.execute(MiCommand::data_disassemble_address(address_start.0, address_end.0, DisassembleMode::DissassemblyOnly)).expect("disassembly successful").results["asm_insns"].take();
-    if let JsonValue::Array(mut line_objs) = disass_object {
+    let mut disass_results = match p.gdb.mi.execute(MiCommand::data_disassemble_address(address_start.0, address_end.0, DisassembleMode::DissassemblyOnly)) {
+        Ok(o) => o.results,
+        Err(ExecuteError::Busy) => {
+            // Not many options here
+            return Err(());
+        },
+        Err(ExecuteError::Quit) => {
+            // If GDB has quit the ugdb will shut down soon as well
+            return Err(());
+        },
+    };
+    if let JsonValue::Array(mut line_objs) = disass_results["asm_insns"].take() {
         //I'm not sure if GDB does this already, but we better not rely on it...
         line_objs.sort_by_key(|l| Address::parse(l["address"].as_str().expect("address present")).expect("Parse address"));
 

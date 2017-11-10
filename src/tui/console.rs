@@ -65,9 +65,9 @@ impl Console {
         }
     }
 
-    pub fn write_to_gdb_log(&mut self, msg: String) {
+    pub fn write_to_gdb_log<S: AsRef<str>>(&mut self, msg: S) {
         use std::fmt::Write;
-        write!(self.gdb_log.storage, "{}", msg).expect("Write Message");
+        write!(self.gdb_log.storage, "{}", msg.as_ref()).expect("Write Message");
     }
 
     fn toggle_active_log(&mut self) {
@@ -107,16 +107,16 @@ impl Console {
             },
             // Gdb commands
             _ => {
-                p.logger.log(LogMsgType::Message, format!("(gdb) {}", line));
+                self.write_to_gdb_log(format!("(gdb) {}\n", line));
                 match p.gdb.mi.execute(&gdbmi::input::MiCommand::cli_exec(line)) {
                     Ok(result) => {
                         p.logger.log(LogMsgType::Debug, format!("Result: {:?}", result));
                     },
                     Err(gdbmi::ExecuteError::Quit) => {
-                        p.logger.log(LogMsgType::Message, "quit");
+                        self.write_to_gdb_log("quit");
                     },
                     Err(gdbmi::ExecuteError::Busy) => {
-                        p.logger.log(LogMsgType::Message, "GDB is running!");
+                        self.write_to_gdb_log("GDB is running!");
                     },
                     //Err(err) => { panic!("Unknown error {:?}", err) },
                 }

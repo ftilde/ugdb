@@ -187,6 +187,18 @@ pub struct AssemblyView<'a> {
     last_stop_position: Option<Address>,
 }
 
+#[derive(Debug)]
+enum GotoError {
+    NoLastStopPosition,
+    MismatchedPagerContent,
+    PagerError(PagerError)
+}
+
+impl From<PagerError> for GotoError {
+    fn from(e: PagerError) -> Self {
+        GotoError::PagerError(e)
+    }
+}
 
 impl<'a> AssemblyView<'a> {
     pub fn new(highlighting_theme: &'a Theme) -> Self {
@@ -201,26 +213,26 @@ impl<'a> AssemblyView<'a> {
         self.last_stop_position = Some(pos);
     }
 
-    fn go_to_address(&mut self, pos: Address) -> Result<(), PagerError> {
-        self.pager.go_to_line_if(|_, line| line.address == pos)
+    fn go_to_address(&mut self, pos: Address) -> Result<(), GotoError> {
+        Ok(self.pager.go_to_line_if(|_, line| line.address == pos)?)
     }
 
-    fn go_to_first_applicable_line<L: Into<LineNumber>>(&mut self, file: &Path, line: L) -> Result<(), PagerError> {
+    fn go_to_first_applicable_line<L: Into<LineNumber>>(&mut self, file: &Path, line: L) -> Result<(), GotoError> {
         let line: LineNumber = line.into();
-        self.pager.go_to_line_if(|_, l| {
+        Ok(self.pager.go_to_line_if(|_, l| {
             if let Some(ref src_position) = l.src_position {
                 src_position.file == file && src_position.line == line
             } else {
                 false
             }
-        })
+        })?)
     }
 
-    fn go_to_last_stop_position(&mut self) -> Result<(), PagerError> {
+    fn go_to_last_stop_position(&mut self) -> Result<(), GotoError> {
         if let Some(address) = self.last_stop_position {
             self.go_to_address(address)
         } else {
-            Err(PagerError::LineDoesNotExist)
+            Err(GotoError::NoLastStopPosition)
         }
     }
 
@@ -426,25 +438,26 @@ impl<'a> SourceView<'a> {
         self.last_stop_position = Some(SrcPosition::new(file.as_ref().to_path_buf(), pos));
     }
 
-    fn go_to_line<L: Into<LineNumber>>(&mut self, line: L) -> Result<(), PagerError> {
-        self.pager.go_to_line(line.into())
+    fn go_to_line<L: Into<LineNumber>>(&mut self, line: L) -> Result<(), GotoError> {
+        Ok(self.pager.go_to_line(line.into())?)
     }
 
-    fn go_to_last_stop_position(&mut self) -> Result<(), PagerError> {
-        let (same_file, line) = if let Some(ref content) = self.pager.content {
+    fn go_to_last_stop_position(&mut self) -> Result<(), GotoError> {
+        let line = if let Some(ref content) = self.pager.content {
             if let Some(ref src_pos) = self.last_stop_position {
-                (src_pos.file == content.storage.get_file_path(), src_pos.line)
+                if src_pos.file == content.storage.get_file_path() {
+                    src_pos.line
+                } else {
+                    return Err(GotoError::MismatchedPagerContent);
+                }
             } else {
-                return Err(PagerError::LineDoesNotExist)
+                return Err(GotoError::NoLastStopPosition);
             }
         } else {
-            return Err(PagerError::LineDoesNotExist)
+            return Err(GotoError::from(PagerError::NoContent));
         };
-        if same_file {
-            self.go_to_line(line)
-        } else {
-            Err(PagerError::LineDoesNotExist)
-        }
+
+        self.go_to_line(line)
     }
 
     fn get_last_line_number_for<P: AsRef<Path>>(&self, file: P) -> Option<LineNumber>{
@@ -629,7 +642,9 @@ impl<'a> CodeWindow<'a> {
 
             self.asm_view.set_last_stop_position(address);
             if self.asm_view.show_file(path, line, p).is_ok() {
-                self.asm_view.go_to_last_stop_position().expect("We just set a last stop pos and it must be valid!");
+                if self.asm_view.go_to_last_stop_position().is_err() {
+                    p.logger.log(LogMsgType::Debug, format!("Failed to go to address: {}", address));
+                }
             } else {
                 self.mode = CodeWindowMode::Source;
             }

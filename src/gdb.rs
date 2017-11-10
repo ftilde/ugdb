@@ -47,7 +47,7 @@ impl SrcPosition {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Address(pub usize);
 impl Address {
     pub fn parse(string: &str) -> Result<Self, (::std::num::ParseIntError, String)> {
@@ -56,7 +56,7 @@ impl Address {
 }
 impl fmt::Display for Address {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, " 0x{:0$x} ", self.0)
+        write!(f, "0x{:x}", self.0)
     }
 }
 impl Add<usize> for Address {

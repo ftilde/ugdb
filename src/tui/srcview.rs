@@ -369,7 +369,7 @@ impl<'a> Widget for AssemblyView<'a> {
     fn space_demand(&self) -> Demand2D {
         self.pager.space_demand()
     }
-    fn draw(&mut self, window: Window, hints: RenderingHints) {
+    fn draw(&self, window: Window, hints: RenderingHints) {
         self.pager.draw(window, hints)
     }
 }
@@ -590,7 +590,7 @@ impl<'a> Widget for SourceView<'a> {
     fn space_demand(&self) -> Demand2D {
         self.pager.space_demand()
     }
-    fn draw(&mut self, window: Window, hints: RenderingHints) {
+    fn draw(&self, window: Window, hints: RenderingHints) {
         self.pager.draw(window, hints)
     }
 }
@@ -814,10 +814,10 @@ impl<'a> Widget for CodeWindow<'a> {
             &CodeWindowMode::Message(ref m) => MsgWindow::new(&m).space_demand(),
         }
     }
-    fn draw(&mut self, window: Window, hints: RenderingHints) {
+    fn draw(&self, window: Window, hints: RenderingHints) {
         match &self.mode {
             &CodeWindowMode::Assembly => self.asm_view.draw(window, hints),
-            &CodeWindowMode::SideBySide => self.layout.draw(window, &mut [(&mut self.asm_view, hints), (&mut self.src_view, RenderingHints{ active: false, ..hints})]),
+            &CodeWindowMode::SideBySide => self.layout.draw(window, &[(&self.asm_view, hints), (&self.src_view, RenderingHints{ active: false, ..hints})]),
             &CodeWindowMode::Source => self.src_view.draw(window, hints),
             &CodeWindowMode::Message(ref m) => MsgWindow::new(&m).draw(window, hints),
         }
@@ -843,7 +843,7 @@ impl<'a> Widget for MsgWindow<'a> {
             height: Demand::at_least(1),
         }
     }
-    fn draw(&mut self, mut window: Window, _: RenderingHints) {
+    fn draw(&self, mut window: Window, _: RenderingHints) {
         let lines: Vec<_> =  self.msg.lines().collect();
         let num_lines = lines.len();
 

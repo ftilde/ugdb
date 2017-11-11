@@ -82,9 +82,9 @@ impl Widget for PromptLine {
         let widgets: Vec<&Widget> = vec![&self.prompt, &self.line];
         self.layout.space_demand(widgets.as_slice())
     }
-    fn draw(&mut self, window: Window, hints: RenderingHints) {
-        let mut widgets: Vec<(&mut Widget, RenderingHints)> = vec![(&mut self.prompt, hints), (&mut self.line, hints)];
-        self.layout.draw(window, widgets.as_mut_slice());
+    fn draw(&self, window: Window, hints: RenderingHints) {
+        let widgets: Vec<(&Widget, RenderingHints)> = vec![(&self.prompt, hints), (&self.line, hints)];
+        self.layout.draw(window, widgets.as_slice());
     }
 }
 

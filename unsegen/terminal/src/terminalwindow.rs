@@ -15,7 +15,6 @@ use unsegen::widget::{
     Demand,
     Demand2D,
     RenderingHints,
-    Widget,
 };
 use unsegen::input::{
     Scrollable,
@@ -204,10 +203,8 @@ impl TerminalWindow {
     fn col_to_buffer_pos_x(&self, col: index::Column) -> i32 {
         col.0 as i32
     }
-}
 
-impl Widget for TerminalWindow {
-    fn space_demand(&self) -> Demand2D {
+    pub fn space_demand(&self) -> Demand2D {
         // at_least => We can grow if there is space
         Demand2D {
             width: Demand::at_least(self.window_width as u32),
@@ -215,7 +212,7 @@ impl Widget for TerminalWindow {
         }
     }
 
-    fn draw(&mut self, mut window: Window, _: RenderingHints) {
+    pub fn draw(&mut self, mut window: Window, _: RenderingHints) {
         //temporarily change buffer to show cursor:
         if self.show_cursor {
             self.with_cursor(|cursor| {

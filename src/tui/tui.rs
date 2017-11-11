@@ -9,7 +9,6 @@ use unsegen::widget::{
     RenderingHints,
     SeparatingStyle,
     VerticalLayout,
-    Widget,
 };
 use unsegen::input::{
     Key,
@@ -138,17 +137,15 @@ impl<'a> Tui<'a> {
             .. Default::default()
         };
 
-        let mut left_widgets: Vec<(&mut Widget, RenderingHints)> = vec![
-            (&mut self.src_view, if self.active_window == SubWindow::CodeWindow { active_hints } else { inactive_hints }),
-            (&mut self.console, if self.active_window == SubWindow::Console { active_hints } else { inactive_hints }),
-        ];
-        self.left_layout.draw(window_l, &mut left_widgets);
+        self.left_layout.draw(window_l, &[
+                              (&self.src_view, if self.active_window == SubWindow::CodeWindow { active_hints } else { inactive_hints }),
+                              (&self.console, if self.active_window == SubWindow::Console { active_hints } else { inactive_hints }),
+        ]);
 
-        let mut right_widgets: Vec<(&mut Widget, RenderingHints)> = vec![
-            (&mut self.expression_table, if self.active_window == SubWindow::ExpressionTable { active_hints } else { inactive_hints }),
-            (&mut self.process_pty, if self.active_window == SubWindow::Terminal { active_hints } else { inactive_hints }),
-        ];
-        self.right_layout.draw(window_r, &mut right_widgets);
+        self.right_layout.draw(window_r, &[
+            (&self.expression_table, if self.active_window == SubWindow::ExpressionTable { active_hints } else { inactive_hints }),
+            (&self.process_pty, if self.active_window == SubWindow::Terminal { active_hints } else { inactive_hints }),
+        ]);
     }
 
     pub fn event(&mut self, event: InputEvent, p: ::UpdateParameters) {

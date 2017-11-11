@@ -5,7 +5,7 @@ use std::cmp::max;
 
 pub trait Widget {
     fn space_demand(&self) -> Demand2D;
-    fn draw(&mut self, window: Window, hints: RenderingHints);
+    fn draw(&self, window: Window, hints: RenderingHints);
 }
 
 #[derive(Clone, Copy, Debug)]

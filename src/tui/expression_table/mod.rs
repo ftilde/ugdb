@@ -184,7 +184,7 @@ impl Widget for ExpressionTable {
     fn space_demand(&self) -> Demand2D {
         self.table.space_demand()
     }
-    fn draw(&mut self, window: Window, hints: RenderingHints) {
+    fn draw(&self, window: Window, hints: RenderingHints) {
         self.table.draw(window, hints);
     }
 }

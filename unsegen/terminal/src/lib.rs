@@ -41,6 +41,7 @@ use terminalwindow::TerminalWindow;
 
 use std::fs::File;
 use std::thread;
+use std::cell::RefCell;
 
 fn read_slave_input_loop<S: SlaveInputSink>(sink: S, mut reader: PTYOutput) {
     use ::std::io::Read;
@@ -79,9 +80,9 @@ impl<'a> Behavior for PassthroughBehavior<'a> {
 
 
 pub struct Terminal {
-    terminal_window: TerminalWindow,
+    terminal_window: RefCell<TerminalWindow>,
     //slave_input_thread: thread::Thread,
-    master_input_sink: PTYInput,
+    master_input_sink: RefCell<PTYInput>,
 
     //Hack used to keep the slave device open as long as the master exists. This may not be a good idea, we will see...
     _slave_handle: File,
@@ -110,8 +111,8 @@ impl Terminal {
         write!(pts, "").expect("initial write to pts");
 
         Terminal {
-            terminal_window: TerminalWindow::new(),
-            master_input_sink: pty_input,
+            terminal_window: RefCell::new(TerminalWindow::new()),
+            master_input_sink: RefCell::new(pty_input),
             //slave_input_thread: slave_input_thread,
             _slave_handle: pts,
             slave_name: ptsname,
@@ -121,8 +122,11 @@ impl Terminal {
 
     //TODO: do we need to distinguish between input from user and from slave?
     pub fn add_byte_input(&mut self, bytes: Box<[u8]>) {
+        use std::ops::DerefMut;
+        let mut window_ref = self.terminal_window.borrow_mut();
+        let mut sink_ref = self.master_input_sink.borrow_mut();
         for byte in bytes.iter() {
-            self.ansi_processor.advance(&mut self.terminal_window, *byte, &mut self.master_input_sink);
+            self.ansi_processor.advance(window_ref.deref_mut(), *byte, sink_ref.deref_mut());
         }
     }
 
@@ -134,42 +138,43 @@ impl Terminal {
         //TODO: implement more keys. Actually, we probably want to pass on the raw input bytes from
         //termion to the sink. This requires work on the termion side...
         use std::io::Write;
-        self.master_input_sink.write_all(i.raw.as_slice()).expect("Write to terminal");
+        self.master_input_sink.borrow_mut().write_all(i.raw.as_slice()).expect("Write to terminal");
     }
 
-    fn ensure_size(&mut self, w: u32, h: u32) {
-        if w != self.terminal_window.get_width() || h != self.terminal_window.get_height() {
-            self.terminal_window.set_width(w);
-            self.terminal_window.set_height(h);
+    fn ensure_size(&self, w: u32, h: u32) {
+        let mut window = self.terminal_window.borrow_mut();
+        if w != window.get_width() || h != window.get_height() {
+            window.set_width(w);
+            window.set_height(h);
 
-            self.master_input_sink.resize(w as u16, h as u16, w as u16 /*??*/, h as u16 /*??*/).expect("Resize pty");
+            self.master_input_sink.borrow_mut().resize(w as u16, h as u16, w as u16 /*??*/, h as u16 /*??*/).expect("Resize pty");
         }
     }
 }
 
 impl Widget for Terminal {
     fn space_demand(&self) -> Demand2D {
-        self.terminal_window.space_demand()
+        self.terminal_window.borrow().space_demand()
     }
-    fn draw(&mut self, window: Window, hints: RenderingHints) {
+    fn draw(&self, window: Window, hints: RenderingHints) {
         self.ensure_size(window.get_width(), window.get_height());
-        self.terminal_window.draw(window, hints);
+        self.terminal_window.borrow_mut().draw(window, hints);
     }
 }
 
 impl Writable for Terminal {
     fn write(&mut self, c: char) -> OperationResult {
         use std::io::Write;
-        write!(self.master_input_sink, "{}", c).expect("Write key to terminal");
+        write!(self.master_input_sink.borrow_mut(), "{}", c).expect("Write key to terminal");
         Ok(())
     }
 }
 
 impl Scrollable for Terminal {
     fn scroll_forwards(&mut self) -> OperationResult {
-        self.terminal_window.scroll_forwards()
+        self.terminal_window.borrow_mut().scroll_forwards()
     }
     fn scroll_backwards(&mut self) -> OperationResult {
-        self.terminal_window.scroll_backwards()
+        self.terminal_window.borrow_mut().scroll_backwards()
     }
 }

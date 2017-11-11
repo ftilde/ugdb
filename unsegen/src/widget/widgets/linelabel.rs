@@ -34,7 +34,7 @@ impl Widget for LineLabel {
             height: Demand::exact(1),
         }
     }
-    fn draw(&mut self, mut window: Window, _: RenderingHints) {
+    fn draw(&self, mut window: Window, _: RenderingHints) {
         let mut cursor = Cursor::new(&mut window);
         cursor.write(&self.text);
     }

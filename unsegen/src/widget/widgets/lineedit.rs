@@ -113,7 +113,7 @@ impl Widget for LineEdit {
             height: Demand::exact(1), //TODO this is not really universal
         }
     }
-    fn draw(&mut self, mut window: Window, hints: RenderingHints) {
+    fn draw(&self, mut window: Window, hints: RenderingHints) {
         let (maybe_cursor_pos_offset, maybe_after_cursor_offset) = {
             let mut grapheme_indices = self.text.grapheme_indices(true);
             let cursor_cluster = grapheme_indices.nth(self.cursor_pos as usize);

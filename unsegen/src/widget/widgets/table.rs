@@ -186,11 +186,11 @@ impl<R: TableRow + 'static> Widget for Table<R> {
             height: y_demand
         }
     }
-    fn draw(&mut self, window: Window, hints: RenderingHints) {
+    fn draw(&self, window: Window, hints: RenderingHints) {
         let column_widths = self.layout_columns(&window);
 
         let mut window = Some(window);
-        let mut row_iter = self.rows.iter_mut().enumerate().peekable();
+        let mut row_iter = self.rows.iter().enumerate().peekable();
         while let Some((row_index, row)) = row_iter.next() {
             if window.is_none() {
                 break;
@@ -226,7 +226,7 @@ impl<R: TableRow + 'static> Widget for Table<R> {
                 };
 
                 cell_window.clear(); // Fill background using new style
-                (col.access_mut)(row).draw(cell_window, cell_draw_hints);
+                (col.access)(row).draw(cell_window, cell_draw_hints);
                 if let (Some(_), &SeparatingStyle::Draw(ref c)) = (iter.peek(), &self.col_sep_style) {
                     if row_window.get_width() > 0 {
                         let (mut sep_window, r) = row_window.split_h(c.width() as u32).expect("valid split pos from layout");

@@ -129,7 +129,7 @@ impl Widget for JsonViewer {
             height: Demand::exact(window.extent_y()),
         }
     }
-    fn draw(&mut self, mut window: Window, hints: RenderingHints) {
+    fn draw(&self, mut window: Window, hints: RenderingHints) {
         let mut cursor = Cursor::new(&mut window);
         let info = RenderingInfo {
             hints: hints,

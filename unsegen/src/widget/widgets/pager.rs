@@ -337,8 +337,8 @@ impl<S, H, D> Widget for Pager<S, H, D>
             height: Demand::at_least(1)
         }
     }
-    fn draw(&mut self, window: Window, _: RenderingHints) {
-        if let Some(ref mut content) = self.content {
+    fn draw(&self, window: Window, _: RenderingHints) {
+        if let Some(ref content) = self.content {
             let mut highlighter = content.highlighter.create_instance();
             let height = window.get_height() as usize;
             // The highlighter might need a minimum number of lines to figure out the syntax:

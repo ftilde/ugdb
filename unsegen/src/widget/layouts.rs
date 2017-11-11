@@ -98,7 +98,7 @@ pub fn layout_linearly(mut available_space: u32, separator_width: u32, demands: 
 }
 
 fn draw_linearly<S, L, M, D>(window: Window,
-                          widgets: &mut [(&mut Widget, RenderingHints)],
+                          widgets: &[(&Widget, RenderingHints)],
                           separating_style: &SeparatingStyle,
                           split: S,
                           window_length: L,
@@ -119,8 +119,8 @@ where
     debug_assert!(widgets.len() == assigned_spaces.len(), "widgets and spaces len mismatch");
 
     let mut rest_window = window;
-    let mut iter = widgets.iter_mut().zip(assigned_spaces.iter()).enumerate().peekable();
-    while let Some((i, (&mut (ref mut w, hint), &pos))) = iter.next() {
+    let mut iter = widgets.iter().zip(assigned_spaces.iter()).enumerate().peekable();
+    while let Some((i, (&(ref w, hint), &pos))) = iter.next() {
         let (mut window, r) = split(rest_window, pos);
         rest_window = r;
         if let (1, &SeparatingStyle::AlternatingStyle(modifier)) = (i%2, separating_style) {
@@ -167,7 +167,7 @@ impl HorizontalLayout {
         }
     }
 
-    pub fn draw(&self, window: Window, widgets: &mut [(&mut Widget, RenderingHints)]) {
+    pub fn draw(&self, window: Window, widgets: &[(&Widget, RenderingHints)]) {
         draw_linearly(window, widgets, &self.separating_style, |w, p| w.split_h(p).expect("valid split pos"), |w| w.get_width(), SeparatingStyle::width, |d| d.width);
     }
 }
@@ -202,7 +202,7 @@ impl VerticalLayout {
         }
     }
 
-    pub fn draw(&self, window: Window, widgets: &mut [(&mut Widget, RenderingHints)]) {
+    pub fn draw(&self, window: Window, widgets: &[(&Widget, RenderingHints)]) {
         draw_linearly(window, widgets, &self.separating_style, |w, p| w.split_v(p).expect("valid split pos"), |w| w.get_height(), SeparatingStyle::height, |d| d.height);
     }
 }

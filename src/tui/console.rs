@@ -170,14 +170,13 @@ impl Widget for Console {
         let widgets: Vec<&Widget> = vec![self.get_active_log_viewer(), &self.prompt_line];
         self.layout.space_demand(widgets.as_slice())
     }
-    fn draw(&mut self, window: Window, hints: RenderingHints) {
+    fn draw(&self, window: Window, hints: RenderingHints) {
         // We cannot use self.get_active_log_viewer_mut(), because it apparently borrows
         // self mutably in its entirety. TODO: Maybe there is another way?
         let active_log_viewer = match self.active_log {
-            ActiveLog::Debug => &mut self.debug_log,
-            ActiveLog::Gdb => &mut self.gdb_log,
+            ActiveLog::Debug => &self.debug_log,
+            ActiveLog::Gdb => &self.gdb_log,
         };
-        let mut widgets: Vec<(&mut Widget, RenderingHints)> = vec![(active_log_viewer, hints), (&mut self.prompt_line, hints)];
-        self.layout.draw(window, &mut widgets)
+        self.layout.draw(window, &[(active_log_viewer, hints), (&self.prompt_line, hints)])
     }
 }

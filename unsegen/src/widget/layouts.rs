@@ -9,7 +9,7 @@ use base::{
     GraphemeCluster,
     StyleModifier,
 };
-use std::cmp::{max, min};
+use std::cmp::min;
 
 #[derive(Clone)]
 pub enum SeparatingStyle {
@@ -36,17 +36,26 @@ impl SeparatingStyle {
 pub fn layout_linearly(mut available_space: u32, separator_width: u32, demands: &[Demand]) -> Box<[u32]>
 {
     let mut assigned_spaces = vec![0; demands.len()].into_boxed_slice();
-    let mut max_max_demand = None;
-    let mut num_unbounded = 0;
+    let mut num_unfinished = 0;
+    let mut sum_of_unfinished = 0;
     for (i, demand) in demands.iter().enumerate() {
+        let mut unfinished = false;
         if let Some(max_demand) = demand.max {
-            max_max_demand = Some(max(max_max_demand.unwrap_or(0), max_demand));
+            if max_demand != demand.min {
+                unfinished = true;
+            }
         } else {
-            num_unbounded += 1;
+            unfinished = true;
         }
+
         let assigned_space = min(available_space, demand.min);
         available_space -= assigned_space;
         assigned_spaces[i] = assigned_space;
+
+        if unfinished {
+            num_unfinished += 1;
+            sum_of_unfinished += assigned_space;
+        }
 
         let separator_width = if i == (demands.len()-1) { //Last element does not have a following separator
             0
@@ -58,40 +67,81 @@ pub fn layout_linearly(mut available_space: u32, separator_width: u32, demands: 
             return assigned_spaces;
         }
         available_space -= separator_width;
-        //println!("Step 1: {:?}, {:?} left", assigned_spaces, available_space);
+        //println!("Step 1: {:?}, {:?} left (unfinished? {})", assigned_spaces, available_space, unfinished);
     }
 
-    if let Some(total_max_max_demand) = max_max_demand {
-        for (i, demand) in demands.iter().enumerate() {
-            let max_demand = demand.max.unwrap_or(total_max_max_demand);
-            if max_demand > demand.min {
-                let additional_assigned_space = min(available_space, max_demand - demand.min);
-                available_space -= additional_assigned_space;
-                assigned_spaces[i] += additional_assigned_space;
+    // equalize remaining
+    {
+        if num_unfinished == 0 {
+            return assigned_spaces;
+        }
 
-                //println!("Step 2: {:?}, {:?} left", assigned_spaces, available_space);
-                if available_space == 0 {
-                    return assigned_spaces;
-                }
+        let total_per_widget = (available_space + sum_of_unfinished) / num_unfinished; //Rounded down!
+        if total_per_widget > 0 {
+            for (i, demand) in demands.iter().enumerate() {
+                let additional = if let Some(max_demand) = demand.max {
+                    if assigned_spaces[i] == max_demand {
+                        continue;
+                    }
+                    if total_per_widget < max_demand {
+                        total_per_widget.checked_sub(assigned_spaces[i]).unwrap_or(0)
+                    } else {
+                        num_unfinished -= 1;
+                        max_demand - assigned_spaces[i]
+                    }
+                } else {
+                    total_per_widget.checked_sub(assigned_spaces[i]).unwrap_or(0)
+                };
+                assigned_spaces[i] += additional;
+                available_space -= additional;
+                //println!("Step 2: {:?}, {:?} left ({} total per widget)", assigned_spaces, available_space, total_per_widget);
             }
         }
     }
 
-    if num_unbounded == 0 {
-        return assigned_spaces;
-    }
-
-    let left_over_space_per_unbounded_widget = available_space / num_unbounded; //Rounded down!
-
-    for (i, _) in demands.iter().enumerate().filter(|&(_, w)| w.max.is_none()) {
-        let additional_assigned_space = min(available_space, left_over_space_per_unbounded_widget);
-        available_space -= additional_assigned_space;
-        assigned_spaces[i] += additional_assigned_space;
-
-        //println!("Step 3: {:?}, {:?} left", assigned_spaces, available_space);
-        if available_space == 0 {
+    // spend rest equally
+    loop {
+        if num_unfinished == 0 {
             return assigned_spaces;
         }
+
+        let to_assign_per_widget = available_space / num_unfinished; //Rounded down!
+        if to_assign_per_widget == 0 {
+            break;
+        }
+        //println!("Starting Step 3: {:?} left, {:?} per widget", available_space, to_assign_per_widget);
+
+        for (i, demand) in demands.iter().enumerate() {
+            let additional = if let Some(max_demand) = demand.max {
+                if assigned_spaces[i] == max_demand {
+                    continue;
+                }
+                if assigned_spaces[i] + to_assign_per_widget < max_demand {
+                    to_assign_per_widget
+                } else {
+                    num_unfinished -= 1;
+                    max_demand - assigned_spaces[i]
+                }
+            } else {
+                to_assign_per_widget
+            };
+            //println!("Step 3: {:?}, assigning {:?}, {:?} left", assigned_spaces, additional, available_space);
+            assigned_spaces[i] += additional;
+            available_space -= additional;
+        }
+    }
+
+    // now: available_space / num_unfinished < 0!
+    // => at most 1 space left per unfinished
+    for (i, demand) in demands.iter().enumerate() {
+        if available_space == 0 {
+            break;
+        }
+        if demand.max.is_none() || demand.max.unwrap() > assigned_spaces[i] {
+            assigned_spaces[i] += 1;
+            available_space -= 1;
+        }
+        //println!("Step 4: {:?}, {:?} left", assigned_spaces, available_space);
     }
 
     assigned_spaces
@@ -232,7 +282,7 @@ mod test {
         fn space_demand(&self) -> Demand2D {
             self.space_demand
         }
-        fn draw(&mut self, mut window: Window, _: RenderingHints) {
+        fn draw(&self, mut window: Window, _: RenderingHints) {
             window.fill(GraphemeCluster::try_from(self.fill_char).unwrap());
         }
     }
@@ -255,13 +305,13 @@ mod test {
         assert_eq_boxed_slices(layout_linearly(4, 0, &[Demand::from_to(1, 2), Demand::from_to(1, 2)]), Box::new([2, 2]), "both hit max");
         assert_eq_boxed_slices(layout_linearly(4, 0, &[Demand::from_to(1, 2), Demand::from_to(1, 3)]), Box::new([2, 2]), "less for 2nd");
         assert_eq_boxed_slices(layout_linearly(4, 0, &[Demand::from_to(5, 6), Demand::from_to(1, 4)]), Box::new([4, 0]), "nothing for 2nd");
-        assert_eq_boxed_slices(layout_linearly(4, 0, &[Demand::from_to(1, 5), Demand::from_to(1, 4)]), Box::new([3, 1]), "less for 1st");
+        assert_eq_boxed_slices(layout_linearly(4, 0, &[Demand::from_to(1, 5), Demand::from_to(1, 4)]), Box::new([2, 2]), "both not full");
     }
 
     #[test]
     fn test_layout_linearly_from_at_least() {
         assert_eq_boxed_slices(layout_linearly(4, 0, &[Demand::at_least(1), Demand::at_least(1)]), Box::new([2, 2]), "more for both");
-        assert_eq_boxed_slices(layout_linearly(4, 0, &[Demand::at_least(1), Demand::at_least(2)]), Box::new([1, 2]), "exact for both, devisor test");
+        assert_eq_boxed_slices(layout_linearly(4, 0, &[Demand::at_least(1), Demand::at_least(2)]), Box::new([2, 2]), "more for 1st, exact for 2nd");
         assert_eq_boxed_slices(layout_linearly(4, 0, &[Demand::at_least(2), Demand::at_least(2)]), Box::new([2, 2]), "exact for both");
         assert_eq_boxed_slices(layout_linearly(4, 0, &[Demand::at_least(5), Demand::at_least(2)]), Box::new([4, 0]), "none for 2nd");
     }
@@ -271,15 +321,15 @@ mod test {
         assert_eq_boxed_slices(layout_linearly(10, 0, &[Demand::exact(3), Demand::at_least(1)]), Box::new([3, 7]), "exact, 2nd takes rest, no separator");
         assert_eq_boxed_slices(layout_linearly(10, 1, &[Demand::exact(3), Demand::at_least(1)]), Box::new([3, 6]), "exact, 2nd takes rest, separator");
         assert_eq_boxed_slices(layout_linearly(10, 0, &[Demand::from_to(1, 2), Demand::at_least(1)]), Box::new([2, 8]), "from_to, 2nd takes rest");
-        assert_eq_boxed_slices(layout_linearly(10, 0, &[Demand::from_to(1, 2), Demand::exact(3), Demand::at_least(1)]), Box::new([2, 3, 5]), "return paths: end");
-        assert_eq_boxed_slices(layout_linearly(10, 0, &[Demand::from_to(5, 6), Demand::exact(5), Demand::at_least(5)]), Box::new([5, 5, 0]), "return paths: first loop, 2nd it");
-        assert_eq_boxed_slices(layout_linearly(10, 0, &[Demand::from_to(4, 6), Demand::exact(4), Demand::at_least(3)]), Box::new([4, 4, 2]), "return paths: first loop, 3rd it, rest");
-        assert_eq_boxed_slices(layout_linearly(10, 0, &[Demand::from_to(3, 6), Demand::exact(4), Demand::at_least(3)]), Box::new([3, 4, 3]), "return paths: first loop, 3rd it, full");
-        assert_eq_boxed_slices(layout_linearly(10, 0, &[Demand::from_to(3, 6), Demand::exact(3), Demand::at_least(3)]), Box::new([4, 3, 3]), "return paths: second loop, 1st it");
-        assert_eq_boxed_slices(layout_linearly(10, 0, &[Demand::from_to(2, 4), Demand::exact(2), Demand::at_least(3)]), Box::new([4, 2, 4]), "return paths: second loop, 3rd it");
-        assert_eq_boxed_slices(layout_linearly(10, 0, &[Demand::from_to(2, 4), Demand::exact(2), Demand::exact(3)]), Box::new([4, 2, 3]), "return paths: after second loop, 3rd it");
-        assert_eq_boxed_slices(layout_linearly(10, 0, &[Demand::from_to(2, 4), Demand::exact(2), Demand::at_least(4)]), Box::new([4, 2, 4]), "return paths: third loop, after 1st item");
-        assert_eq_boxed_slices(layout_linearly(10, 0, &[Demand::from_to(2, 3), Demand::at_least(2), Demand::at_least(2)]), Box::new([3, 3, 3]), "return paths: third loop, finished");
+        assert_eq_boxed_slices(layout_linearly(10, 0, &[Demand::from_to(1, 2), Demand::exact(3), Demand::at_least(1)]),    Box::new([2, 3, 5]), "misc 1");
+        assert_eq_boxed_slices(layout_linearly(10, 0, &[Demand::from_to(5, 6), Demand::exact(5), Demand::at_least(5)]),    Box::new([5, 5, 0]), "misc 2");
+        assert_eq_boxed_slices(layout_linearly(10, 0, &[Demand::from_to(4, 6), Demand::exact(4), Demand::at_least(3)]),    Box::new([4, 4, 2]), "misc 3");
+        assert_eq_boxed_slices(layout_linearly(10, 0, &[Demand::from_to(3, 6), Demand::exact(4), Demand::at_least(3)]),    Box::new([3, 4, 3]), "misc 4");
+        assert_eq_boxed_slices(layout_linearly(10, 0, &[Demand::from_to(3, 6), Demand::exact(3), Demand::at_least(3)]),    Box::new([4, 3, 3]), "misc 5");
+        assert_eq_boxed_slices(layout_linearly(10, 0, &[Demand::from_to(2, 4), Demand::exact(2), Demand::at_least(3)]),    Box::new([4, 2, 4]), "misc 6");
+        assert_eq_boxed_slices(layout_linearly(10, 0, &[Demand::from_to(2, 4), Demand::exact(2), Demand::exact(3)]),       Box::new([4, 2, 3]), "misc 7");
+        assert_eq_boxed_slices(layout_linearly(10, 0, &[Demand::from_to(2, 4), Demand::exact(2), Demand::at_least(4)]),    Box::new([4, 2, 4]), "misc 8");
+        assert_eq_boxed_slices(layout_linearly(10, 0, &[Demand::from_to(2, 3), Demand::at_least(2), Demand::at_least(2)]), Box::new([3, 4, 3]), "misc 9");
     }
 
     fn aeq_horizontal_layout_space_demand(widgets: Vec<&Widget>, solution: (Demand, Demand)) {
@@ -295,17 +345,18 @@ mod test {
         aeq_horizontal_layout_space_demand(vec![&FakeWidget::new((Demand::from_to(1, 2), Demand::from_to(1, 3))), &FakeWidget::new((Demand::exact(1), Demand::exact(2)))], (Demand::from_to(2, 3), Demand::from_to(2, 3)));
         aeq_horizontal_layout_space_demand(vec![&FakeWidget::new((Demand::at_least(3), Demand::at_least(3))), &FakeWidget::new((Demand::exact(1), Demand::exact(5)))], (Demand::at_least(4), Demand::at_least(5)));
     }
-    fn aeq_horizontal_layout_draw(terminal_size: (u32, u32), widgets: Vec<&mut Widget>, solution: &str) {
+    fn aeq_horizontal_layout_draw(terminal_size: (u32, u32), widgets: Vec<&Widget>, solution: &str) {
         let mut term = FakeTerminal::with_size(terminal_size);
-        let mut widgets_with_hints: Vec<(&mut Widget, RenderingHints)> = widgets.into_iter().map(|w| (w, RenderingHints::default())).collect();
-        HorizontalLayout::new(SeparatingStyle::None).draw(term.create_root_window(), widgets_with_hints.as_mut_slice());
+        let widgets_with_hints: Vec<(&Widget, RenderingHints)> = widgets.into_iter().map(|w| (w, RenderingHints::default())).collect();
+        HorizontalLayout::new(SeparatingStyle::None).draw(term.create_root_window(), widgets_with_hints.as_slice());
         assert_eq!(term, FakeTerminal::from_str(terminal_size, solution).expect("term from str"));
     }
     #[test]
     fn test_horizontal_layout_draw() {
-        aeq_horizontal_layout_draw((4, 1), vec![&mut FakeWidget::with_fill_char((Demand::exact(2), Demand::exact(1)), '1'), &mut FakeWidget::with_fill_char((Demand::exact(2), Demand::exact(1)), '2')], "1122");
-        aeq_horizontal_layout_draw((4, 1), vec![&mut FakeWidget::with_fill_char((Demand::exact(1), Demand::exact(1)), '1'), &mut FakeWidget::with_fill_char((Demand::at_least(2), Demand::exact(1)), '2')], "1222");
-        aeq_horizontal_layout_draw((4, 2), vec![&mut FakeWidget::with_fill_char((Demand::exact(1), Demand::exact(1)), '1'), &mut FakeWidget::with_fill_char((Demand::at_least(2), Demand::exact(2)), '2')], "1222 1222");
+        aeq_horizontal_layout_draw((4, 1), vec![&FakeWidget::with_fill_char((Demand::exact(2), Demand::exact(1)), '1'), &FakeWidget::with_fill_char((Demand::exact(2), Demand::exact(1)), '2')], "1122");
+        aeq_horizontal_layout_draw((4, 1), vec![&FakeWidget::with_fill_char((Demand::exact(1), Demand::exact(1)), '1'), &FakeWidget::with_fill_char((Demand::at_least(2), Demand::exact(1)), '2')], "1222");
+        aeq_horizontal_layout_draw((4, 2), vec![&FakeWidget::with_fill_char((Demand::exact(1), Demand::exact(1)), '1'), &FakeWidget::with_fill_char((Demand::at_least(2), Demand::exact(2)), '2')], "1222 1222");
+        aeq_horizontal_layout_draw((8, 1), vec![&FakeWidget::with_fill_char((Demand::at_least(1), Demand::at_least(1)), '1'), &FakeWidget::with_fill_char((Demand::at_least(3), Demand::exact(3)), '2')], "11112222");
     }
 
     fn aeq_vertical_layout_space_demand(widgets: Vec<&Widget>, solution: (Demand, Demand)) {
@@ -321,16 +372,17 @@ mod test {
         aeq_vertical_layout_space_demand(vec![&FakeWidget::new((Demand::from_to(1, 3), Demand::from_to(1, 2))), &FakeWidget::new((Demand::exact(2), Demand::exact(1)))], (Demand::from_to(2, 3), Demand::from_to(2, 3)));
         aeq_vertical_layout_space_demand(vec![&FakeWidget::new((Demand::at_least(3), Demand::at_least(3))), &FakeWidget::new((Demand::exact(5), Demand::exact(1)))], (Demand::at_least(5), Demand::at_least(4)));
     }
-    fn aeq_vertical_layout_draw(terminal_size: (u32, u32), widgets: Vec<&mut Widget>, solution: &str) {
+    fn aeq_vertical_layout_draw(terminal_size: (u32, u32), widgets: Vec<&Widget>, solution: &str) {
         let mut term = FakeTerminal::with_size(terminal_size);
-        let mut widgets_with_hints: Vec<(&mut Widget, RenderingHints)> = widgets.into_iter().map(|w| (w, RenderingHints::default())).collect();
-        VerticalLayout::new(SeparatingStyle::None).draw(term.create_root_window(), widgets_with_hints.as_mut_slice());
+        let widgets_with_hints: Vec<(&Widget, RenderingHints)> = widgets.into_iter().map(|w| (w, RenderingHints::default())).collect();
+        VerticalLayout::new(SeparatingStyle::None).draw(term.create_root_window(), widgets_with_hints.as_slice());
         assert_eq!(term, FakeTerminal::from_str(terminal_size, solution).expect("term from str"));
     }
     #[test]
     fn test_vertical_layout_draw() {
-        aeq_vertical_layout_draw((1, 4), vec![&mut FakeWidget::with_fill_char((Demand::exact(1), Demand::exact(2)), '1'), &mut FakeWidget::with_fill_char((Demand::exact(1), Demand::exact(2)), '2')], "1 1 2 2");
-        aeq_vertical_layout_draw((1, 4), vec![&mut FakeWidget::with_fill_char((Demand::exact(1), Demand::exact(1)), '1'), &mut FakeWidget::with_fill_char((Demand::exact(1), Demand::at_least(2)), '2')], "1 2 2 2");
-        aeq_vertical_layout_draw((2, 4), vec![&mut FakeWidget::with_fill_char((Demand::exact(1), Demand::exact(1)), '1'), &mut FakeWidget::with_fill_char((Demand::exact(2), Demand::at_least(2)), '2')], "11 22 22 22");
+        aeq_vertical_layout_draw((1, 4), vec![&FakeWidget::with_fill_char((Demand::exact(1), Demand::exact(2)), '1'), &FakeWidget::with_fill_char((Demand::exact(1), Demand::exact(2)), '2')], "1 1 2 2");
+        aeq_vertical_layout_draw((1, 4), vec![&FakeWidget::with_fill_char((Demand::exact(1), Demand::exact(1)), '1'), &FakeWidget::with_fill_char((Demand::exact(1), Demand::at_least(2)), '2')], "1 2 2 2");
+        aeq_vertical_layout_draw((2, 4), vec![&FakeWidget::with_fill_char((Demand::exact(1), Demand::exact(1)), '1'), &FakeWidget::with_fill_char((Demand::exact(2), Demand::at_least(2)), '2')], "11 22 22 22");
+        aeq_vertical_layout_draw((1, 8), vec![&FakeWidget::with_fill_char((Demand::at_least(2), Demand::at_least(2)), '1'), &FakeWidget::with_fill_char((Demand::at_least(1), Demand::at_least(1)), '2')], "1 1 1 1 2 2 2 2");
     }
 }

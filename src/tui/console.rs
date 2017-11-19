@@ -26,6 +26,7 @@ use unsegen::widget::widgets::{
     LogViewer,
     PromptLine,
 };
+use unsegen::container::Container;
 
 enum ActiveLog {
     Debug,
@@ -51,9 +52,9 @@ impl Console {
         }
     }
 
-    pub fn display_log(&mut self, logger: Logger) {
+    pub fn display_log(&mut self, logger: &mut Logger) {
         use std::fmt::Write;
-        for (msg_type, msg) in logger.into_messages() {
+        for (msg_type, msg) in logger.drain_messages() {
             match msg_type {
                 LogMsgType::Debug => {
                     writeln!(self.debug_log.storage, " -=- {}", msg).expect("Write Debug Message");
@@ -123,8 +124,25 @@ impl Console {
             },
         }
     }
+}
 
-    pub fn event(&mut self, input: Input, p: ::UpdateParameters) {
+impl Widget for Console {
+    fn space_demand(&self) -> Demand2D {
+        let widgets: Vec<&Widget> = vec![self.get_active_log_viewer(), &self.prompt_line];
+        self.layout.space_demand(widgets.as_slice())
+    }
+    fn draw(&self, window: Window, hints: RenderingHints) {
+        // We cannot use self.get_active_log_viewer_mut(), because it apparently borrows
+        // self mutably in its entirety. TODO: Maybe there is another way?
+        let active_log_viewer = match self.active_log {
+            ActiveLog::Debug => &self.debug_log,
+            ActiveLog::Gdb => &self.gdb_log,
+        };
+        self.layout.draw(window, &[(active_log_viewer, hints), (&self.prompt_line, hints)])
+    }
+}
+impl Container<::UpdateParametersStruct> for Console {
+    fn input(&mut self, input: Input, p: ::UpdateParameters) -> Option<Input> {
         input
             .chain(|input: Input| {
                 match input.event {
@@ -161,22 +179,7 @@ impl Console {
                 ScrollBehavior::new(self.get_active_log_viewer_mut())
                 .forwards_on(Key::PageDown)
                 .backwards_on(Key::PageUp)
-                );
-    }
-}
-
-impl Widget for Console {
-    fn space_demand(&self) -> Demand2D {
-        let widgets: Vec<&Widget> = vec![self.get_active_log_viewer(), &self.prompt_line];
-        self.layout.space_demand(widgets.as_slice())
-    }
-    fn draw(&self, window: Window, hints: RenderingHints) {
-        // We cannot use self.get_active_log_viewer_mut(), because it apparently borrows
-        // self mutably in its entirety. TODO: Maybe there is another way?
-        let active_log_viewer = match self.active_log {
-            ActiveLog::Debug => &self.debug_log,
-            ActiveLog::Gdb => &self.gdb_log,
-        };
-        self.layout.draw(window, &[(active_log_viewer, hints), (&self.prompt_line, hints)])
+                )
+            .finish()
     }
 }

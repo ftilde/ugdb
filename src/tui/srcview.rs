@@ -32,6 +32,7 @@ use unsegen::widget::widgets::{
     PagerLine,
     SyntectHighlighter,
 };
+use unsegen::container::Container;
 use syntect::highlighting::{
     Theme,
 };
@@ -790,31 +791,6 @@ impl<'a> CodeWindow<'a> {
         }
     }
 
-    pub fn event(&mut self, event: Input, p: ::UpdateParameters) {
-        event.chain(|i: Input| match i.event {
-            Event::Key(Key::Char('d')) => {
-                self.toggle_mode(p);
-                None
-            },
-            _ => Some(i),
-        }).chain(|i: Input| {
-            match self.mode {
-                CodeWindowMode::Assembly | CodeWindowMode::SideBySide => {
-                    self.asm_view.event(i, p);
-                    if let Some(src_pos) = self.asm_view.pager.current_line().and_then(|line| line.src_position) {
-                        let _  = self.src_view.show(src_pos.file, src_pos.line, p);
-                    }
-                },
-                CodeWindowMode::Source => {
-                    self.src_view.event(i, p);
-                },
-                CodeWindowMode::Message(_) => {
-                }
-            }
-            None
-        });
-    }
-
     pub fn update_after_event(&mut self, p: ::UpdateParameters) {
         if p.gdb.breakpoints.last_change > self.last_bp_update {
             self.asm_view.update_decoration(p);
@@ -840,6 +816,33 @@ impl<'a> Widget for CodeWindow<'a> {
             &CodeWindowMode::Source => self.src_view.draw(window, hints),
             &CodeWindowMode::Message(ref m) => MsgWindow::new(&m).draw(window, hints),
         }
+    }
+}
+
+impl<'a> Container<::UpdateParametersStruct> for CodeWindow<'a> {
+    fn input(&mut self, input: Input, p: ::UpdateParameters) -> Option<Input> {
+        input.chain(|i: Input| match i.event {
+            Event::Key(Key::Char('d')) => {
+                self.toggle_mode(p);
+                None
+            },
+            _ => Some(i),
+        }).chain(|i: Input| {
+            match self.mode {
+                CodeWindowMode::Assembly | CodeWindowMode::SideBySide => {
+                    self.asm_view.event(i, p);
+                    if let Some(src_pos) = self.asm_view.pager.current_line().and_then(|line| line.src_position) {
+                        let _  = self.src_view.show(src_pos.file, src_pos.line, p);
+                    }
+                },
+                CodeWindowMode::Source => {
+                    self.src_view.event(i, p);
+                },
+                CodeWindowMode::Message(_) => {
+                }
+            }
+            None
+        }).finish()
     }
 }
 

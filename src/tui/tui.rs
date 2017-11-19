@@ -10,13 +10,6 @@ use unsegen::widget::{
     SeparatingStyle,
     VerticalLayout,
 };
-use unsegen::input::{
-    Key,
-    ScrollBehavior,
-};
-use input::{
-    InputEvent,
-};
 use logging::{
     LogMsgType,
 };
@@ -37,9 +30,9 @@ use super::console::Console;
 use super::srcview::CodeWindow;
 use unsegen_terminal::{
     Terminal,
-    PassthroughBehavior,
 };
 use super::expression_table::ExpressionTable;
+use unsegen::container::{Accessor, ContainerProvider};
 
 pub struct Tui<'a> {
     pub console: Console,
@@ -148,44 +141,33 @@ impl<'a> Tui<'a> {
         ]);
     }
 
-    pub fn event(&mut self, event: InputEvent, p: ::UpdateParameters) {
-        let sig_behavior = ::unsegen_signals::SignalBehavior::new().sig_default::<::unsegen_signals::SIGTSTP>();
-        match event {
-            InputEvent::ConsoleEvent(event) => {
-                self.active_window = SubWindow::Console;
-                event.chain(sig_behavior).chain(|event| {
-                    self.console.event(event, p);
-                    None
-                });
-            },
-            InputEvent::PseudoTerminalEvent(event) => {
-                self.active_window = SubWindow::Terminal;
-                event.chain(ScrollBehavior::new(&mut self.process_pty)
-                            .forwards_on(Key::PageDown)
-                            .backwards_on(Key::PageUp))
-                    .chain(PassthroughBehavior::new(&mut self.process_pty));
-            },
-            InputEvent::SourcePagerEvent(event) => {
-                self.active_window = SubWindow::CodeWindow;
-                event.chain(sig_behavior).chain(|event| {
-                    self.src_view.event(event, p);
-                    None
-                });
-            },
-            InputEvent::ExpressionTableEvent(event) => {
-                self.active_window = SubWindow::ExpressionTable;
-                event.chain(sig_behavior).chain(|event| {
-                    self.expression_table.event(event, p);
-                    None
-                });
-            },
-            InputEvent::Quit => {
-                unreachable!("quit should have been caught in main" )
-            }, //TODO this is ugly
-        }
-    }
-
     pub fn update_after_event(&mut self, p: ::UpdateParameters) {
         self.src_view.update_after_event(p);
     }
+}
+
+impl<'a> ContainerProvider for Tui<'a> {
+    type Parameters = ::UpdateParametersStruct;
+    fn get_accessor(identifier: &str) -> Option<Accessor<Self>> {
+        match identifier {
+            "srcview" => Some(Accessor {
+                access: |s| &s.src_view,
+                access_mut: |s| &mut s.src_view,
+            }),
+            "console" => Some(Accessor {
+                access: |s| &s.console,
+                access_mut: |s| &mut s.console,
+            }),
+            "expressiontable" => Some(Accessor {
+                access: |s| &s.expression_table,
+                access_mut: |s| &mut s.expression_table,
+            }),
+            "terminal" => Some(Accessor {
+                access: |s| &s.process_pty,
+                access_mut: |s| &mut s.process_pty,
+            }),
+            _ => None,
+        }
+    }
+    const DEFAULT_CONTAINER: &'static str = "console";
 }

@@ -17,7 +17,9 @@ use unsegen::input::{
     Input,
     OperationResult,
     Scrollable,
+    ScrollBehavior,
     Writable,
+    Key,
 };
 use unsegen::widget::{
     Demand2D,
@@ -36,6 +38,7 @@ use std::ffi::{
 use ansi::{
     Processor,
 };
+use unsegen::container::Container;
 
 use terminalwindow::TerminalWindow;
 
@@ -152,16 +155,6 @@ impl Terminal {
     }
 }
 
-impl Widget for Terminal {
-    fn space_demand(&self) -> Demand2D {
-        self.terminal_window.borrow().space_demand()
-    }
-    fn draw(&self, window: Window, hints: RenderingHints) {
-        self.ensure_size(window.get_width(), window.get_height());
-        self.terminal_window.borrow_mut().draw(window, hints);
-    }
-}
-
 impl Writable for Terminal {
     fn write(&mut self, c: char) -> OperationResult {
         use std::io::Write;
@@ -176,5 +169,27 @@ impl Scrollable for Terminal {
     }
     fn scroll_backwards(&mut self) -> OperationResult {
         self.terminal_window.borrow_mut().scroll_backwards()
+    }
+}
+
+impl Widget for Terminal {
+    fn space_demand(&self) -> Demand2D {
+        self.terminal_window.borrow().space_demand()
+    }
+    fn draw(&self, window: Window, hints: RenderingHints) {
+        self.ensure_size(window.get_width(), window.get_height());
+        self.terminal_window.borrow_mut().draw(window, hints);
+    }
+}
+
+impl<P: ?Sized> Container<P> for Terminal {
+    fn input(&mut self, input: Input, _: &mut P) -> Option<Input> {
+        input
+            .chain(ScrollBehavior::new(self)
+                    .forwards_on(Key::PageDown)
+                    .backwards_on(Key::PageUp))
+            .chain(PassthroughBehavior::new(self))
+            .finish()
+
     }
 }

@@ -30,6 +30,7 @@ use unsegen::input::{
     Key,
     ScrollBehavior,
 };
+use unsegen::container::Container;
 use gdbmi::ExecuteError;
 use gdbmi::input::MiCommand;
 use gdbmi::output::ResultClass;
@@ -112,26 +113,6 @@ impl ExpressionTable {
             table: table,
         }
     }
-    pub fn event(&mut self, event: Input, p: ::UpdateParameters) {
-        event
-            .chain(|i: Input| match i.event {
-                _ => Some(i),
-            })
-            .chain(NavigateBehavior::new(&mut self.table) //TODO: Fix this properly in lineedit
-                 .down_on(Key::Char('\n'))
-                 )
-            .chain(self.table.current_cell_behavior())
-            .chain(NavigateBehavior::new(&mut self.table)
-                 .up_on(Key::Up)
-                 .down_on(Key::Down)
-                 .left_on(Key::Left)
-                 .right_on(Key::Right)
-                 );
-
-        self.shrink_to_fit();
-        self.update_results(p);
-    }
-
     fn shrink_to_fit(&mut self) {
         let begin_of_empty_range = {
             let iter = self.table.rows().iter().enumerate().rev();
@@ -186,5 +167,29 @@ impl Widget for ExpressionTable {
     }
     fn draw(&self, window: Window, hints: RenderingHints) {
         self.table.draw(window, hints);
+    }
+}
+
+impl Container<::UpdateParametersStruct> for ExpressionTable {
+    fn input(&mut self, input: Input, p: ::UpdateParameters) -> Option<Input> {
+        let res = input
+            .chain(|i: Input| match i.event {
+                _ => Some(i),
+            })
+            .chain(NavigateBehavior::new(&mut self.table) //TODO: Fix this properly in lineedit
+                 .down_on(Key::Char('\n'))
+                 )
+            .chain(self.table.current_cell_behavior())
+            .chain(NavigateBehavior::new(&mut self.table)
+                 .up_on(Key::Up)
+                 .down_on(Key::Down)
+                 .left_on(Key::Left)
+                 .right_on(Key::Right)
+                 )
+            .finish();
+
+        self.shrink_to_fit();
+        self.update_results(p);
+        res
     }
 }

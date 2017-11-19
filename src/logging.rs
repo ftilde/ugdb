@@ -16,7 +16,9 @@ impl Logger {
     pub fn log<S: Into<String>>(&mut self, msg_type: LogMsgType, msg: S) {
         self.messages.push((msg_type, msg.into()));
     }
-    pub fn into_messages(self) -> Vec<(LogMsgType, String)> {
-        self.messages
+    pub fn drain_messages(&mut self) -> Vec<(LogMsgType, String)> {
+        let mut alt_buffer = Vec::new();
+        ::std::mem::swap(&mut self.messages, &mut alt_buffer);
+        alt_buffer
     }
 }

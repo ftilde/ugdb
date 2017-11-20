@@ -41,6 +41,7 @@ use syntect::parsing::{
 use gdbmi::output::{
     JsonValue,
     Object,
+    ResultClass,
 };
 use logging::LogMsgType;
 use gdb::{
@@ -300,7 +301,7 @@ impl<'a> AssemblyView<'a> {
         }
     }
 
-    fn show_address(&mut self, address_start: Address, address_end: Address, p: ::UpdateParameters) -> Result<(), () /* Disassembly unsuccessful */> {
+    fn show_address(&mut self, address_start: Address, address_end: Address, p: ::UpdateParameters) -> Result<(), DisassembleError> {
         let line_objs = disassemble_address(address_start, address_end, p)?;
 
         let mut lines = Vec::<AssemblyLine>::new();
@@ -612,16 +613,22 @@ pub struct CodeWindow<'a> {
     last_bp_update: ::std::time::Instant,
 }
 
-fn disassemble_address(address_start: Address, address_end: Address, p: ::UpdateParameters) -> Result<Vec<JsonValue>, ()> {
-    let mut disass_results = match p.gdb.mi.execute(MiCommand::data_disassemble_address(address_start.0, address_end.0, DisassembleMode::DissassemblyOnly)) {
-        Ok(o) => o.results,
-        Err(ExecuteError::Busy) => {
-            // Not many options here
-            return Err(());
-        },
-        Err(ExecuteError::Quit) => {
-            // If GDB has quit the ugdb will shut down soon as well
-            return Err(());
+#[derive(Clone, Debug, PartialEq)]
+enum DisassembleError {
+    Execution(ExecuteError),
+    Other(String),
+}
+
+fn disassemble_address(address_start: Address, address_end: Address, p: ::UpdateParameters) -> Result<Vec<JsonValue>, DisassembleError> {
+    let mut disass_results = match p.gdb.mi.execute(MiCommand::data_disassemble_address(address_start.0, address_end.0, DisassembleMode::DisassemblyOnly)) {
+        Ok(o) => {
+            if o.class == ResultClass::Error {
+                return Err(DisassembleError::Other(o.results["msg"].as_str().unwrap_or("unknown").to_owned()));
+            }
+            o.results
+        }
+        Err(e) => {
+            return Err(DisassembleError::Execution(e));
         },
     };
     if let JsonValue::Array(mut line_objs) = disass_results["asm_insns"].take() {
@@ -630,7 +637,7 @@ fn disassemble_address(address_start: Address, address_end: Address, p: ::Update
 
         Ok(line_objs)
     } else {
-        Err(())
+        panic!("Malformed gdb response, no \"asm_insns\": {:?}", disass_results);
     }
 }
 
@@ -682,7 +689,7 @@ impl<'a> CodeWindow<'a> {
         }
     }
     fn find_function_range(at: Address, p: ::UpdateParameters) -> Result<(Address, Address), ()> {
-        let first_lines = disassemble_address(at, at+16, p)?;
+        let first_lines = disassemble_address(at, at+16, p).map_err(|_| ())?;
         let current = first_lines.first().expect("line at address");
         let asm_debug_location = AssemblyDebugLocation::try_from_value(current).ok_or(())?;
         let begin = at - asm_debug_location.offset;
@@ -690,7 +697,7 @@ impl<'a> CodeWindow<'a> {
         let block_size = 128;
         let mut current = at;
         let func_change_block = loop {
-            let current_block_lines = disassemble_address(current, current+block_size, p)?;
+            let current_block_lines = disassemble_address(current, current+block_size, p).map_err(|_| ())?;
             {
                 let penultimate_index = current_block_lines.len().checked_sub(2).ok_or(())?;
                 let penultimate = current_block_lines.get(penultimate_index).expect("At least two instructions in block");
@@ -713,7 +720,7 @@ impl<'a> CodeWindow<'a> {
         unreachable!("func_change_block has to contain changing line");
     }
     fn find_valid_address_range(at: Address, approx_byte_size: usize, p: ::UpdateParameters) -> Result<(Address, Address), ()> {
-        let block_lines = disassemble_address(at, at+approx_byte_size, p)?;
+        let block_lines = disassemble_address(at, at+approx_byte_size, p).map_err(|_| ())?;
 
         let penultimate_index = block_lines.len().checked_sub(2).ok_or(())?;
         let penultimate = block_lines.get(penultimate_index).ok_or(())?;
@@ -724,7 +731,15 @@ impl<'a> CodeWindow<'a> {
     fn show_from_address(&mut self, frame: &Object, p: ::UpdateParameters) {
         let address = Address::parse(frame["addr"].as_str().expect("Address should always be present")).expect("Parse address");
 
-        let (begin, end) = Self::find_function_range(address, p).unwrap_or_else(|_| Self::find_valid_address_range(address, 128, p).unwrap_or((address, address)));
+        let (begin, end) = {
+            if let Ok(range) = Self::find_function_range(address, p).or_else(|_| Self::find_valid_address_range(address, 128, p)) {
+                range
+            } else {
+                p.logger.log(LogMsgType::Debug, format!("Could not show find function range for address {}", address));
+                return;
+            }
+        };
+                                                                                ;
 
         self.asm_view.set_last_stop_position(address);
 

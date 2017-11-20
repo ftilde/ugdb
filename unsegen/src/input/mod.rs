@@ -150,7 +150,7 @@ impl<'a, S: Scrollable> ScrollBehavior<'a, S> {
 }
 
 impl<'a, S: Scrollable> Behavior for ScrollBehavior<'a, S> {
-    fn input(mut self, input: Input) -> Option<Input> {
+    fn input(self, input: Input) -> Option<Input> {
         if self.forwards_on.contains(&input.event) {
             pass_on_if_err(self.scrollable.scroll_forwards(), input)
         } else if self.backwards_on.contains(&input.event) {
@@ -180,7 +180,7 @@ impl<'a, W: Writable + 'a> WriteBehavior<'a, W> {
 }
 
 impl<'a, W: Writable + 'a> Behavior for WriteBehavior<'a, W> {
-    fn input(mut self, input: Input) -> Option<Input> {
+    fn input(self, input: Input) -> Option<Input> {
         if let Event::Key(Key::Char(c)) = input.event {
             pass_on_if_err(self.writable.write(c), input)
         } else {
@@ -233,7 +233,7 @@ impl<'a, N: Navigatable + 'a> NavigateBehavior<'a, N> {
 }
 
 impl<'a, N: Navigatable + 'a> Behavior for NavigateBehavior<'a, N> {
-    fn input(mut self, input: Input) -> Option<Input> {
+    fn input(self, input: Input) -> Option<Input> {
         if self.up_on.contains(&input.event) {
             pass_on_if_err(self.navigatable.move_up(), input)
         } else if self.down_on.contains(&input.event) {
@@ -313,7 +313,7 @@ impl<'a, E: Editable> EditBehavior<'a, E> {
 }
 
 impl<'a, E: Editable> Behavior for EditBehavior<'a, E> {
-    fn input(mut self, input: Input) -> Option<Input> {
+    fn input(self, input: Input) -> Option<Input> {
         if self.up_on.contains(&input.event) {
             pass_on_if_err(self.editable.move_up(), input)
         } else if self.down_on.contains(&input.event) {

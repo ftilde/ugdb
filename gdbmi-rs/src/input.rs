@@ -12,8 +12,8 @@ pub struct MiCommand {
 }
 
 pub enum DisassembleMode {
-    DissassemblyOnly = 0,
-    DissassemblyWithRawOpcodes = 1,
+    DisassemblyOnly = 0,
+    DisassemblyWithRawOpcodes = 1,
     MixedSourceAndDisassembly = 4,
     MixedSourceAndDisassemblyWithRawOpcodes = 5,
 }

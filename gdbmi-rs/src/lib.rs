@@ -41,7 +41,7 @@ pub trait OutOfBandRecordSink: std::marker::Send {
     fn send(&self, output::OutOfBandRecord);
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum ExecuteError {
     Busy,
     Quit,

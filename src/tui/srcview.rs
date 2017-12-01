@@ -265,7 +265,7 @@ impl<'a> AssemblyView<'a> {
 
     fn show_file<P: AsRef<Path>, L: Into<LineNumber>>(&mut self, file: P, line: L, p: ::UpdateParameters) -> Result<(), () /* Disassembly unsuccessful */> {
         let line_u: usize = line.into().into();
-        let disass_results = match { p.gdb.mi.execute(MiCommand::data_disassemble_file(file, line_u, None, DisassembleMode::MixedSourceAndDisassembly)) } {
+        let disass_results = match { p.gdb.mi.execute(MiCommand::data_disassemble_file(file.as_ref(), line_u, None, DisassembleMode::MixedSourceAndDisassembly)) } {
             Ok(o) => { o.results },
             Err(ExecuteError::Busy) => {
                 // that's okay, we will try again next time. This may occur if the user is
@@ -291,13 +291,18 @@ impl<'a> AssemblyView<'a> {
                     lines.push(AssemblyLine::new(instruction.to_owned(), address, src_pos.clone(), AssemblyDebugLocation::try_from_value(tuple)));
                 }
             }
-            lines.sort_by_key(|l| l.address);
-            self.show_lines(lines, p);
-            Ok(())
+            if lines.is_empty() {
+                p.logger.log(LogMsgType::Debug, format!("Disassembly failed for {:?}:{}", file.as_ref(), line_u));
+                Err(())
+            } else {
+                lines.sort_by_key(|l| l.address);
+                self.show_lines(lines, p);
+                Ok(())
+            }
         } else {
             // Disassembly object is not an array:
             // There may be no asm correspondence for the give file and line.
-            return Err(());
+            Err(())
         }
     }
 
@@ -739,7 +744,6 @@ impl<'a> CodeWindow<'a> {
                 return;
             }
         };
-                                                                                ;
 
         self.asm_view.set_last_stop_position(address);
 

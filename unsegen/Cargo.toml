@@ -11,3 +11,6 @@ syntect = "1.8"
 termion = "1.5"
 unicode-segmentation = "1.0"
 unicode-width = "0.1"
+
+[dev-dependencies]
+rand = "0.4"

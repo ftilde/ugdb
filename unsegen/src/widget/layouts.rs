@@ -35,26 +35,27 @@ impl SeparatingStyle {
 }
 pub fn layout_linearly(mut available_space: u32, separator_width: u32, demands: &[Demand]) -> Box<[u32]>
 {
+    //eprintln!("av {}, sep {}, dem, {:?}", available_space, separator_width, demands);
+
     let mut assigned_spaces = vec![0; demands.len()].into_boxed_slice();
-    let mut num_unfinished = 0;
-    let mut sum_of_unfinished = 0;
+    let mut unfinished = Vec::<usize>::new();
+
     for (i, demand) in demands.iter().enumerate() {
-        let mut unfinished = false;
+        let mut is_unfinished = false;
         if let Some(max_demand) = demand.max {
             if max_demand != demand.min {
-                unfinished = true;
+                is_unfinished = true;
             }
         } else {
-            unfinished = true;
+            is_unfinished = true;
         }
 
         let assigned_space = min(available_space, demand.min);
         available_space -= assigned_space;
         assigned_spaces[i] = assigned_space;
 
-        if unfinished {
-            num_unfinished += 1;
-            sum_of_unfinished += assigned_space;
+        if is_unfinished {
+            unfinished.push(i);
         }
 
         let separator_width = if i == (demands.len()-1) { //Last element does not have a following separator
@@ -67,82 +68,78 @@ pub fn layout_linearly(mut available_space: u32, separator_width: u32, demands: 
             return assigned_spaces;
         }
         available_space -= separator_width;
-        //println!("Step 1: {:?}, {:?} left (unfinished? {})", assigned_spaces, available_space, unfinished);
     }
 
     // equalize remaining
-    {
-        if num_unfinished == 0 {
-            return assigned_spaces;
-        }
-
-        let total_per_widget = (available_space + sum_of_unfinished) / num_unfinished; //Rounded down!
-        if total_per_widget > 0 {
-            for (i, demand) in demands.iter().enumerate() {
-                let additional = if let Some(max_demand) = demand.max {
-                    if assigned_spaces[i] == max_demand {
-                        continue;
-                    }
-                    if total_per_widget < max_demand {
-                        total_per_widget.checked_sub(assigned_spaces[i]).unwrap_or(0)
-                    } else {
-                        num_unfinished -= 1;
-                        max_demand - assigned_spaces[i]
-                    }
-                } else {
-                    total_per_widget.checked_sub(assigned_spaces[i]).unwrap_or(0)
-                };
-                assigned_spaces[i] += additional;
-                available_space -= additional;
-                //println!("Step 2: {:?}, {:?} left ({} total per widget)", assigned_spaces, available_space, total_per_widget);
-            }
-        }
-    }
-
-    // spend rest equally
     loop {
-        if num_unfinished == 0 {
+        unfinished.sort_by(|&i, &j| assigned_spaces[i].cmp(&assigned_spaces[j]));
+        let mut still_unfinished = Vec::<usize>::new();
+
+        if unfinished.is_empty() {
             return assigned_spaces;
         }
 
-        let to_assign_per_widget = available_space / num_unfinished; //Rounded down!
-        if to_assign_per_widget == 0 {
+        let mut planned_to_spend = 0;
+        let mut planned_increased_space = 0;
+        let mut num_equalized = 0;
+        // Plan to equalize "ladder" as far as possible
+        for (i, unfinished_index) in unfinished.iter().enumerate() {
+            let new_space = assigned_spaces[*unfinished_index];
+            let diff = new_space - planned_increased_space; //Sorted, so >= 0
+            let increase_cost = (i as u32) * diff;
+            if planned_to_spend + increase_cost > available_space {
+                break;
+            }
+            num_equalized = i+1;
+            planned_to_spend += increase_cost;
+            planned_increased_space = new_space;
+        }
+        // Plan to distribute the remaining space equally (will be less than the last step on the
+        // ladder!
+        let left_to_spend = available_space - planned_to_spend;
+        let per_widget_increase = left_to_spend / (num_equalized as u32);
+        planned_increased_space += per_widget_increase;
+
+        let min_space = assigned_spaces[unfinished[0]];
+        if min_space == planned_increased_space {
             break;
         }
-        //println!("Starting Step 3: {:?} left, {:?} per widget", available_space, to_assign_per_widget);
+        debug_assert!(min_space < planned_increased_space, "Invalid planned increase");
 
-        for (i, demand) in demands.iter().enumerate() {
-            let additional = if let Some(max_demand) = demand.max {
-                if assigned_spaces[i] == max_demand {
-                    continue;
-                }
-                if assigned_spaces[i] + to_assign_per_widget < max_demand {
-                    to_assign_per_widget
+        // Actually distribute (some of) the remaining space like planned
+        for unfinished_index in unfinished {
+            let assigned_space: &mut u32 = &mut assigned_spaces[unfinished_index];
+            let increase = if let Some(max_demand) = demands[unfinished_index].max {
+                if max_demand > planned_increased_space {
+                    still_unfinished.push(unfinished_index);
+                    planned_increased_space.checked_sub(*assigned_space).unwrap_or(0)
                 } else {
-                    num_unfinished -= 1;
-                    max_demand - assigned_spaces[i]
+                    max_demand - *assigned_space
                 }
             } else {
-                to_assign_per_widget
+                still_unfinished.push(unfinished_index);
+                planned_increased_space.checked_sub(*assigned_space).unwrap_or(0)
             };
-            //println!("Step 3: {:?}, assigning {:?}, {:?} left", assigned_spaces, additional, available_space);
-            assigned_spaces[i] += additional;
-            available_space -= additional;
+            *assigned_space += increase;
+            available_space -= increase;
         }
+
+        unfinished = still_unfinished;
     }
 
-    // now: available_space / num_unfinished < 0!
-    // => at most 1 space left per unfinished
-    for (i, demand) in demands.iter().enumerate() {
+    for unfinished_index in unfinished {
         if available_space == 0 {
             break;
         }
-        if demand.max.is_none() || demand.max.unwrap() > assigned_spaces[i] {
-            assigned_spaces[i] += 1;
-            available_space -= 1;
-        }
-        //println!("Step 4: {:?}, {:?} left", assigned_spaces, available_space);
+        debug_assert!({
+            let demand = demands[unfinished_index];
+            demand.max.is_none() || demand.max.unwrap() > assigned_spaces[unfinished_index]
+        }, "Invalid demand for unfinished");
+
+        assigned_spaces[unfinished_index] += 1;
+        available_space -= 1;
     }
+    debug_assert!(available_space == 0, "Not all space distributed");
 
     assigned_spaces
 }
@@ -259,9 +256,12 @@ impl VerticalLayout {
 
 #[cfg(test)]
 mod test {
+    // for fuzzing tests
+    extern crate rand;
+    use self::rand::Rng;
+
     use base::test::FakeTerminal;
     use super::*;
-
 
     struct FakeWidget {
         space_demand: Demand2D,
@@ -330,6 +330,8 @@ mod test {
         assert_eq_boxed_slices(layout_linearly(10, 0, &[Demand::from_to(2, 4), Demand::exact(2), Demand::exact(3)]),       Box::new([4, 2, 3]), "misc 7");
         assert_eq_boxed_slices(layout_linearly(10, 0, &[Demand::from_to(2, 4), Demand::exact(2), Demand::at_least(4)]),    Box::new([4, 2, 4]), "misc 8");
         assert_eq_boxed_slices(layout_linearly(10, 0, &[Demand::from_to(2, 3), Demand::at_least(2), Demand::at_least(2)]), Box::new([3, 4, 3]), "misc 9");
+
+        assert_eq_boxed_slices(layout_linearly(82, 1, &[Demand::at_least(4), Demand::at_least(51)]), Box::new([30, 51]), "misc 10");
     }
 
     fn aeq_horizontal_layout_space_demand(widgets: Vec<&Widget>, solution: (Demand, Demand)) {
@@ -384,5 +386,34 @@ mod test {
         aeq_vertical_layout_draw((1, 4), vec![&FakeWidget::with_fill_char((Demand::exact(1), Demand::exact(1)), '1'), &FakeWidget::with_fill_char((Demand::exact(1), Demand::at_least(2)), '2')], "1 2 2 2");
         aeq_vertical_layout_draw((2, 4), vec![&FakeWidget::with_fill_char((Demand::exact(1), Demand::exact(1)), '1'), &FakeWidget::with_fill_char((Demand::exact(2), Demand::at_least(2)), '2')], "11 22 22 22");
         aeq_vertical_layout_draw((1, 8), vec![&FakeWidget::with_fill_char((Demand::at_least(2), Demand::at_least(2)), '1'), &FakeWidget::with_fill_char((Demand::at_least(1), Demand::at_least(1)), '2')], "1 1 1 1 2 2 2 2");
+    }
+
+    #[test]
+    fn fuzz_layout_linearly() {
+        let fuzz_iterations = 10000;
+        let max_widgets = 10;
+        let max_space = 1000;
+        let max_separator_size = 5;
+
+        let mut rng = rand::thread_rng();
+        for _ in 0..fuzz_iterations {
+            let mut demands = Vec::new();
+            for _ in 0..max_widgets {
+                let min = rng.gen_range(0, max_space);
+                let max = if rng.gen() {
+                    Some(rng.gen_range(min, max_space))
+                } else {
+                    None
+                };
+                demands.push(Demand {
+                    min: min,
+                    max: max,
+                });
+            }
+
+            let space = rng.gen_range(0, max_space);
+            let separator_size = rng.gen_range(0, max_separator_size);
+            layout_linearly(space, separator_size, demands.as_slice());
+        }
     }
 }

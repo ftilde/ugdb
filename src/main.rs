@@ -47,9 +47,9 @@ use logging::{
 use gdbmi::OutOfBandRecordSink;
 use gdbmi::output::OutOfBandRecord;
 use unsegen::base::Terminal;
-use unsegen::container::{Application, ApplicationBehavior, LayoutNode};
-
+use unsegen::container::{Application, ApplicationBehavior, HSplit, VSplit, Leaf};
 use unsegen::input::{Input};
+use tui::{Tui, TuiContainerType};
 
 
 const EVENT_BUFFER_DURATION_MS: u64 = 10;
@@ -149,17 +149,19 @@ fn main() {
     });
     let stdout = std::io::stdout();
 
-    let left_pane = LayoutNode::VerticalSplit(vec![
-          LayoutNode::Container("srcview".to_owned()),
-          LayoutNode::Container("console".to_owned()),
+    let theme_set = syntect::highlighting::ThemeSet::load_defaults();
+
+    let left_pane = VSplit::new(vec![
+          Box::new(Leaf::new(TuiContainerType::SrcView)),
+          Box::new(Leaf::new(TuiContainerType::Console)),
     ]);
-    let right_pane = LayoutNode::VerticalSplit(vec![
-          LayoutNode::Container("expressiontable".to_owned()),
-          LayoutNode::Container("terminal".to_owned()),
+    let right_pane = VSplit::new(vec![
+          Box::new(Leaf::new(TuiContainerType::ExpressionTable)),
+          Box::new(Leaf::new(TuiContainerType::Terminal)),
     ]);
-    let layout = LayoutNode::HorizontalSplit(vec![
-          left_pane,
-          right_pane,
+    let layout = HSplit::new(vec![
+          Box::new(left_pane),
+          Box::new(right_pane),
     ]);
 
     let mut update_parameters = UpdateParametersStruct {
@@ -169,10 +171,9 @@ fn main() {
 
     {
         let mut terminal = Terminal::new(stdout.lock());
-        let theme_set = syntect::highlighting::ThemeSet::load_defaults();
-        let mut tui = tui::Tui::new(tui_terminal, &theme_set.themes["base16-ocean.dark"]);
+        let mut tui = Tui::new(tui_terminal, &theme_set.themes["base16-ocean.dark"]);
 
-        let mut app = Application::<tui::Tui>::from_layout_tree(layout).expect("Valid layout tree");
+        let mut app = Application::<Tui>::from_layout(Box::new(layout));
 
         tui.draw(terminal.create_root_window());
         terminal.present();
@@ -184,6 +185,7 @@ fn main() {
 
             let mut timer = Timer::new();
             'displayloop: loop {
+                #[allow(unused_mut)] { // Not sure where the unused mut in the chan_select macro is coming from...
                 chan_select! {
                     timer.recv() => {
                         break 'displayloop;
@@ -218,6 +220,7 @@ fn main() {
                         }
                         update_parameters.logger.log(LogMsgType::Debug, format!("received signal {:?}", sig));
                     },
+                }
                 }
                 tui.update_after_event(&mut update_parameters);
                 timer.try_start(Duration::from_millis(EVENT_BUFFER_DURATION_MS));

@@ -32,7 +32,7 @@ use unsegen_terminal::{
     Terminal,
 };
 use super::expression_table::ExpressionTable;
-use unsegen::container::{Accessor, ContainerProvider};
+use unsegen::container::{Container, ContainerProvider};
 
 pub struct Tui<'a> {
     pub console: Console,
@@ -146,28 +146,32 @@ impl<'a> Tui<'a> {
     }
 }
 
-impl<'a> ContainerProvider for Tui<'a> {
+#[derive(Clone)]
+pub enum TuiContainerType {
+    SrcView,
+    Console,
+    ExpressionTable,
+    Terminal,
+}
+
+impl<'t> ContainerProvider for Tui<'t> {
     type Parameters = ::UpdateParametersStruct;
-    fn get_accessor(identifier: &str) -> Option<Accessor<Self>> {
-        match identifier {
-            "srcview" => Some(Accessor {
-                access: |s| &s.src_view,
-                access_mut: |s| &mut s.src_view,
-            }),
-            "console" => Some(Accessor {
-                access: |s| &s.console,
-                access_mut: |s| &mut s.console,
-            }),
-            "expressiontable" => Some(Accessor {
-                access: |s| &s.expression_table,
-                access_mut: |s| &mut s.expression_table,
-            }),
-            "terminal" => Some(Accessor {
-                access: |s| &s.process_pty,
-                access_mut: |s| &mut s.process_pty,
-            }),
-            _ => None,
+    type Index = TuiContainerType;
+    fn get<'a, 'b: 'a>(&'b self, index: &'a Self::Index) -> &'b Container<Self::Parameters> {
+        match index {
+            &TuiContainerType::SrcView => &self.src_view,
+            &TuiContainerType::Console => &self.console,
+            &TuiContainerType::ExpressionTable => &self.expression_table,
+            &TuiContainerType::Terminal => &self.process_pty,
         }
     }
-    const DEFAULT_CONTAINER: &'static str = "console";
+    fn get_mut<'a, 'b: 'a>(&'b mut self, index: &'a Self::Index) -> &'b mut Container<Self::Parameters> {
+        match index {
+            &TuiContainerType::SrcView => &mut self.src_view,
+            &TuiContainerType::Console => &mut self.console,
+            &TuiContainerType::ExpressionTable => &mut self.expression_table,
+            &TuiContainerType::Terminal => &mut self.process_pty,
+        }
+    }
+    const DEFAULT_CONTAINER: TuiContainerType = TuiContainerType::Console;
 }

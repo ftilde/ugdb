@@ -113,6 +113,18 @@ impl<F: FnOnce(Input)->Option<Input>> Behavior for F {
     }
 }
 
+impl<E: ToEvent, F: FnOnce()> Behavior for (E, F) {
+    fn input(self, input: Input) -> Option<Input> {
+        let (event, function) = self;
+        if event.to_event() == input.event {
+            function();
+            None
+        } else {
+            Some(input)
+        }
+    }
+}
+
 pub type OperationResult = Result<(), ()>;
 fn pass_on_if_err(res: OperationResult, input: Input) -> Option<Input> {
     if res.is_err() {

@@ -1,9 +1,17 @@
-use base::{Window};
+pub mod boxdrawing;
+
+use base::{CursorTarget, Window};
 use widget::{Widget, Demand, Demand2D, RenderingHints};
 use widget::layouts::{layout_linearly};
-use input::{Behavior, Input};
-use std::ops::Range;
+use input::{Behavior, Input, Navigatable, OperationResult};
+use std::cell::Cell;
+use std::collections::BTreeMap;
+use std::collections::btree_map;
 use std::convert::From;
+use std::ops::Range;
+use std::cmp::{min, max};
+use self::boxdrawing::{LineSegment, LineType, LineCell};
+
 
 pub trait Container<P: ?Sized> : Widget {
     fn input(&mut self, input: Input, parameters: &mut P) -> Option<Input>;
@@ -11,7 +19,7 @@ pub trait Container<P: ?Sized> : Widget {
 
 pub trait ContainerProvider {
     type Parameters;
-    type Index: Clone;
+    type Index: Clone + PartialEq;
     fn get<'a, 'b: 'a>(&'b self, index: &'a Self::Index) -> &'b Container<Self::Parameters>;
     fn get_mut<'a, 'b: 'a>(&'b mut self, index: &'a Self::Index) -> &'b mut Container<Self::Parameters>;
     const DEFAULT_CONTAINER: Self::Index;
@@ -23,16 +31,6 @@ where C::Parameters: 'c
     app: &'a mut Application<'d, C>,
     provider: &'b mut C,
     parameters: &'c mut C::Parameters,
-}
-
-impl<'a, 'b, 'c, 'd: 'a, C: ContainerProvider + 'a + 'b> ApplicationBehavior<'a, 'b, 'c, 'd, C> {
-    pub fn new(app: &'a mut Application<'d, C>, provider: &'b mut C, parameters: &'c mut C::Parameters) -> Self {
-        ApplicationBehavior {
-            app: app,
-            provider: provider,
-            parameters: parameters,
-        }
-    }
 }
 
 impl<'a, 'b, 'c, 'd: 'a, C: ContainerProvider + 'a + 'b> Behavior for ApplicationBehavior<'a, 'b, 'c, 'd, C> {
@@ -264,9 +262,116 @@ impl<'a, C: ContainerProvider> Layout<C> for VSplit<'a, C> {
     }
 }
 
+pub struct NavigatableApplication<'a, 'b, 'd: 'a, C: ContainerProvider + 'a + 'b> {
+    app: &'a mut Application<'d, C>,
+    provider: &'b mut C,
+}
+
+enum MovementDirection {
+    Up,
+    Down,
+    Left,
+    Right,
+}
+
+impl<'a, 'b, 'd: 'a, C: ContainerProvider + 'a + 'b> NavigatableApplication<'a, 'b, 'd, C> {
+    fn move_to(&mut self, direction: MovementDirection) -> OperationResult {
+        let window_size = self.app.last_window_size.get();
+        let window_rect = Rectangle { x_range: 0..window_size.0, y_range: 0..window_size.1 };
+        let layout_result = self.app.layout.layout(window_rect, self.provider);
+        let (_, active_rect) = layout_result.windows.iter().find(|&&(ref i, _)| { *i == self.app.active }).ok_or(())?.clone();
+        let best = layout_result.windows.iter().filter_map(|&(ref candidate_index, ref candidate_rect)| {
+            if *candidate_index == self.app.active {
+                return None;
+            }
+            let (smaller_adjacent, greater_adjacent, active_range, candidate_range) = match direction {
+                MovementDirection::Up => {
+                    (candidate_rect.y_range.end, active_rect.y_range.start,
+                     active_rect.x_range.clone(), candidate_rect.x_range.clone())
+                },
+                MovementDirection::Down => {
+                    (active_rect.y_range.end, candidate_rect.y_range.start,
+                     active_rect.x_range.clone(), candidate_rect.x_range.clone())
+                },
+                MovementDirection::Left => {
+                    (candidate_rect.x_range.end, active_rect.x_range.start,
+                     active_rect.y_range.clone(), candidate_rect.y_range.clone())
+                },
+                MovementDirection::Right => {
+                    (active_rect.x_range.end, candidate_rect.x_range.start,
+                     active_rect.y_range.clone(), candidate_rect.y_range.clone())
+                },
+            };
+            if smaller_adjacent < greater_adjacent && greater_adjacent - smaller_adjacent == 1 {
+                // Rects are adjacent
+                let overlap = min(active_range.end, candidate_range.end).checked_sub(max(active_range.start, candidate_range.start)).unwrap_or(0);
+                Some((overlap, candidate_index))
+            } else {
+                None
+            }
+        }).max_by_key(|&(overlap, _)| overlap);
+
+        if let Some((_, index)) = best {
+            self.app.active = index.clone();
+            Ok(())
+        } else {
+            Err(())
+        }
+    }
+}
+impl<'a, 'b, 'd: 'a, C: ContainerProvider + 'a + 'b> Navigatable for NavigatableApplication<'a, 'b, 'd, C> {
+    fn move_up(&mut self) -> OperationResult {
+        self.move_to(MovementDirection::Up)
+    }
+    fn move_down(&mut self) -> OperationResult {
+        self.move_to(MovementDirection::Down)
+    }
+    fn move_left(&mut self) -> OperationResult {
+        self.move_to(MovementDirection::Left)
+    }
+    fn move_right(&mut self) -> OperationResult {
+        self.move_to(MovementDirection::Right)
+    }
+}
+
 pub struct Application<'a, C: ContainerProvider> {
     layout: Box<Layout<C> + 'a>,
     active: C::Index,
+    last_window_size: Cell<(u32, u32)>,
+}
+
+struct LineCanvas {
+    cells: BTreeMap<(u32, u32), LineCell>,
+}
+
+impl LineCanvas {
+    fn new() -> Self {
+        LineCanvas {
+            cells: BTreeMap::new(),
+        }
+    }
+
+    fn get_mut(&mut self, x: u32, y: u32) -> &mut LineCell {
+        self.cells.entry((x, y)).or_insert(LineCell::empty())
+    }
+
+    fn into_iter(self) -> LineCanvasIter {
+        LineCanvasIter {
+            iter: self.cells.into_iter()
+        }
+    }
+}
+
+struct LineCanvasIter {
+    iter: btree_map::IntoIter<(u32, u32), LineCell>,
+}
+
+impl Iterator for LineCanvasIter {
+    type Item = (u32, u32, LineCell);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().map(|((x,y),c)| (x,y,c))
+    }
 }
 
 impl<'a, C: ContainerProvider> Application<'a, C> {
@@ -274,6 +379,7 @@ impl<'a, C: ContainerProvider> Application<'a, C> {
         Application {
             layout: layout_root,
             active: C::DEFAULT_CONTAINER.clone(),
+            last_window_size: Cell::new((100, 100)),
         }
     }
 
@@ -281,8 +387,57 @@ impl<'a, C: ContainerProvider> Application<'a, C> {
         let window_rect = Rectangle { x_range: 0..window.get_width(), y_range: 0..window.get_height() };
         let layout_result = self.layout.layout(window_rect, provider);
         for (index, rect) in layout_result.windows {
-            provider.get_mut(&index).draw(window.create_subwindow(rect.x_range, rect.y_range), RenderingHints::default() /* TODO */);
+            provider.get_mut(&index).draw(window.create_subwindow(rect.x_range, rect.y_range), RenderingHints {
+                active: index == self.active,
+                ..Default::default()
+            });
         }
-        //TODO draw lines
+        self.last_window_size.set((window.get_width(), window.get_height()));
+
+        let mut line_canvas = LineCanvas::new();
+        for line in layout_result.separators {
+            match line {
+                Line::Horizontal(HorizontalLine { x, y_range }) => {
+                    for y in y_range {
+                        line_canvas.get_mut(x, y)
+                            .set(LineSegment::North, LineType::Thin)
+                            .set(LineSegment::South, LineType::Thin);
+                    }
+                },
+                Line::Vertical(VerticalLine { x_range, y }) => {
+                    for x in x_range {
+                        line_canvas.get_mut(x, y)
+                            .set(LineSegment::East, LineType::Thin)
+                            .set(LineSegment::West, LineType::Thin);
+                    }
+                },
+            }
+        }
+
+        for (x, y, cell) in line_canvas.into_iter() {
+            let styled_cluster = window.get_cell_mut(x, y).expect("Lines are in window for valid layouts");
+            styled_cluster.grapheme_cluster = cell.to_grapheme_cluster();
+        }
+    }
+
+    pub fn navigatable<'b, 'c>(&'b mut self, provider: &'c mut C) -> NavigatableApplication<'b, 'c, 'a, C>
+    {
+        NavigatableApplication::<C> {
+            app: self,
+            provider: provider,
+        }
+    }
+
+    pub fn active_container_behavior<'b, 'c, 'd>(&'b mut self, provider: &'c mut C, parameters: &'d mut C::Parameters) -> ApplicationBehavior<'b, 'c, 'd, 'a, C>
+    {
+        ApplicationBehavior {
+            app: self,
+            provider: provider,
+            parameters: parameters,
+        }
+    }
+
+    pub fn active(&self) -> C::Index {
+        self.active.clone()
     }
 }

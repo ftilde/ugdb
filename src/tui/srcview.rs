@@ -355,7 +355,7 @@ impl<'a> AssemblyView<'a> {
             }
         }
     }
-    fn event(&mut self, event: Input, p: ::UpdateParameters) {
+    fn event(&mut self, event: Input, p: ::UpdateParameters) -> Option<Input> {
         event.chain(ScrollBehavior::new(&mut self.pager)
                     .forwards_on(Key::PageDown)
                     .forwards_on(Key::Char('j'))
@@ -368,7 +368,7 @@ impl<'a> AssemblyView<'a> {
                     None
                 }
                 e => Some(e)
-            });
+            }).finish()
     }
 }
 
@@ -576,7 +576,7 @@ impl<'a> SourceView<'a> {
         }
     }
 
-    fn event(&mut self, event: Input, p: ::UpdateParameters) {
+    fn event(&mut self, event: Input, p: ::UpdateParameters) -> Option<Input> {
         event.chain(ScrollBehavior::new(&mut self.pager)
                     .forwards_on(Key::PageDown)
                     .forwards_on(Key::Char('j'))
@@ -589,7 +589,7 @@ impl<'a> SourceView<'a> {
                     None
                 }
                 e => Some(e)
-            });
+            }).finish()
     }
 }
 
@@ -830,18 +830,19 @@ impl<'a> Container<::UpdateParametersStruct> for CodeWindow<'a> {
         }).chain(|i: Input| {
             match self.mode {
                 CodeWindowMode::Assembly | CodeWindowMode::SideBySide => {
-                    self.asm_view.event(i, p);
+                    let ret = self.asm_view.event(i, p);
                     if let Some(src_pos) = self.asm_view.pager.current_line().and_then(|line| line.src_position) {
                         let _  = self.src_view.show(src_pos.file, src_pos.line, p);
                     }
+                    ret
                 },
                 CodeWindowMode::Source => {
-                    self.src_view.event(i, p);
+                    self.src_view.event(i, p)
                 },
                 CodeWindowMode::Message(_) => {
+                    Some(i)
                 }
             }
-            None
         }).finish()
     }
 }

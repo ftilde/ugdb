@@ -146,7 +146,7 @@ impl<'a> Tui<'a> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum TuiContainerType {
     SrcView,
     Console,

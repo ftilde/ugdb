@@ -27,7 +27,6 @@ extern crate unicode_width; // For AssemblyLineDecorator
 extern crate syntect;
 
 mod gdb;
-mod input;
 mod ipc;
 mod logging;
 mod tui;
@@ -47,8 +46,8 @@ use logging::{
 use gdbmi::OutOfBandRecordSink;
 use gdbmi::output::OutOfBandRecord;
 use unsegen::base::Terminal;
-use unsegen::container::{Application, ApplicationBehavior, HSplit, VSplit, Leaf};
-use unsegen::input::{Input};
+use unsegen::container::{Application, HSplit, VSplit, Leaf};
+use unsegen::input::{Input, Key, NavigateBehavior};
 use tui::{Tui, TuiContainerType};
 
 
@@ -194,7 +193,19 @@ fn main() {
                         let sig_behavior = ::unsegen_signals::SignalBehavior::new().sig_default::<::unsegen_signals::SIGTSTP>();
                         evt.expect("read keyboard event")
                             .chain(sig_behavior)
-                            .chain(ApplicationBehavior::new(&mut app, &mut tui, &mut update_parameters));
+                            .chain((Key::Esc, || { update_parameters.gdb.kill(); }))
+                            .chain((Key::F(4), || { update_parameters.logger.log(LogMsgType::Debug, format!("{:?}", app.active())); }))
+                            .chain(app.active_container_behavior(&mut tui, &mut update_parameters))
+                            .chain(NavigateBehavior::new(&mut app.navigatable(&mut tui))
+                                   .up_on(Key::Alt('k'))
+                                   .up_on(Key::Up)
+                                   .down_on(Key::Alt('j'))
+                                   .down_on(Key::Down)
+                                   .left_on(Key::Alt('h'))
+                                   .left_on(Key::Left)
+                                   .right_on(Key::Alt('l'))
+                                   .right_on(Key::Right)
+                                   );
                     },
                     oob_source.recv() -> oob_evt => {
                         if let Some(record) = oob_evt {

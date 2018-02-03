@@ -11,11 +11,12 @@ use ndarray::{
     Ix,
     Ix2,
 };
-use std::cmp::max;
+use std::cmp::{max};
 use base::ranges::{
     Bound,
     RangeArgument,
 };
+use base::basic_types::*;
 use std::fmt;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -47,9 +48,9 @@ pub struct WindowBuffer {
 }
 
 impl WindowBuffer {
-    pub fn new(width: u32, height: u32) -> Self {
+    pub fn new(width: Width, height: Height) -> Self {
         WindowBuffer {
-            storage: CharMatrix::default(Ix2(height as usize, width as usize)),
+            storage: CharMatrix::default(Ix2(height.into(), width.into())),
         }
     }
 
@@ -76,7 +77,9 @@ pub struct Window<'w> {
 
 impl<'w> ::std::fmt::Debug for Window<'w> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Window {{ w: {}, h: {} }}", self.get_width(), self.get_height())
+        let w: usize = self.get_width().into();
+        let h: usize = self.get_height().into();
+        write!(f, "Window {{ w: {}, h: {} }}", w, h)
     }
 }
 
@@ -88,12 +91,12 @@ impl<'w> Window<'w> {
         }
     }
 
-    pub fn get_width(&self) -> u32 {
-        self.values.dim().1 as u32
+    pub fn get_width(&self) -> Width {
+        Width::new(self.values.dim().1 as i32).unwrap()
     }
 
-    pub fn get_height(&self) -> u32 {
-        self.values.dim().0 as u32
+    pub fn get_height(&self) -> Height {
+        Height::new(self.values.dim().0 as i32).unwrap()
     }
 
     pub fn clone_mut<'a>(&'a mut self) -> Window<'a> {
@@ -104,42 +107,42 @@ impl<'w> Window<'w> {
         }
     }
 
-    pub fn create_subwindow<'a, WX: RangeArgument<u32>, WY: RangeArgument<u32>>(&'a mut self, x_range: WX, y_range: WY) -> Window<'a> {
+    pub fn create_subwindow<'a, WX: RangeArgument<ColIndex>, WY: RangeArgument<RowIndex>>(&'a mut self, x_range: WX, y_range: WY) -> Window<'a> {
         let x_range_start = match x_range.start() {
-            Bound::Unbound => 0,
+            Bound::Unbound => ColIndex::new(0),
             Bound::Inclusive(i) => i,
             Bound::Exclusive(i) => i-1,
         };
         let x_range_end = match x_range.end() {
-            Bound::Unbound => self.get_width(),
+            Bound::Unbound => self.get_width().from_origin(),
             Bound::Inclusive(i) => i-1,
             Bound::Exclusive(i) => i,
         };
         let y_range_start = match y_range.start() {
-            Bound::Unbound => 0,
+            Bound::Unbound => RowIndex::new(0),
             Bound::Inclusive(i) => i,
             Bound::Exclusive(i) => i-1,
         };
         let y_range_end = match y_range.end() {
-            Bound::Unbound => self.get_height(),
+            Bound::Unbound => self.get_height().from_origin(),
             Bound::Inclusive(i) => i-1,
             Bound::Exclusive(i) => i,
         };
         assert!(x_range_start <= x_range_end, "Invalid x_range: start > end");
         assert!(y_range_start <= y_range_end, "Invalid y_range: start > end");
-        assert!(x_range_end <= self.get_width(), "Invalid x_range: end > width");
-        assert!(y_range_end <= self.get_height(), "Invalid y_range: end > height");
+        assert!(x_range_end <= self.get_width().from_origin(), "Invalid x_range: end > width");
+        assert!(y_range_end <= self.get_height().from_origin(), "Invalid y_range: end > height");
 
-        let sub_mat = self.values.slice_mut(s![y_range_start as isize..y_range_end as isize, x_range_start as isize..x_range_end as isize]);
+        let sub_mat = self.values.slice_mut(s![y_range_start.into()..y_range_end.into(), x_range_start.into()..x_range_end.into()]);
         Window {
             values: sub_mat,
             default_style: self.default_style,
         }
     }
 
-    pub fn split_v(self, split_pos: u32) -> Result<(Self, Self), Self> {
-        if split_pos <= self.get_height() {
-            let (first_mat, second_mat) = self.values.split_at(Axis(0), split_pos as Ix);
+    pub fn split_v(self, split_pos: RowIndex) -> Result<(Self, Self), Self> {
+        if (self.get_height()+Height::new(1).unwrap()).origin_range_contains(split_pos) {
+            let (first_mat, second_mat) = self.values.split_at(Axis(0), split_pos.raw_value() as Ix);
             let w_u = Window {
                 values: first_mat,
                 default_style: self.default_style,
@@ -154,10 +157,9 @@ impl<'w> Window<'w> {
         }
     }
 
-    pub fn split_h(self, split_pos: u32) -> Result<(Self, Self), Self> {
-        if split_pos <= self.get_width() {
-
-            let (first_mat, second_mat) = self.values.split_at(Axis(1), split_pos as Ix);
+    pub fn split_h(self, split_pos: ColIndex) -> Result<(Self, Self), Self> {
+        if (self.get_width()+Width::new(1).unwrap()).origin_range_contains(split_pos) {
+            let (first_mat, second_mat) = self.values.split_at(Axis(1), split_pos.raw_value() as Ix);
             let w_l = Window {
                 values: first_mat,
                 default_style: self.default_style,
@@ -177,9 +179,10 @@ impl<'w> Window<'w> {
         let template = StyledGraphemeCluster::new(c, self.default_style);
         let empty = StyledGraphemeCluster::new(GraphemeCluster::empty(), self.default_style);
         let space = StyledGraphemeCluster::new(GraphemeCluster::space(), self.default_style);
-        let right_border = (self.get_width() - (self.get_width() % cluster_width as u32)) as usize;
+        let w: i32 = self.get_width().into();
+        let right_border = (w - (w % cluster_width as i32)) as usize;
         for ((_, x), cell) in self.values.indexed_iter_mut() {
-            if x >= right_border {
+            if x >= right_border.into() {
                 *cell = space.clone();
             } else if x % cluster_width == 0 {
                 *cell = template.clone();
@@ -207,17 +210,29 @@ impl<'w> Window<'w> {
 }
 
 impl<'a> CursorTarget for Window<'a> {
-    fn get_width(&self) -> u32 {
+    fn get_width(&self) -> Width {
         self.get_width()
     }
-    fn get_height(&self) -> u32 {
+    fn get_height(&self) -> Height {
         self.get_height()
     }
-    fn get_cell_mut(&mut self, x: u32, y: u32) -> Option<&mut StyledGraphemeCluster> {
-        self.values.get_mut((y as usize, x as usize))
+    fn get_cell_mut(&mut self, x: ColIndex, y: RowIndex) -> Option<&mut StyledGraphemeCluster> {
+        if x < 0 || y < 0 {
+            None
+        } else {
+            let x: isize = x.into();
+            let y: isize = y.into();
+            self.values.get_mut((y as usize, x as usize))
+        }
     }
-    fn get_cell(&self, x: u32, y: u32) -> Option<&StyledGraphemeCluster> {
-        self.values.get((y as usize, x as usize))
+    fn get_cell(&self, x: ColIndex, y: RowIndex) -> Option<&StyledGraphemeCluster> {
+        if x < 0 || y < 0 {
+            None
+        } else {
+            let x: isize = x.into();
+            let y: isize = y.into();
+            self.values.get((y as usize, x as usize))
+        }
     }
     fn get_default_style(&self) -> &Style {
         &self.default_style
@@ -228,34 +243,38 @@ impl<'a> CursorTarget for Window<'a> {
 pub struct ExtentEstimationWindow {
     some_value: StyledGraphemeCluster,
     default_style: Style,
-    width: u32,
-    extent_x: u32,
-    extent_y: u32,
+    width: Width,
+    extent_x: Width,
+    extent_y: Height,
 }
 
-pub const UNBOUNDED_EXTENT: u32 = 2147483647;//i32::max_value() as u32;
+//FIXME: compile time evaluation, see https://github.com/rust-lang/rust/issues/24111
+//pub const UNBOUNDED_WIDTH: Width = Width::new(2147483647).unwrap();//i32::max_value() as u32;
+//pub const UNBOUNDED_HEIGHT: Height = Height::new(2147483647).unwrap();//i32::max_value() as u32;
+pub const UNBOUNDED_WIDTH: i32 = 2147483647;//i32::max_value() as u32;
+pub const UNBOUNDED_HEIGHT: i32 = 2147483647;//i32::max_value() as u32;
 
 impl ExtentEstimationWindow {
-    pub fn with_width(width: u32) -> Self {
+    pub fn with_width(width: Width) -> Self {
         let style = Style::default();
         ExtentEstimationWindow {
             some_value: StyledGraphemeCluster::new(GraphemeCluster::space().into(), style),
             default_style: style,
             width: width,
-            extent_x: 0,
-            extent_y: 0,
+            extent_x: Width::new(0).unwrap(),
+            extent_y: Height::new(0).unwrap(),
         }
     }
 
     pub fn unbounded() -> Self {
-        Self::with_width(UNBOUNDED_EXTENT)
+        Self::with_width(Width::new(UNBOUNDED_WIDTH).unwrap())
     }
 
-    pub fn extent_x(&self) -> u32 {
+    pub fn extent_x(&self) -> Width {
         self.extent_x
     }
 
-    pub fn extent_y(&self) -> u32 {
+    pub fn extent_y(&self) -> Height {
         self.extent_y
     }
 
@@ -265,25 +284,25 @@ impl ExtentEstimationWindow {
 }
 
 impl CursorTarget for ExtentEstimationWindow {
-    fn get_width(&self) -> u32 {
+    fn get_width(&self) -> Width {
         self.width
     }
-    fn get_height(&self) -> u32 {
-        UNBOUNDED_EXTENT
+    fn get_height(&self) -> Height {
+        Height::new(UNBOUNDED_HEIGHT).unwrap()
     }
-    fn get_cell_mut(&mut self, x: u32, y: u32) -> Option<&mut StyledGraphemeCluster> {
-        self.extent_x = max(self.extent_x, x+1);
-        self.extent_y = max(self.extent_y, y+1);
+    fn get_cell_mut(&mut self, x: ColIndex, y: RowIndex) -> Option<&mut StyledGraphemeCluster> {
+        self.extent_x = max(self.extent_x, (x.diff_to_origin()+1).positive_or_zero());
+        self.extent_y = max(self.extent_y, (y.diff_to_origin()+1).positive_or_zero());
         self.reset_value();
-        if x < self.width {
+        if x < self.width.from_origin() {
             Some(&mut self.some_value)
         } else {
             None
         }
     }
 
-    fn get_cell(&self, x: u32, _: u32) -> Option<&StyledGraphemeCluster> {
-        if x < self.width {
+    fn get_cell(&self, x: ColIndex, _: RowIndex) -> Option<&StyledGraphemeCluster> {
+        if x < self.width.from_origin() {
             Some(&self.some_value)
         } else {
             None

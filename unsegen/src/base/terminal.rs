@@ -7,6 +7,8 @@ use base::{
     Style,
     Window,
     WindowBuffer,
+    Width,
+    Height,
 };
 use std::io;
 use std::io::{
@@ -32,7 +34,7 @@ pub struct Terminal<'a> {
 impl<'a> Terminal<'a> {
     pub fn new(stdout: StdoutLock<'a>) -> Self {
         let mut term = Terminal {
-            values: WindowBuffer::new(0, 0),
+            values: WindowBuffer::new(Width::new(0).unwrap(), Height::new(0).unwrap()),
             terminal: stdout.into_raw_mode().expect("raw terminal"),
         };
         term.setup_terminal().expect("Setup terminal");
@@ -84,8 +86,8 @@ impl<'a> Terminal<'a> {
 
     pub fn create_root_window(&mut self) -> Window {
         let (x, y) = termion::terminal_size().expect("get terminal size");
-        let x = x as u32;
-        let y = y as u32;
+        let x = Width::new(x as i32).unwrap();
+        let y = Height::new(y as i32).unwrap();
         if x != self.values.as_window().get_width() || y != self.values.as_window().get_height() {
             self.values = WindowBuffer::new(x, y)
         } else {
@@ -133,10 +135,12 @@ impl<'a> Drop for Terminal<'a> {
 
 pub mod test {
     use super::super::{
+        Height,
         Style,
         StyledGraphemeCluster,
         Window,
         WindowBuffer,
+        Width,
         GraphemeCluster,
     };
 
@@ -147,7 +151,7 @@ pub mod test {
     impl FakeTerminal {
         pub fn with_size((w, h): (u32, u32)) -> Self {
             FakeTerminal {
-                values: WindowBuffer::new(w, h)
+                values: WindowBuffer::new(Width::new(w as i32).unwrap(), Height::new(h as i32).unwrap())
             }
         }
 

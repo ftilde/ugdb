@@ -9,6 +9,7 @@ mod ansi;
 mod index;
 mod terminalwindow;
 
+use unsegen::base::basic_types::*;
 use unsegen::base::{
     Window,
 };
@@ -144,13 +145,15 @@ impl Terminal {
         self.master_input_sink.borrow_mut().write_all(i.raw.as_slice()).expect("Write to terminal");
     }
 
-    fn ensure_size(&self, w: u32, h: u32) {
+    fn ensure_size(&self, w: Width, h: Height) {
         let mut window = self.terminal_window.borrow_mut();
         if w != window.get_width() || h != window.get_height() {
             window.set_width(w);
             window.set_height(h);
 
-            self.master_input_sink.borrow_mut().resize(w as u16, h as u16, w as u16 /*??*/, h as u16 /*??*/).expect("Resize pty");
+            let w16 = w.raw_value() as u16;
+            let h16 = w.raw_value() as u16;
+            self.master_input_sink.borrow_mut().resize(w16, h16, w16 /* TODO ??*/, h16 /* TODO ??*/).expect("Resize pty");
         }
     }
 }

@@ -174,9 +174,6 @@ fn main() {
 
         let mut app = Application::<Tui>::from_layout(Box::new(layout));
 
-        tui.draw(terminal.create_root_window());
-        terminal.present();
-
         // Somehow ipc.requests does not work in the chan_select macro...
         let ipc_requests = &mut ipc.requests;
 

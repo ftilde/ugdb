@@ -20,6 +20,7 @@
 use std::cmp::{Ord, Ordering};
 use std::fmt;
 use std::ops::{self, Deref, Add, Range};
+use unsegen::base::basic_types::*;
 
 /// The side of a cell
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -59,6 +60,11 @@ impl Ord for Point {
 /// Newtype to avoid passing values incorrectly
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Default, Ord, PartialOrd)]
 pub struct Line(pub usize);
+impl Into<RowIndex> for Line {
+    fn into(self) -> RowIndex {
+        RowIndex::new(self.0 as i32)
+    }
+}
 
 impl fmt::Display for Line {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -71,6 +77,12 @@ impl fmt::Display for Line {
 /// Newtype to avoid passing values incorrectly
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Default, Ord, PartialOrd)]
 pub struct Column(pub usize);
+
+impl Into<ColIndex> for Column {
+    fn into(self) -> ColIndex {
+        ColIndex::new(self.0 as i32)
+    }
+}
 
 impl fmt::Display for Column {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

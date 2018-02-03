@@ -12,7 +12,7 @@ pub use self::logviewer::*;
 pub use self::pager::*;
 pub use self::table::*;
 
-fn count_grapheme_clusters(text: &str) -> u32 {
+fn count_grapheme_clusters(text: &str) -> usize {
     use ::unicode_segmentation::UnicodeSegmentation;
-    text.graphemes(true).count() as u32
+    text.graphemes(true).count()
 }

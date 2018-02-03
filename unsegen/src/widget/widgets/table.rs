@@ -2,6 +2,7 @@ use base::{
     Window,
     StyleModifier,
 };
+use base::basic_types::*;
 use input::{
     Behavior,
     Input,
@@ -9,8 +10,10 @@ use input::{
     OperationResult,
 };
 use widget::{
+    ColDemand,
     Demand,
     Demand2D,
+    RowDemand,
     SeparatingStyle,
     RenderingHints,
     Widget,
@@ -30,7 +33,7 @@ pub trait TableRow: 'static {
         Self::COLUMNS.len()
     }
 
-    fn height_demand(&self) -> Demand {
+    fn height_demand(&self) -> RowDemand {
         let mut y_demand = Demand::zero();
         for col in Self::COLUMNS.iter() {
             let demand2d = (col.access)(self).space_demand();
@@ -94,7 +97,7 @@ impl<R: TableRow + 'static> Table<R> {
         &self.rows
     }
 
-    fn layout_columns(&self, window: &Window) -> Box<[u32]> {
+    fn layout_columns(&self, window: &Window) -> Box<[Width]> {
         let mut x_demands = vec![Demand::zero(); R::num_columns()];
         for row in self.rows.iter() {
             for (col_num, col) in R::COLUMNS.iter().enumerate() {
@@ -180,7 +183,7 @@ impl<R: TableRow + 'static> Widget for Table<R> {
         }
 
         //Account all separators between cols
-        let x_demand = x_demands.iter().sum::<Demand>() + Demand::exact((x_demands.len() as u32 -1)*self.col_sep_style.width());
+        let x_demand = x_demands.iter().sum::<ColDemand>() + ColDemand::exact((self.col_sep_style.width() * (x_demands.len() as i32 -1)).positive_or_zero());
         Demand2D {
             width: x_demand,
             height: y_demand
@@ -196,7 +199,7 @@ impl<R: TableRow + 'static> Widget for Table<R> {
                 break;
             }
             let height = row.height_demand().min;
-            let (mut row_window, rest_window) = match window.unwrap().split_v(height) {
+            let (mut row_window, rest_window) = match window.unwrap().split_v(height.from_origin()) {
                 Ok((row_window, rest_window)) => (row_window, Some(rest_window)),
                 Err(row_window) => (row_window, None),
             };
@@ -208,7 +211,7 @@ impl<R: TableRow + 'static> Widget for Table<R> {
 
             let mut iter = R::COLUMNS.iter().zip(column_widths.iter()).enumerate().peekable();
             while let Some((col_index, (col, &pos))) = iter.next() {
-                let (mut cell_window, r) = row_window.split_h(pos).expect("valid split pos from layout");
+                let (mut cell_window, r) = row_window.split_h(pos.from_origin()).expect("valid split pos from layout");
                 row_window = r;
 
                 if let (1, &SeparatingStyle::AlternatingStyle(modifier)) = (col_index%2, &self.col_sep_style) {
@@ -229,7 +232,7 @@ impl<R: TableRow + 'static> Widget for Table<R> {
                 (col.access)(row).draw(cell_window, cell_draw_hints);
                 if let (Some(_), &SeparatingStyle::Draw(ref c)) = (iter.peek(), &self.col_sep_style) {
                     if row_window.get_width() > 0 {
-                        let (mut sep_window, r) = row_window.split_h(c.width() as u32).expect("valid split pos from layout");
+                        let (mut sep_window, r) = row_window.split_h(Width::from(c.width()).from_origin()).expect("valid split pos from layout");
                         row_window = r;
                         sep_window.fill(c.clone());
                     }
@@ -239,7 +242,7 @@ impl<R: TableRow + 'static> Widget for Table<R> {
                 if window.is_none() {
                     break;
                 }
-                let (mut sep_window, rest_window) = match window.unwrap().split_v(height) {
+                let (mut sep_window, rest_window) = match window.unwrap().split_v(height.from_origin()) {
                     Ok((row_window, rest_window)) => (row_window, Some(rest_window)),
                     Err(row_window) => (row_window, None),
                 };

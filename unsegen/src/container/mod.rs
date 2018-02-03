@@ -1,7 +1,8 @@
 pub mod boxdrawing;
 
 use base::{CursorTarget, Window};
-use widget::{Widget, Demand, Demand2D, RenderingHints};
+use base::basic_types::*;
+use widget::{Widget, ColDemand, RowDemand, Demand2D, RenderingHints};
 use widget::layouts::{layout_linearly};
 use input::{Behavior, Input, Navigatable, OperationResult};
 use std::cell::Cell;
@@ -44,19 +45,19 @@ impl<'a, 'b, 'c, 'd: 'a, C: ContainerProvider + 'a + 'b> Behavior for Applicatio
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Rectangle {
-    pub x_range: Range<u32>,
-    pub y_range: Range<u32>,
+    pub x_range: Range<ColIndex>,
+    pub y_range: Range<RowIndex>,
 }
 
 impl Rectangle {
-    fn width(&self) -> u32 {
-        self.x_range.end - self.x_range.start
+    fn width(&self) -> Width {
+        (self.x_range.end - self.x_range.start).try_into_positive().expect("range invariant")
     }
-    fn height(&self) -> u32 {
-        self.y_range.end - self.y_range.start
+    fn height(&self) -> Height {
+        (self.y_range.end - self.y_range.start).try_into_positive().expect("range invariant")
     }
 
-    fn slice_range_x(&self, range: Range<u32>) -> Rectangle {
+    fn slice_range_x(&self, range: Range<ColIndex>) -> Rectangle {
         debug_assert!(self.x_range.start <= range.start && range.end <= self.x_range.end, "Invalid slice argument");
         Rectangle {
             x_range: range,
@@ -64,7 +65,7 @@ impl Rectangle {
         }
     }
 
-    fn slice_range_y(&self, range: Range<u32>) -> Rectangle {
+    fn slice_range_y(&self, range: Range<RowIndex>) -> Rectangle {
         debug_assert!(self.y_range.start <= range.start && range.end <= self.y_range.end, "Invalid slice argument");
         Rectangle {
             x_range: self.x_range.clone(),
@@ -72,7 +73,7 @@ impl Rectangle {
         }
     }
 
-    fn slice_line_x(&self, x: u32) -> HorizontalLine {
+    fn slice_line_x(&self, x: ColIndex) -> HorizontalLine {
         debug_assert!(self.x_range.start <= x && x <= self.x_range.end, "Invalid slice argument");
         HorizontalLine {
             x: x,
@@ -80,7 +81,7 @@ impl Rectangle {
         }
     }
 
-    fn slice_line_y(&self, y: u32) -> VerticalLine {
+    fn slice_line_y(&self, y: RowIndex) -> VerticalLine {
         debug_assert!(self.y_range.start <= y && y <= self.y_range.end, "Invalid slice argument");
         VerticalLine {
             x_range: self.x_range.clone(),
@@ -90,13 +91,13 @@ impl Rectangle {
 }
 
 pub struct HorizontalLine {
-    pub x: u32,
-    pub y_range: Range<u32>,
+    pub x: ColIndex,
+    pub y_range: Range<RowIndex>,
 }
 
 pub struct VerticalLine {
-    pub x_range: Range<u32>,
-    pub y: u32,
+    pub x_range: Range<ColIndex>,
+    pub y: RowIndex,
 }
 
 pub enum Line {
@@ -182,29 +183,29 @@ impl<'a, C: ContainerProvider> HSplit<'a, C> {
 
 impl<'a, C: ContainerProvider> Layout<C> for HSplit<'a, C> {
     fn space_demand(&self, containers: &C) -> Demand2D {
-        let mut total_x = Demand::exact(0);
-        let mut total_y = Demand::exact(0);
+        let mut total_x = ColDemand::exact(0);
+        let mut total_y = RowDemand::exact(0);
         for e in self.elms.iter() {
             let demand2d = e.space_demand(containers);
             total_x = total_x + demand2d.width;
             total_y = total_y.max(demand2d.height);
         }
-        total_x = total_x + Demand::exact(self.elms.len().checked_sub(1).unwrap_or(0) as u32);
+        total_x = total_x + ColDemand::exact(self.elms.len().checked_sub(1).unwrap_or(0));
         Demand2D {
             width: total_x,
             height: total_y,
         }
     }
     fn layout(&self, available_area: Rectangle, containers: &C) -> LayoutOutput<C::Index> {
-        let separator_length = 1;
-        let horizontal_demands: Vec<Demand> = self.elms.iter().map(|w| w.space_demand(containers).width).collect();
+        let separator_length = Width::new(1).unwrap();
+        let horizontal_demands: Vec<ColDemand> = self.elms.iter().map(|w| w.space_demand(containers).width).collect();
         let assigned_spaces = layout_linearly(available_area.width(), separator_length, horizontal_demands.as_slice());
         let mut output = LayoutOutput::new();
         let mut p = available_area.x_range.start;
         for (elm, space) in self.elms.iter().zip(assigned_spaces.into_iter()) {
-            let elm_rect = available_area.slice_range_x(p..(p+space));
+            let elm_rect = available_area.slice_range_x(p..(p+*space));
             output.add_child(elm.layout(elm_rect, containers));
-            p += space;
+            p += *space;
 
             if p < available_area.x_range.end {
                 output.separators.push(available_area.slice_line_x(p).into());
@@ -229,29 +230,29 @@ impl<'a, C: ContainerProvider> VSplit<'a, C> {
 
 impl<'a, C: ContainerProvider> Layout<C> for VSplit<'a, C> {
     fn space_demand(&self, containers: &C) -> Demand2D {
-        let mut total_x = Demand::exact(0);
-        let mut total_y = Demand::exact(0);
+        let mut total_x = ColDemand::exact(0);
+        let mut total_y = RowDemand::exact(0);
         for e in self.elms.iter() {
             let demand2d = e.space_demand(containers);
             total_x = total_x.max(demand2d.width);
             total_y = total_y + demand2d.height;
         }
-        total_y = total_y + Demand::exact(self.elms.len().checked_sub(1).unwrap_or(0) as u32);
+        total_y += RowDemand::exact(self.elms.len().checked_sub(1).unwrap_or(0));
         Demand2D {
             width: total_x,
             height: total_y,
         }
     }
     fn layout(&self, available_area: Rectangle, containers: &C) -> LayoutOutput<C::Index> {
-        let separator_length = 1;
-        let vertical_demands: Vec<Demand> = self.elms.iter().map(|w| w.space_demand(containers).height).collect();
+        let separator_length = Height::new(1).unwrap();
+        let vertical_demands: Vec<RowDemand> = self.elms.iter().map(|w| w.space_demand(containers).height).collect();
         let assigned_spaces = layout_linearly(available_area.height(), separator_length, vertical_demands.as_slice());
         let mut output = LayoutOutput::new();
         let mut p = available_area.y_range.start;
         for (elm, space) in self.elms.iter().zip(assigned_spaces.into_iter()) {
-            let elm_rect = available_area.slice_range_y(p..(p+space));
+            let elm_rect = available_area.slice_range_y(p..(p+*space));
             output.add_child(elm.layout(elm_rect, containers));
-            p += space;
+            p += *space;
 
             if p < available_area.y_range.end {
                 output.separators.push(available_area.slice_line_y(p).into());
@@ -274,10 +275,14 @@ enum MovementDirection {
     Right,
 }
 
+fn raw_range<T: AxisDimension>(range: &Range<AxisIndex<T>>) -> Range<i32> {
+    range.start.raw_value() .. range.end.raw_value()
+}
+
 impl<'a, 'b, 'd: 'a, C: ContainerProvider + 'a + 'b> NavigatableApplication<'a, 'b, 'd, C> {
     fn move_to(&mut self, direction: MovementDirection) -> OperationResult {
         let window_size = self.app.last_window_size.get();
-        let window_rect = Rectangle { x_range: 0..window_size.0, y_range: 0..window_size.1 };
+        let window_rect = Rectangle { x_range: 0.into()..window_size.0.from_origin(), y_range: 0.into()..window_size.1.from_origin() };
         let layout_result = self.app.layout.layout(window_rect, self.provider);
         let (_, active_rect) = layout_result.windows.iter().find(|&&(ref i, _)| { *i == self.app.active }).ok_or(())?.clone();
         let best = layout_result.windows.iter().filter_map(|&(ref candidate_index, ref candidate_rect)| {
@@ -286,20 +291,20 @@ impl<'a, 'b, 'd: 'a, C: ContainerProvider + 'a + 'b> NavigatableApplication<'a, 
             }
             let (smaller_adjacent, greater_adjacent, active_range, candidate_range) = match direction {
                 MovementDirection::Up => {
-                    (candidate_rect.y_range.end, active_rect.y_range.start,
-                     active_rect.x_range.clone(), candidate_rect.x_range.clone())
+                    (candidate_rect.y_range.end.raw_value(), active_rect.y_range.start.raw_value(),
+                     raw_range(&active_rect.x_range), raw_range(&candidate_rect.x_range))
                 },
                 MovementDirection::Down => {
-                    (active_rect.y_range.end, candidate_rect.y_range.start,
-                     active_rect.x_range.clone(), candidate_rect.x_range.clone())
+                    (active_rect.y_range.end.raw_value(), candidate_rect.y_range.start.raw_value(),
+                     raw_range(&active_rect.x_range), raw_range(&candidate_rect.x_range))
                 },
                 MovementDirection::Left => {
-                    (candidate_rect.x_range.end, active_rect.x_range.start,
-                     active_rect.y_range.clone(), candidate_rect.y_range.clone())
+                    (candidate_rect.x_range.end.raw_value(), active_rect.x_range.start.raw_value(),
+                     raw_range(&active_rect.y_range), raw_range(&candidate_rect.y_range))
                 },
                 MovementDirection::Right => {
-                    (active_rect.x_range.end, candidate_rect.x_range.start,
-                     active_rect.y_range.clone(), candidate_rect.y_range.clone())
+                    (active_rect.x_range.end.raw_value(), candidate_rect.x_range.start.raw_value(),
+                     raw_range(&active_rect.y_range), raw_range(&candidate_rect.y_range))
                 },
             };
             if smaller_adjacent < greater_adjacent && greater_adjacent - smaller_adjacent == 1 {
@@ -337,11 +342,11 @@ impl<'a, 'b, 'd: 'a, C: ContainerProvider + 'a + 'b> Navigatable for Navigatable
 pub struct Application<'a, C: ContainerProvider> {
     layout: Box<Layout<C> + 'a>,
     active: C::Index,
-    last_window_size: Cell<(u32, u32)>,
+    last_window_size: Cell<(Width, Height)>,
 }
 
 struct LineCanvas {
-    cells: BTreeMap<(u32, u32), LineCell>,
+    cells: BTreeMap<(ColIndex, RowIndex), LineCell>,
 }
 
 impl LineCanvas {
@@ -351,7 +356,7 @@ impl LineCanvas {
         }
     }
 
-    fn get_mut(&mut self, x: u32, y: u32) -> &mut LineCell {
+    fn get_mut(&mut self, x: ColIndex, y: RowIndex) -> &mut LineCell {
         self.cells.entry((x, y)).or_insert(LineCell::empty())
     }
 
@@ -363,11 +368,11 @@ impl LineCanvas {
 }
 
 struct LineCanvasIter {
-    iter: btree_map::IntoIter<(u32, u32), LineCell>,
+    iter: btree_map::IntoIter<(ColIndex, RowIndex), LineCell>,
 }
 
 impl Iterator for LineCanvasIter {
-    type Item = (u32, u32, LineCell);
+    type Item = (ColIndex, RowIndex, LineCell);
 
     fn next(&mut self) -> Option<Self::Item> {
         self.iter.next().map(|((x,y),c)| (x,y,c))
@@ -379,12 +384,12 @@ impl<'a, C: ContainerProvider> Application<'a, C> {
         Application {
             layout: layout_root,
             active: C::DEFAULT_CONTAINER.clone(),
-            last_window_size: Cell::new((100, 100)),
+            last_window_size: Cell::new((Width::new(100).unwrap(), Height::new(100).unwrap())),
         }
     }
 
     pub fn draw(&self, mut window: Window, provider: &mut C) {
-        let window_rect = Rectangle { x_range: 0..window.get_width(), y_range: 0..window.get_height() };
+        let window_rect = Rectangle { x_range: 0.into()..window.get_width().from_origin(), y_range: 0.into()..window.get_height().from_origin() };
         let layout_result = self.layout.layout(window_rect, provider);
         for (index, rect) in layout_result.windows {
             provider.get_mut(&index).draw(window.create_subwindow(rect.x_range, rect.y_range), RenderingHints {
@@ -398,15 +403,17 @@ impl<'a, C: ContainerProvider> Application<'a, C> {
         for line in layout_result.separators {
             match line {
                 Line::Horizontal(HorizontalLine { x, y_range }) => {
-                    for y in y_range {
-                        line_canvas.get_mut(x, y)
+                    // FIXME: Step trait stabilization
+                    for y in y_range.start.raw_value() .. y_range.end.raw_value() {
+                        line_canvas.get_mut(x, RowIndex::new(y))
                             .set(LineSegment::North, LineType::Thin)
                             .set(LineSegment::South, LineType::Thin);
                     }
                 },
                 Line::Vertical(VerticalLine { x_range, y }) => {
-                    for x in x_range {
-                        line_canvas.get_mut(x, y)
+                    // FIXME: Step trait stabilization
+                    for x in x_range.start.raw_value() .. x_range.end.raw_value() {
+                        line_canvas.get_mut(ColIndex::new(x), y)
                             .set(LineSegment::East, LineType::Thin)
                             .set(LineSegment::West, LineType::Thin);
                     }

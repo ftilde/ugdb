@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use unsegen::base::basic_types::*;
 use unsegen::widget::{
     RenderingHints,
 };
@@ -79,7 +80,7 @@ impl DisplayObject {
         result
     }
 
-    fn draw<T: CursorTarget>(&self, cursor: &mut Cursor<T>, path: Option<&ObjectPath>, info: &RenderingInfo, indentation: u16) {
+    fn draw<T: CursorTarget>(&self, cursor: &mut Cursor<T>, path: Option<&ObjectPath>, info: &RenderingInfo, indentation: Width) {
         use ::std::fmt::Write;
         if self.extended {
 
@@ -93,7 +94,7 @@ impl DisplayObject {
             }
             {
                 let mut cursor = cursor.save().line_start_column();
-                cursor.move_line_start_column(indentation as i32);
+                cursor.move_line_start_column(indentation.into());
                 for (key, value) in self.members.iter() {
                     cursor.wrap_line();
                     write!(cursor, "{}: ", key).unwrap();
@@ -182,7 +183,7 @@ impl DisplayArray {
         result
     }
 
-    fn draw<T: CursorTarget>(&self, cursor: &mut Cursor<T>, path: Option<&ArrayPath>, info: &RenderingInfo, indentation: u16) {
+    fn draw<T: CursorTarget>(&self, cursor: &mut Cursor<T>, path: Option<&ArrayPath>, info: &RenderingInfo, indentation: Width) {
         use ::std::fmt::Write;
 
         if self.extended {
@@ -197,7 +198,7 @@ impl DisplayArray {
             }
             {
                 let mut cursor = cursor.save().line_start_column();
-                cursor.move_line_start_column(indentation as i32);
+                cursor.move_line_start_column(indentation.into());
                 for (i, value) in self.values.iter().enumerate().take(self.num_extended) {
                     cursor.wrap_line();
 
@@ -321,7 +322,7 @@ impl DisplayValue {
             &JsonValue::Array(ref val)   => DisplayValue::Array(DisplayArray::from_json(&val)),
         }
     }
-    pub fn draw<T: CursorTarget>(&self, cursor: &mut Cursor<T>, path: Option<&Path>, info: &RenderingInfo, indentation: u16) {
+    pub fn draw<T: CursorTarget>(&self, cursor: &mut Cursor<T>, path: Option<&Path>, info: &RenderingInfo, indentation: Width) {
         match (self, path) {
             (&DisplayValue::Scalar(ref scalar), Some(&Path::Scalar)) => scalar.draw(cursor, true, info),
             (&DisplayValue::Scalar(ref scalar), None) => scalar.draw(cursor, false, info),

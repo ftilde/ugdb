@@ -10,6 +10,7 @@ use base::{
     StyleModifier,
     Window,
 };
+use base::basic_types::*;
 use super::{
     count_grapheme_clusters,
 };
@@ -109,7 +110,7 @@ impl LineEdit {
 impl Widget for LineEdit {
     fn space_demand(&self) -> Demand2D {
         Demand2D {
-            width: Demand::at_least((count_grapheme_clusters(&self.text) + 1) as u32),
+            width: Demand::at_least((count_grapheme_clusters(&self.text) + 1)),
             height: Demand::exact(1), //TODO this is not really universal
         }
     }
@@ -122,7 +123,7 @@ impl Widget for LineEdit {
         };
         let num_graphemes = count_grapheme_clusters(&self.text);
         let right_padding = 1;
-        let cursor_start_pos = ::std::cmp::min(0, window.get_width() as i32 - num_graphemes as i32 - right_padding);
+        let cursor_start_pos = ::std::cmp::min(ColIndex::new(0), (window.get_width() - num_graphemes as i32 - right_padding).from_origin());
 
         let cursor_style = if hints.active {
             self.cursor_style_active
@@ -130,7 +131,7 @@ impl Widget for LineEdit {
             self.cursor_style_inactive
         };
 
-        let mut cursor = Cursor::new(&mut window).position(cursor_start_pos, 0);
+        let mut cursor = Cursor::new(&mut window).position(cursor_start_pos, RowIndex::new(0));
         if let Some(cursor_pos_offset) = maybe_cursor_pos_offset {
             let (until_cursor, from_cursor) = self.text.split_at(cursor_pos_offset);
             cursor.write(until_cursor);

@@ -1,3 +1,4 @@
+use unsegen::base::basic_types::*;
 use unsegen::base::{
     Cursor,
     Color,
@@ -12,6 +13,7 @@ use unsegen::input::{
     ScrollBehavior,
 };
 use unsegen::widget::{
+    ColDemand,
     Demand,
     Demand2D,
     FileLineStorage,
@@ -148,15 +150,15 @@ impl AssemblyDecorator {
 
 impl LineDecorator for AssemblyDecorator {
     type Line = AssemblyLine;
-    fn horizontal_space_demand<'a, 'b: 'a>(&'a self, lines: Box<DoubleEndedIterator<Item=(LineIndex, Self::Line)> + 'b>) -> Demand {
+    fn horizontal_space_demand<'a, 'b: 'a>(&'a self, lines: Box<DoubleEndedIterator<Item=(LineIndex, Self::Line)> + 'b>) -> ColDemand {
         let max_space = lines.last().map(|(_,l)| {
             ::unicode_width::UnicodeWidthStr::width(format!(" 0x{:x} ", l.address.0).as_str())
         }).unwrap_or(0);
-        Demand::from_to(0, max_space as u32)
+        Demand::from_to(0, max_space)
     }
     fn decorate(&self, line: &Self::Line, _: LineIndex, mut window: Window) {
-        let width = window.get_width() as usize;
-        let mut cursor = Cursor::new(&mut window).position(0,0);
+        let width = window.get_width();
+        let mut cursor = Cursor::new(&mut window).position(ColIndex::new(0),RowIndex::new(0));
 
         use std::fmt::Write;
         let at_stop_position = self.stop_position.map(|p| p ==line.address).unwrap_or(false);
@@ -176,9 +178,9 @@ impl LineDecorator for AssemblyDecorator {
 
         if let Some(offset) = line.debug_location.iter().map(|l| l.offset).filter(|&offset| offset != 0).next() {
             let formatted_offset = format!("<+{}>", offset);
-            write!(cursor, "{:>width$}{}", formatted_offset, right_border, width=width-1).unwrap();
+            write!(cursor, "{:>width$}{}", formatted_offset, right_border, width=(width-1).positive_or_zero().into()).unwrap();
         } else {
-            write!(cursor, " 0x{:0>width$x}{}", line.address.0, right_border, width=width - 4).unwrap();
+            write!(cursor, " 0x{:0>width$x}{}", line.address.0, right_border, width=(width-4).positive_or_zero().into()).unwrap();
         }
     }
 }
@@ -406,16 +408,16 @@ impl SourceDecorator {
 
 impl LineDecorator for SourceDecorator {
     type Line = String;
-    fn horizontal_space_demand<'a, 'b: 'a>(&'a self, lines: Box<DoubleEndedIterator<Item=(LineIndex, Self::Line)> + 'b>) -> Demand {
+    fn horizontal_space_demand<'a, 'b: 'a>(&'a self, lines: Box<DoubleEndedIterator<Item=(LineIndex, Self::Line)> + 'b>) -> ColDemand {
         let max_space = lines.last().map(|(i,_)| {
             ::unicode_width::UnicodeWidthStr::width(format!(" {} ", i).as_str())
         }).unwrap_or(0);
-        Demand::from_to(0, max_space as u32)
+        Demand::from_to(0, max_space)
     }
     fn decorate(&self, _: &Self::Line, index: LineIndex, mut window: Window) {
-        let width = window.get_width() as usize - 2;
+        let width = (window.get_width() - 2).positive_or_zero();
         let line_number = LineNumber::from(index);
-        let mut cursor = Cursor::new(&mut window).position(0,0);
+        let mut cursor = Cursor::new(&mut window).position(ColIndex::new(0),RowIndex::new(0));
 
         let at_stop_position = self.stop_position.map(|p| p == index.into()).unwrap_or(false);
         let right_border = if at_stop_position {
@@ -434,7 +436,7 @@ impl LineDecorator for SourceDecorator {
         cursor.set_style_modifier(style_modifier);
 
         use std::fmt::Write;
-        write!(cursor, " {:width$}{}", line_number, right_border, width = width).unwrap();
+        write!(cursor, " {:width$}{}", line_number, right_border, width = width.into()).unwrap();
     }
 }
 
@@ -870,13 +872,13 @@ impl<'a> Widget for MsgWindow<'a> {
         let lines: Vec<_> =  self.msg.lines().collect();
         let num_lines = lines.len();
 
-        let start_line = (window.get_height() as i32 - num_lines as i32) / 2;
-        let window_width = window.get_width() as i32;
+        let start_line = ((window.get_height() - num_lines as i32) / 2).from_origin();
+        let window_width = window.get_width();
 
         let mut c = Cursor::new(&mut window);
         c.set_position_y(start_line);
         for line in lines {
-            let start_x = (window_width - ::unicode_width::UnicodeWidthStr::width(line) as i32) / 2;
+            let start_x = ((window_width - ::unicode_width::UnicodeWidthStr::width(line) as i32) / 2).from_origin();
             c.set_position_x(start_x);
             c.write(line);
             c.wrap_line();

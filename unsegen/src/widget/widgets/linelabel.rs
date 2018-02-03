@@ -1,5 +1,6 @@
 use super::super::{
-    Demand,
+    RowDemand,
+    ColDemand,
     Demand2D,
     RenderingHints,
     Widget,
@@ -30,8 +31,8 @@ impl LineLabel {
 impl Widget for LineLabel {
     fn space_demand(&self) -> Demand2D {
         Demand2D {
-            width: Demand::exact(count_grapheme_clusters(&self.text)),
-            height: Demand::exact(1),
+            width: ColDemand::exact(count_grapheme_clusters(&self.text)),
+            height: RowDemand::exact(1),
         }
     }
     fn draw(&self, mut window: Window, _: RenderingHints) {

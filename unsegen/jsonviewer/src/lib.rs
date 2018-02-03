@@ -13,6 +13,7 @@ use unsegen::widget::{
     RenderingHints,
     Widget,
 };
+use unsegen::base::basic_types::*;
 use unsegen::base::{
     Color,
     Cursor,
@@ -49,7 +50,7 @@ use self::displayvalue::*;
 pub struct JsonViewer {
     value: DisplayValue,
     active_element: Path,
-    indentation: u16,
+    indentation: Width,
     active_focused_style: StyleModifier,
     inactive_focused_style: StyleModifier,
     item_changed_style: StyleModifier,
@@ -60,7 +61,7 @@ impl JsonViewer {
         let mut res = JsonViewer {
             value: DisplayValue::from_json(&value),
             active_element: Path::Scalar, //Will be fixed ...
-            indentation: 2,
+            indentation: Width::new(2).unwrap(),
             active_focused_style: StyleModifier::new().invert(ModifyMode::Toggle).bold(true),
             inactive_focused_style: StyleModifier::new().bold(true),
             item_changed_style: StyleModifier::new().bg_color(Color::Red),

@@ -1,4 +1,5 @@
 use super::super::{
+    ColDemand,
     Demand,
     Demand2D,
     layout_linearly,
@@ -18,6 +19,7 @@ use base::{
     Window,
     WrappingMode,
 };
+use base::basic_types::*;
 use input::{
     Scrollable,
     OperationResult,
@@ -151,7 +153,7 @@ fn to_unsegen_style_modifier(style: &highlighting::Style) -> StyleModifier {
 
 pub trait LineDecorator {
     type Line: PagerLine;
-    fn horizontal_space_demand<'a, 'b: 'a>(&'a self, lines: Box<DoubleEndedIterator<Item=(LineIndex, Self::Line)> + 'b>) -> Demand;
+    fn horizontal_space_demand<'a, 'b: 'a>(&'a self, lines: Box<DoubleEndedIterator<Item=(LineIndex, Self::Line)> + 'b>) -> ColDemand;
     fn decorate(&self, line: &Self::Line, line_index: LineIndex, window: Window);
 }
 
@@ -169,7 +171,7 @@ impl<L> Default for NoDecorator<L> {
 
 impl<L: PagerLine> LineDecorator for NoDecorator<L> {
     type Line = L;
-    fn horizontal_space_demand<'a, 'b: 'a>(&'a self, _: Box<DoubleEndedIterator<Item=(LineIndex, Self::Line)> + 'b>) -> Demand {
+    fn horizontal_space_demand<'a, 'b: 'a>(&'a self, _: Box<DoubleEndedIterator<Item=(LineIndex, Self::Line)> + 'b>) -> ColDemand {
         Demand::exact(0)
     }
     fn decorate(&self, _: &L, _: LineIndex, _: Window) {
@@ -190,19 +192,19 @@ impl<L> Default for LineNumberDecorator<L> {
 
 impl<L: PagerLine> LineDecorator for LineNumberDecorator<L> {
     type Line = L;
-    fn horizontal_space_demand<'a, 'b: 'a>(&'a self, lines: Box<DoubleEndedIterator<Item=(LineIndex, Self::Line)> + 'b>) -> Demand {
+    fn horizontal_space_demand<'a, 'b: 'a>(&'a self, lines: Box<DoubleEndedIterator<Item=(LineIndex, Self::Line)> + 'b>) -> ColDemand {
         let max_space = lines.last().map(|(i,_)| {
             ::unicode_width::UnicodeWidthStr::width(format!(" {} ", i).as_str())
         }).unwrap_or(0);
-        Demand::from_to(0, max_space as u32)
+        Demand::from_to(0, max_space)
     }
     fn decorate(&self, _: &L, index: LineIndex, mut window: Window) {
-        let width = window.get_width() as usize - 2;
+        let width = (window.get_width() - 2).positive_or_zero();
         let line_number = LineNumber::from(index);
-        let mut cursor = Cursor::new(&mut window).position(0,0);
+        let mut cursor = Cursor::new(&mut window).position(ColIndex::new(0), RowIndex::new(0));
 
         use std::fmt::Write;
-        write!(cursor, " {:width$} ", line_number, width = width).unwrap();
+        write!(cursor, " {:width$} ", line_number, width = width.into()).unwrap();
     }
 }
 
@@ -340,20 +342,20 @@ impl<S, H, D> Widget for Pager<S, H, D>
     fn draw(&self, window: Window, _: RenderingHints) {
         if let Some(ref content) = self.content {
             let mut highlighter = content.highlighter.create_instance();
-            let height = window.get_height() as usize;
+            let height: Height = window.get_height();
             // The highlighter might need a minimum number of lines to figure out the syntax:
             // TODO: make this configurable?
             let min_highlight_context = 40;
-            let num_adjacent_lines_to_load = max(height, min_highlight_context/2);
+            let num_adjacent_lines_to_load = max(height.into(), min_highlight_context/2);
             let min_line = self.current_line.checked_sub(num_adjacent_lines_to_load).unwrap_or(LineIndex(0));
             let max_line = self.current_line + num_adjacent_lines_to_load;
 
 
             // Split window
             let decorator_demand = content.decorator.horizontal_space_demand(content.storage.view(min_line..max_line));
-            let split_pos = layout_linearly(window.get_width(), 0, &[decorator_demand, Demand::at_least(1)])[0];
+            let split_pos = layout_linearly(window.get_width(), Width::new(0).unwrap(), &[decorator_demand, Demand::at_least(1)])[0];
 
-            let (mut decoration_window, mut content_window) = window.split_h(split_pos).expect("valid split pos");
+            let (mut decoration_window, mut content_window) = window.split_h(split_pos.from_origin()).expect("valid split pos");
 
             // Fill background with correct color
             let bg_style = highlighter.default_style();
@@ -361,31 +363,31 @@ impl<S, H, D> Widget for Pager<S, H, D>
             content_window.fill(GraphemeCluster::space());
 
             let mut cursor = Cursor::new(&mut content_window)
-                .position(0, 0)
+                .position(ColIndex::new(0), RowIndex::new(0))
                 .wrapping_mode(WrappingMode::Wrap);
 
             let num_line_wraps_until_current_line = {
                 content.storage
                     .view(min_line..self.current_line)
                     .map(|(_,line)| {
-                        cursor.num_expected_wraps(line.get_content()) + 1
+                        (cursor.num_expected_wraps(line.get_content()) + 1) as i32
                     })
-                    .sum::<u32>()
+                    .sum::<i32>()
             };
             let num_line_wraps_from_current_line = {
                 content.storage
                     .view(self.current_line..max_line)
                     .map(|(_,line)| {
-                        cursor.num_expected_wraps(line.get_content()) + 1
+                        (cursor.num_expected_wraps(line.get_content()) + 1) as i32
                     })
-                    .sum::<u32>()
+                    .sum::<i32>()
             };
 
-            let centered_current_line_start_pos = (height/2) as i32;
-            let best_current_line_pos_for_bottom = max(centered_current_line_start_pos, height as i32 - num_line_wraps_from_current_line as i32);
-            let required_start_pos = min(0, best_current_line_pos_for_bottom as i32 - num_line_wraps_until_current_line as i32);
+            let centered_current_line_start_pos: RowIndex = (height/(2 as usize)).from_origin();
+            let best_current_line_pos_for_bottom = max(centered_current_line_start_pos, height.from_origin() - num_line_wraps_from_current_line);
+            let required_start_pos = min(RowIndex::new(0), best_current_line_pos_for_bottom - num_line_wraps_until_current_line);
 
-            cursor.set_position(0, required_start_pos);
+            cursor.set_position(ColIndex::new(0), required_start_pos);
 
             for (line_index, line) in content.storage.view(min_line..max_line) {
                 let base_style = if line_index == self.current_line {
@@ -403,8 +405,8 @@ impl<S, H, D> Widget for Pager<S, H, D>
                 cursor.fill_and_wrap_line();
                 let (_, end_y) = cursor.get_position();
 
-                let range_start_y = min(max(start_y, 0) as u32, height as u32);
-                let range_end_y = min(max(end_y, 0) as u32, height as u32);
+                let range_start_y = min(max(start_y, RowIndex::new(0)), height.from_origin());
+                let range_end_y = min(max(end_y, RowIndex::new(0)), height.from_origin());
                 content.decorator.decorate(&line, line_index, decoration_window.create_subwindow(.., range_start_y..range_end_y));
                 //decoration_window.create_subwindow(.., range_start_y..range_end_y).fill('X');
             }

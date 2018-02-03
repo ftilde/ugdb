@@ -1,15 +1,3 @@
-use unsegen::base::{
-    Color,
-    GraphemeCluster,
-    Style,
-    TextFormat,
-    Window,
-};
-use unsegen::widget::{
-    RenderingHints,
-    SeparatingStyle,
-    VerticalLayout,
-};
 use logging::{
     LogMsgType,
 };
@@ -39,19 +27,6 @@ pub struct Tui<'a> {
     expression_table: ExpressionTable,
     process_pty: Terminal,
     src_view: CodeWindow<'a>,
-
-    left_layout: VerticalLayout,
-    right_layout: VerticalLayout,
-
-    active_window: SubWindow, // This is a temporary solution until container management is implemented
-}
-
-#[derive(PartialEq, Eq)]
-enum SubWindow {
-    Console,
-    CodeWindow,
-    Terminal,
-    ExpressionTable,
 }
 
 const WELCOME_MSG: &'static str = r#"
@@ -71,9 +46,6 @@ impl<'a> Tui<'a> {
             expression_table: ExpressionTable::new(),
             process_pty: terminal,
             src_view: CodeWindow::new(highlighting_theme, WELCOME_MSG),
-            left_layout: VerticalLayout::new(SeparatingStyle::Draw(GraphemeCluster::try_from('=').unwrap())),
-            right_layout: VerticalLayout::new(SeparatingStyle::Draw(GraphemeCluster::try_from('=').unwrap())),
-            active_window: SubWindow::CodeWindow,
         }
     }
 
@@ -110,35 +82,6 @@ impl<'a> Tui<'a> {
 
     pub fn add_pty_input(&mut self, input: Box<[u8]>) {
         self.process_pty.add_byte_input(input);
-    }
-
-    pub fn draw(&mut self, window: Window) {
-        let split_pos = window.get_width()/2-1;
-        let (window_l, rest) = window.split_h(split_pos).expect("Valid split pos guaranteed");
-
-        let (mut separator, window_r) = rest.split_h(2).expect("Valid split size for (not too small) terminals");
-
-        separator.set_default_style(Style::new(Color::Green, Color::Blue, TextFormat{ bold: true, underline: true, invert: false, italic: true }));
-        separator.fill(GraphemeCluster::try_from('山').unwrap());
-
-        let inactive_hints = RenderingHints {
-            active: false,
-            .. Default::default()
-        };
-        let active_hints = RenderingHints {
-            active: true,
-            .. Default::default()
-        };
-
-        self.left_layout.draw(window_l, &[
-                              (&self.src_view, if self.active_window == SubWindow::CodeWindow { active_hints } else { inactive_hints }),
-                              (&self.console, if self.active_window == SubWindow::Console { active_hints } else { inactive_hints }),
-        ]);
-
-        self.right_layout.draw(window_r, &[
-            (&self.expression_table, if self.active_window == SubWindow::ExpressionTable { active_hints } else { inactive_hints }),
-            (&self.process_pty, if self.active_window == SubWindow::Terminal { active_hints } else { inactive_hints }),
-        ]);
     }
 
     pub fn update_after_event(&mut self, p: ::UpdateParameters) {

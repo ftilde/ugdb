@@ -7,6 +7,7 @@ use super::super::{
     RenderingHints,
     Widget,
 };
+use base::basic_types::*;
 use base::{
     Cursor,
     Window,
@@ -45,7 +46,7 @@ impl Widget for LogViewer {
         }
     }
     fn draw(&self, mut window: Window, _: RenderingHints) {
-        let height = window.get_height() as usize;
+        let height = window.get_height();
         if height == 0 {
             return;
         }
@@ -56,15 +57,15 @@ impl Widget for LogViewer {
 
         let y_start = height - 1;
         let mut cursor = Cursor::new(&mut window)
-            .position(0, y_start as i32)
+            .position(ColIndex::new(0), y_start.from_origin())
             .wrapping_mode(WrappingMode::Wrap);
         let end_line = LineIndex(self.current_line());
-        let start_line = LineIndex(end_line.0.checked_sub(height).unwrap_or(0));
+        let start_line = LineIndex(end_line.0.checked_sub(height.into()).unwrap_or(0));
         for (_, line) in self.storage.view(start_line..(end_line+1)).rev() {
             let num_auto_wraps = cursor.num_expected_wraps(&line) as i32;
-            cursor.move_by(0, -num_auto_wraps);
+            cursor.move_by(ColDiff::new(0), RowDiff::new(-num_auto_wraps));
             cursor.writeln(&line);
-            cursor.move_by(0, -num_auto_wraps-2);
+            cursor.move_by(ColDiff::new(0), RowDiff::new(-num_auto_wraps)-2);
         }
     }
 }

@@ -1,3 +1,4 @@
+use unsegen::base::basic_types::*;
 use unsegen::base::{
     Cursor,
     CursorState,
@@ -8,7 +9,8 @@ use unsegen::base::{
     StyledGraphemeCluster,
     Window,
     WrappingMode,
-    UNBOUNDED_EXTENT,
+    UNBOUNDED_WIDTH,
+    UNBOUNDED_HEIGHT,
 };
 use unsegen::base::Color as UColor;
 use unsegen::widget::{
@@ -55,21 +57,32 @@ impl Line {
         self.content.clear();
     }
 
-    fn height_for_width(&self, width: u32) -> u32 {
+    fn height_for_width(&self, width: Width) -> Height {
         //TODO: this might not be correct if there are wide clusters within the content, hmm...
-        self.length().checked_sub(1).unwrap_or(0) as u32 / width + 1
+        if width == 0 {
+            Height::new(1).unwrap()
+        } else {
+            Height::new(self.length().checked_sub(1).unwrap_or(0) as i32 / width.raw_value() + 1).unwrap()
+        }
     }
 
-    fn get_cell_mut(&mut self, x: u32) -> Option<&mut StyledGraphemeCluster> {
+    fn get_cell_mut(&mut self, x: ColIndex) -> Option<&mut StyledGraphemeCluster> {
+        if x < 0 {
+            return None
+        }
+        let x = x.raw_value() as usize;
         // Grow horizontally to desired position
-        let missing_elements = (x as usize+ 1).checked_sub(self.content.len()).unwrap_or(0);
+        let missing_elements = (x + 1).checked_sub(self.content.len()).unwrap_or(0);
         self.content.extend(::std::iter::repeat(StyledGraphemeCluster::default()).take(missing_elements));
 
-        let element = self.content.get_mut(x as usize).expect("element existent assured previously");
+        let element = self.content.get_mut(x).expect("element existent assured previously");
         Some(element)
     }
 
-    fn get_cell(&self, x: u32) -> Option<&StyledGraphemeCluster> {
+    fn get_cell(&self, x: ColIndex) -> Option<&StyledGraphemeCluster> {
+        if x < 0 {
+            return None
+        }
         /*
         //TODO: maybe we want to grow? problems with mutability...
         // Grow horizontally to desired position
@@ -77,54 +90,58 @@ impl Line {
         self.content.extend(::std::iter::repeat(StyledGraphemeCluster::default()).take(missing_elements));
         */
 
-        let element = self.content.get(x as usize).expect("element existent assured previously");
+        let element = self.content.get(x.raw_value() as usize).expect("element existent assured previously");
         Some(element)
     }
 }
 
 struct LineBuffer {
     lines: Vec<Line>,
-    window_width: u32,
+    window_width: Width,
     default_style: Style,
 }
 impl LineBuffer {
     pub fn new() -> Self {
         LineBuffer {
             lines: Vec::new(),
-            window_width: 0,
+            window_width: Width::new(0).unwrap(),
             default_style: Style::default(),
         }
     }
 
-    fn height_as_displayed(&self) -> u32 {
+    fn height_as_displayed(&self) -> Height {
         self.lines.iter().map(|l| l.height_for_width(self.window_width)).sum()
     }
 
-    pub fn set_window_width(&mut self, w: u32) {
+    pub fn set_window_width(&mut self, w: Width) {
         self.window_width = w;
     }
 }
 
 impl CursorTarget for LineBuffer {
-    fn get_width(&self) -> u32 {
-        UNBOUNDED_EXTENT
+    fn get_width(&self) -> Width {
+        Width::new(UNBOUNDED_WIDTH).unwrap()
     }
-    fn get_soft_width(&self) -> u32 {
+    fn get_soft_width(&self) -> Width {
         self.window_width
     }
-    fn get_height(&self) -> u32 {
-        UNBOUNDED_EXTENT
+    fn get_height(&self) -> Height {
+        Height::new(UNBOUNDED_HEIGHT).unwrap()
     }
-    fn get_cell_mut(&mut self, x: u32, y: u32) -> Option<&mut StyledGraphemeCluster> {
+    fn get_cell_mut(&mut self, x: ColIndex, y: RowIndex) -> Option<&mut StyledGraphemeCluster> {
+        if y < 0 {
+            return None
+        }
+        let y = y.raw_value() as usize;
         // Grow vertically to desired position
-        let missing_elements = (y as usize + 1).checked_sub(self.lines.len()).unwrap_or(0);
+        let missing_elements = (y+1).checked_sub(self.lines.len()).unwrap_or(0);
         self.lines.extend(::std::iter::repeat(Line::empty()).take(missing_elements));
 
-        let line = self.lines.get_mut(y as usize).expect("line existence assured previously");
+        let line = self.lines.get_mut(y).expect("line existence assured previously");
 
         line.get_cell_mut(x)
     }
-    fn get_cell(&self, x: u32, y: u32) -> Option<&StyledGraphemeCluster> {
+    fn get_cell(&self, x: ColIndex, y: RowIndex) -> Option<&StyledGraphemeCluster> {
         /*
         //TODO: maybe we want to grow? problems with mutability...
         // Grow vertically to desired position
@@ -132,7 +149,11 @@ impl CursorTarget for LineBuffer {
         self.lines.extend(::std::iter::repeat(Line::empty()).take(missing_elements));
         */
 
-        let line = self.lines.get(y as usize).expect("line existence assured previously");
+        if y < 0 {
+            return None;
+        }
+
+        let line = self.lines.get(y.raw_value() as usize).expect("line existence assured previously");
 
         line.get_cell(x)
     }
@@ -142,12 +163,12 @@ impl CursorTarget for LineBuffer {
 }
 
 pub struct TerminalWindow {
-    window_width: u32,
-    window_height: u32,
+    window_width: Width,
+    window_height: Height,
     buffer: LineBuffer,
     cursor_state: CursorState,
-    scrollback_position: Option<u32>,
-    scroll_step: u32,
+    scrollback_position: Option<RowIndex>,
+    scroll_step: Height,
 
     // Terminal state
     show_cursor: bool,
@@ -156,36 +177,36 @@ pub struct TerminalWindow {
 impl TerminalWindow {
     pub fn new() -> Self {
         TerminalWindow  {
-            window_width: 0,
-            window_height: 0,
+            window_width: Width::new(0).unwrap(),
+            window_height: Height::new(0).unwrap(),
             buffer: LineBuffer::new(),
             cursor_state: CursorState::default(),
             scrollback_position: None,
-            scroll_step: 1,
+            scroll_step: Height::new(1).unwrap(),
 
             show_cursor: true,
         }
     }
 
     // position of the first (displayed) row of the buffer that will NOT be displayed
-    fn current_scrollback_pos(&self) -> u32 {
-        self.scrollback_position.unwrap_or(self.buffer.height_as_displayed())
+    fn current_scrollback_pos(&self) -> RowIndex {
+        self.scrollback_position.unwrap_or(self.buffer.height_as_displayed().from_origin())
     }
 
-    pub fn set_width(&mut self, w: u32) {
+    pub fn set_width(&mut self, w: Width) {
         self.window_width = w;
         self.buffer.set_window_width(w);
     }
 
-    pub fn set_height(&mut self, h: u32) {
+    pub fn set_height(&mut self, h: Height) {
         self.window_height = h;
     }
 
-    pub fn get_width(&self) -> u32 {
+    pub fn get_width(&self) -> Width {
         self.window_width
     }
 
-    pub fn get_height(&self) -> u32 {
+    pub fn get_height(&self) -> Height {
         self.window_height
     }
 
@@ -197,18 +218,18 @@ impl TerminalWindow {
         self.cursor_state = cursor.into_state();
     }
 
-    fn line_to_buffer_pos_y(&self, line: index::Line) -> i32 {
-        max(0, self.buffer.lines.len() as i32 - self.window_height as i32) + line.0 as i32
+    fn line_to_buffer_pos_y(&self, line: index::Line) -> RowIndex {
+        RowIndex::new(max(0, self.buffer.lines.len() as i32 - self.window_height.raw_value()) + line.0 as i32)
     }
-    fn col_to_buffer_pos_x(&self, col: index::Column) -> i32 {
-        col.0 as i32
+    fn col_to_buffer_pos_x(&self, col: index::Column) -> ColIndex {
+        ColIndex::new(col.0 as i32)
     }
 
     pub fn space_demand(&self) -> Demand2D {
         // at_least => We can grow if there is space
         Demand2D {
-            width: Demand::at_least(self.window_width as u32),
-            height: Demand::at_least(self.window_height as u32),
+            width: Demand::at_least(self.window_width),
+            height: Demand::at_least(self.window_height),
         }
     }
 
@@ -229,13 +250,13 @@ impl TerminalWindow {
             return;
         }
 
-        let scrollback_offset = (self.buffer.height_as_displayed() - self.current_scrollback_pos()) as i32;
-        let minimum_y_start = height as i32 + scrollback_offset;
-        let start_line = self.buffer.lines.len().checked_sub(minimum_y_start as usize).unwrap_or(0);
+        let scrollback_offset = -(self.current_scrollback_pos() - self.buffer.height_as_displayed());
+        let minimum_y_start = scrollback_offset + height;
+        let start_line = self.buffer.lines.len().checked_sub(minimum_y_start.raw_value() as usize).unwrap_or(0);
         let line_range = start_line..;
-        let y_start = min(0, minimum_y_start - self.buffer.lines[line_range.clone()].iter().map(|line| line.height_for_width(width)).sum::<u32>() as i32);
+        let y_start: RowIndex = min(RowIndex::new(0), minimum_y_start - self.buffer.lines[line_range.clone()].iter().map(|line| line.height_for_width(width)).sum::<Height>());
         let mut cursor = Cursor::new(&mut window)
-            .position(0, y_start as i32)
+            .position(ColIndex::new(0), y_start)
             .wrapping_mode(WrappingMode::Wrap);
         for line in self.buffer.lines[line_range].iter() {
             cursor.write_preformatted(line.content.as_slice());
@@ -381,7 +402,7 @@ impl Handler for TerminalWindow {
     /// Move cursor up `rows`
     fn move_up(&mut self, line: index::Line) {
         self.with_cursor(|cursor| {
-            cursor.move_by(0, -(line.0 as i32));
+            cursor.move_by(ColDiff::new(0), RowDiff::new(-(line.0 as i32)));
         });
         trace_ansi!("move_up");
     }
@@ -389,7 +410,7 @@ impl Handler for TerminalWindow {
     /// Move cursor down `rows`
     fn move_down(&mut self, line: index::Line) {
         self.with_cursor(|cursor| {
-            cursor.move_by(0, line.0 as i32);
+            cursor.move_by(ColDiff::new(0), RowDiff::new(line.0 as i32));
         });
         trace_ansi!("move_down");
     }
@@ -472,7 +493,7 @@ impl Handler for TerminalWindow {
             // Slight hack:
             // Write something into the new line to force the buffer to update it's size.
             cursor.write("\n ");
-            cursor.move_by(-1, 0);
+            cursor.move_by(ColDiff::new(-1), RowDiff::new(0));
         });
         trace_ansi!("linefeed");
     }
@@ -591,7 +612,7 @@ impl Handler for TerminalWindow {
                 trace_ansi!("clear_screen below");
                 let mut range_start = 0;
                 self.with_cursor(|cursor| {
-                    range_start = max(0, cursor.get_pos_y()+1) as usize
+                    range_start = max(0, cursor.get_pos_y().raw_value()+1) as usize
                 });
 
                 self.clear_line(ansi::LineClearMode::Right);
@@ -601,14 +622,14 @@ impl Handler for TerminalWindow {
                 trace_ansi!("clear_screen above");
                 let mut range_end = ::std::usize::MAX;
                 self.with_cursor(|cursor| {
-                    range_end = max(0, cursor.get_pos_y()) as usize
+                    range_end = max(0, cursor.get_pos_y().raw_value()) as usize
                 });
                 self.clear_line(ansi::LineClearMode::Left);
-                self.buffer.lines.len().checked_sub(self.window_height as usize).unwrap_or(0) .. range_end
+                self.buffer.lines.len().checked_sub(self.window_height.into()).unwrap_or(0) .. range_end
             },
             ansi::ClearMode::All => {
                 trace_ansi!("clear_screen all");
-                self.buffer.lines.len().checked_sub(self.window_height as usize).unwrap_or(0) .. self.buffer.lines.len()
+                self.buffer.lines.len().checked_sub(self.window_height.into()).unwrap_or(0) .. self.buffer.lines.len()
             },
             ansi::ClearMode::Saved => {
                 warn_unimplemented!("clear_screen saved");
@@ -744,10 +765,10 @@ impl Handler for TerminalWindow {
 
 impl TermInfo for TerminalWindow {
     fn lines(&self) -> index::Line {
-        index::Line(self.get_height() as usize) //TODO: is this even correct? do we want 'unbounded'?
+        index::Line(self.get_height().raw_value() as usize) //TODO: is this even correct? do we want 'unbounded'?
     }
     fn cols(&self) -> index::Column {
-        index::Column(self.get_width() as usize) //TODO: see above
+        index::Column(self.get_width().raw_value() as usize) //TODO: see above
     }
 }
 
@@ -755,7 +776,7 @@ impl Scrollable for TerminalWindow {
     fn scroll_forwards(&mut self) -> OperationResult {
         let current = self.current_scrollback_pos();
         let candidate = current + self.scroll_step;
-        self.scrollback_position = if candidate < self.buffer.height_as_displayed() {
+        self.scrollback_position = if candidate < self.buffer.height_as_displayed().from_origin() {
             Some(candidate)
         } else {
             None
@@ -768,8 +789,8 @@ impl Scrollable for TerminalWindow {
     }
     fn scroll_backwards(&mut self) -> OperationResult {
         let current = self.current_scrollback_pos();
-        if current > self.window_height {
-            self.scrollback_position = Some(current.checked_sub(self.scroll_step).unwrap_or(0));
+        if current > self.window_height.from_origin() {
+            self.scrollback_position = Some((current - self.scroll_step).positive_or_zero());
             Ok(())
         } else {
             Err(())
@@ -799,6 +820,7 @@ mod test {
             let mut window = term.create_root_window();
             window.fill(GraphemeCluster::try_from('_').unwrap());
             let mut tw = TerminalWindow::new();
+            tw.show_cursor = false;
             action(&mut tw);
             tw.draw(window, RenderingHints::default());
         }

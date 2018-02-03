@@ -1,6 +1,6 @@
 use base::GraphemeCluster;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum LineSegment {
     North,
     South,
@@ -17,6 +17,8 @@ impl LineSegment {
         }
     }
 }
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum LineType {
     None,
     Thin,

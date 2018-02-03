@@ -88,6 +88,25 @@ impl Rectangle {
             y: y,
         }
     }
+
+    fn is_near_border(&self, x: ColIndex, y: RowIndex, dir: LineSegment) -> bool {
+        let x_l = self.x_range.start-1;
+        let x_r = self.x_range.end;
+        let y_l = self.y_range.start-1;
+        let y_r = self.y_range.end;
+
+        let west = x_l == x;
+        let east = x_r == x;
+        let north = y_l == y;
+        let south = y_r == y;
+        if east && dir == LineSegment::East || west && dir == LineSegment::West
+            || north && dir == LineSegment::North || south && dir == LineSegment::South {
+
+            false
+        } else {
+            (east || west) && (y_l <= y && y <= y_r) || (north || south) && (x_l <= x && x <= x_r)
+        }
+    }
 }
 
 pub struct HorizontalLine {
@@ -127,7 +146,7 @@ pub struct LayoutOutput<I: Clone> {
     pub separators: Vec<Line>,
 }
 
-impl<I: Clone> LayoutOutput<I> {
+impl<I: Clone + PartialEq> LayoutOutput<I> {
     fn new() -> Self {
         LayoutOutput {
             windows: Vec::new(),
@@ -143,6 +162,10 @@ impl<I: Clone> LayoutOutput<I> {
             //self.separators.push(region.transform_to_outside_line(separator));
             self.separators.push(separator);
         }
+    }
+
+    fn get_rect_with_index(&self, index: I) -> Option<Rectangle> {
+        self.windows.iter().find(|&&(ref i, _)| { *i == index }).map(|&(_, ref w)| w.clone())
     }
 }
 
@@ -284,7 +307,7 @@ impl<'a, 'b, 'd: 'a, C: ContainerProvider + 'a + 'b> NavigatableApplication<'a, 
         let window_size = self.app.last_window_size.get();
         let window_rect = Rectangle { x_range: 0.into()..window_size.0.from_origin(), y_range: 0.into()..window_size.1.from_origin() };
         let layout_result = self.app.layout.layout(window_rect, self.provider);
-        let (_, active_rect) = layout_result.windows.iter().find(|&&(ref i, _)| { *i == self.app.active }).ok_or(())?.clone();
+        let active_rect = layout_result.get_rect_with_index(self.app.active.clone()).ok_or(())?;
         let best = layout_result.windows.iter().filter_map(|&(ref candidate_index, ref candidate_rect)| {
             if *candidate_index == self.app.active {
                 return None;
@@ -389,41 +412,68 @@ impl<'a, C: ContainerProvider> Application<'a, C> {
     }
 
     pub fn draw(&self, mut window: Window, provider: &mut C) {
+        self.last_window_size.set((window.get_width(), window.get_height()));
+
         let window_rect = Rectangle { x_range: 0.into()..window.get_width().from_origin(), y_range: 0.into()..window.get_height().from_origin() };
+
         let layout_result = self.layout.layout(window_rect, provider);
+        let active_rect = layout_result.get_rect_with_index(self.active.clone());
+
         for (index, rect) in layout_result.windows {
             provider.get_mut(&index).draw(window.create_subwindow(rect.x_range, rect.y_range), RenderingHints {
                 active: index == self.active,
                 ..Default::default()
             });
         }
-        self.last_window_size.set((window.get_width(), window.get_height()));
+
+        let get_line_type = |x, y, s| {
+            if let &Some(ref active_rect) = &active_rect {
+                if active_rect.is_near_border(x, y, s) {
+                    LineType::Thick
+                } else {
+                    LineType::Thin
+                }
+            } else {
+                LineType::Thin
+            }
+        };
 
         let mut line_canvas = LineCanvas::new();
         for line in layout_result.separators {
             match line {
                 Line::Horizontal(HorizontalLine { x, y_range }) => {
+                    line_canvas.get_mut(x, y_range.start-1)
+                        .set(LineSegment::South, get_line_type(x, y_range.start-1, LineSegment::South));
                     // FIXME: Step trait stabilization
                     for y in y_range.start.raw_value() .. y_range.end.raw_value() {
-                        line_canvas.get_mut(x, RowIndex::new(y))
-                            .set(LineSegment::North, LineType::Thin)
-                            .set(LineSegment::South, LineType::Thin);
+                        let y = RowIndex::new(y);
+                        line_canvas.get_mut(x, y)
+                            .set(LineSegment::North, get_line_type(x, y, LineSegment::North))
+                            .set(LineSegment::South, get_line_type(x, y, LineSegment::South));
                     }
+                    line_canvas.get_mut(x, y_range.end)
+                        .set(LineSegment::North, get_line_type(x, y_range.end, LineSegment::North));
                 },
                 Line::Vertical(VerticalLine { x_range, y }) => {
+                    line_canvas.get_mut(x_range.start-1, y)
+                        .set(LineSegment::East, get_line_type(x_range.start-1, y, LineSegment::East));
                     // FIXME: Step trait stabilization
                     for x in x_range.start.raw_value() .. x_range.end.raw_value() {
-                        line_canvas.get_mut(ColIndex::new(x), y)
-                            .set(LineSegment::East, LineType::Thin)
-                            .set(LineSegment::West, LineType::Thin);
+                        let x = ColIndex::new(x);
+                        line_canvas.get_mut(x, y)
+                            .set(LineSegment::East, get_line_type(x, y, LineSegment::East))
+                            .set(LineSegment::West, get_line_type(x, y, LineSegment::West));
                     }
+                    line_canvas.get_mut(x_range.end, y)
+                        .set(LineSegment::West, get_line_type(x_range.end, y, LineSegment::West));
                 },
             }
         }
 
         for (x, y, cell) in line_canvas.into_iter() {
-            let styled_cluster = window.get_cell_mut(x, y).expect("Lines are in window for valid layouts");
-            styled_cluster.grapheme_cluster = cell.to_grapheme_cluster();
+            if let Some(styled_cluster) = window.get_cell_mut(x, y) {
+                styled_cluster.grapheme_cluster = cell.to_grapheme_cluster();
+            }
         }
     }
 

@@ -1,6 +1,5 @@
-Add Container management:
- - Top level layouting as a tree of containers (cf. i3)
- - Different kinds of containers (hsplit, vsplit, widget (or extension), grid?
+Improve Container management:
+ - More layouts, center tile (large) with smaller tiles around it
  - Configurable by layout file (yaml), use serde
 
 Add MemoryViewer:

@@ -139,8 +139,6 @@ impl Terminal {
     }
 
     pub fn process_input(&mut self, i: Input) {
-        //TODO: implement more keys. Actually, we probably want to pass on the raw input bytes from
-        //termion to the sink. This requires work on the termion side...
         use std::io::Write;
         self.master_input_sink.borrow_mut().write_all(i.raw.as_slice()).expect("Write to terminal");
     }

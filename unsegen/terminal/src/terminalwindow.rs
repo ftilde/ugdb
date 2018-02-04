@@ -227,9 +227,11 @@ impl TerminalWindow {
 
     pub fn space_demand(&self) -> Demand2D {
         // at_least => We can grow if there is space
+        // However, we also don't ask for the complete width/height of the terminal in order to
+        // avoid hogging space when the window size is reduced.
         Demand2D {
-            width: Demand::at_least(self.window_width),
-            height: Demand::at_least(self.window_height),
+            width: Demand::at_least(1),
+            height: Demand::at_least(1),
         }
     }
 

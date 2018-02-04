@@ -1,6 +1,6 @@
 pub mod boxdrawing;
 
-use base::{CursorTarget, Window};
+use base::{CursorTarget, StyleModifier, Window};
 use base::basic_types::*;
 use widget::{Widget, ColDemand, RowDemand, Demand2D, RenderingHints};
 use widget::layouts::{layout_linearly};
@@ -411,7 +411,7 @@ impl<'a, C: ContainerProvider> Application<'a, C> {
         }
     }
 
-    pub fn draw(&self, mut window: Window, provider: &mut C) {
+    pub fn draw(&self, mut window: Window, provider: &mut C, border_style: StyleModifier) {
         self.last_window_size.set((window.get_width(), window.get_height()));
 
         let window_rect = Rectangle { x_range: 0.into()..window.get_width().from_origin(), y_range: 0.into()..window.get_height().from_origin() };
@@ -473,6 +473,7 @@ impl<'a, C: ContainerProvider> Application<'a, C> {
         for (x, y, cell) in line_canvas.into_iter() {
             if let Some(styled_cluster) = window.get_cell_mut(x, y) {
                 styled_cluster.grapheme_cluster = cell.to_grapheme_cluster();
+                border_style.modify(&mut styled_cluster.style);
             }
         }
     }
@@ -496,5 +497,9 @@ impl<'a, C: ContainerProvider> Application<'a, C> {
 
     pub fn active(&self) -> C::Index {
         self.active.clone()
+    }
+
+    pub fn set_active(&mut self, i: C::Index) {
+        self.active = i;
     }
 }

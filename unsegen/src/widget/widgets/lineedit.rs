@@ -1,4 +1,4 @@
-use super::super::{
+use widget::{
     Demand,
     Demand2D,
     RenderingHints,
@@ -13,6 +13,7 @@ use base::{
 use base::basic_types::*;
 use super::{
     count_grapheme_clusters,
+    text_width,
 };
 use input::{
     Editable,
@@ -110,7 +111,7 @@ impl LineEdit {
 impl Widget for LineEdit {
     fn space_demand(&self) -> Demand2D {
         Demand2D {
-            width: Demand::at_least((count_grapheme_clusters(&self.text) + 1)),
+            width: Demand::at_least((text_width(&self.text) + 1)),
             height: Demand::exact(1), //TODO this is not really universal
         }
     }
@@ -121,9 +122,9 @@ impl Widget for LineEdit {
             let next_cluster = grapheme_indices.next();
             (cursor_cluster.map(|c: (usize, &str)| c.0), next_cluster.map(|c: (usize, &str)| c.0))
         };
-        let num_graphemes = count_grapheme_clusters(&self.text);
         let right_padding = 1;
-        let cursor_start_pos = ::std::cmp::min(ColIndex::new(0), (window.get_width() - num_graphemes as i32 - right_padding).from_origin());
+        let text_width_before_cursor = text_width(&self.text[0..maybe_after_cursor_offset.unwrap_or(self.text.len())]);
+        let draw_cursor_start_pos = ::std::cmp::min(ColIndex::new(0), (window.get_width() - text_width_before_cursor as i32 - right_padding).from_origin());
 
         let cursor_style = if hints.active {
             self.cursor_style_active
@@ -131,7 +132,7 @@ impl Widget for LineEdit {
             self.cursor_style_inactive
         };
 
-        let mut cursor = Cursor::new(&mut window).position(cursor_start_pos, RowIndex::new(0));
+        let mut cursor = Cursor::new(&mut window).position(draw_cursor_start_pos, RowIndex::new(0));
         if let Some(cursor_pos_offset) = maybe_cursor_pos_offset {
             let (until_cursor, from_cursor) = self.text.split_at(cursor_pos_offset);
             cursor.write(until_cursor);

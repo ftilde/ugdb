@@ -16,3 +16,8 @@ fn count_grapheme_clusters(text: &str) -> usize {
     use ::unicode_segmentation::UnicodeSegmentation;
     text.graphemes(true).count()
 }
+
+fn text_width(text: &str) -> usize {
+    use ::unicode_width::UnicodeWidthStr;
+    UnicodeWidthStr::width(text)
+}

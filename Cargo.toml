@@ -42,3 +42,7 @@ path = "unsegen/jsonviewer"
 
 [dependencies.gdbmi]
 path = "gdbmi-rs/"
+
+[build-dependencies]
+git2 = "0.6"
+toml = "0.4"

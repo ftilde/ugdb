@@ -29,14 +29,15 @@ pub struct Tui<'a> {
     src_view: CodeWindow<'a>,
 }
 
-const WELCOME_MSG: &'static str = r#"
-       Welcome to          
- _   _  __ _  __| | |__    
-| | | |/ _` |/ _` | '_ \   
-| |_| | (_| | (_| | |_) |  
- \__,_|\__, |\__,_|_.__/   
-       |___/               
-"#;
+const WELCOME_MSG: &'static str = concat!(r#"
+       Welcome to        
+ _   _  __ _  __| | |__  
+| | | |/ _` |/ _` | '_ \ 
+| |_| | (_| | (_| | |_) |
+ \__,_|\__, |\__,_|_.__/ 
+       |___/             
+version             "#, env!("CRATE_VERSION"), r#"
+revision         "#, env!("GIT_HASH"));
 
 impl<'a> Tui<'a> {
 

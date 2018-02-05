@@ -275,9 +275,11 @@ pub struct EditBehavior<'a, E: Editable+'a> {
     down_on: EventSet,
     left_on: EventSet,
     right_on: EventSet,
-    delete_symbol_on: EventSet,
-    remove_symbol_on: EventSet,
+    delete_forwards_on: EventSet,
+    delete_backwards_on: EventSet,
     clear_on: EventSet,
+    go_to_beginning_of_line_on: EventSet,
+    go_to_end_of_line_on: EventSet,
 }
 
 impl<'a, E: Editable> EditBehavior<'a, E> {
@@ -288,9 +290,11 @@ impl<'a, E: Editable> EditBehavior<'a, E> {
             down_on: EventSet::new(),
             left_on: EventSet::new(),
             right_on: EventSet::new(),
-            delete_symbol_on: EventSet::new(),
-            remove_symbol_on: EventSet::new(),
+            delete_forwards_on: EventSet::new(),
+            delete_backwards_on: EventSet::new(),
             clear_on: EventSet::new(),
+            go_to_beginning_of_line_on: EventSet::new(),
+            go_to_end_of_line_on: EventSet::new(),
         }
     }
 
@@ -310,16 +314,24 @@ impl<'a, E: Editable> EditBehavior<'a, E> {
         self.right_on.insert(event);
         self
     }
-    pub fn delete_symbol_on<T: ToEvent>(mut self, event: T) -> Self {
-        self.delete_symbol_on.insert(event);
+    pub fn delete_forwards_on<T: ToEvent>(mut self, event: T) -> Self {
+        self.delete_forwards_on.insert(event);
         self
     }
-    pub fn remove_symbol_on<T: ToEvent>(mut self, event: T) -> Self {
-        self.remove_symbol_on.insert(event);
+    pub fn delete_backwards_on<T: ToEvent>(mut self, event: T) -> Self {
+        self.delete_backwards_on.insert(event);
         self
     }
     pub fn clear_on<T: ToEvent>(mut self, event: T) -> Self {
         self.clear_on.insert(event);
+        self
+    }
+    pub fn go_to_beginning_of_line_on<T: ToEvent>(mut self, event: T) -> Self {
+        self.go_to_beginning_of_line_on.insert(event);
+        self
+    }
+    pub fn go_to_end_of_line_on<T: ToEvent>(mut self, event: T) -> Self {
+        self.go_to_end_of_line_on.insert(event);
         self
     }
 }
@@ -334,12 +346,16 @@ impl<'a, E: Editable> Behavior for EditBehavior<'a, E> {
             pass_on_if_err(self.editable.move_left(), input)
         } else if self.right_on.contains(&input.event) {
             pass_on_if_err(self.editable.move_right(), input)
-        } else if self.delete_symbol_on.contains(&input.event) {
-            pass_on_if_err(self.editable.delete_symbol(), input)
-        } else if self.remove_symbol_on.contains(&input.event) {
-            pass_on_if_err(self.editable.remove_symbol(), input)
+        } else if self.delete_forwards_on.contains(&input.event) {
+            pass_on_if_err(self.editable.delete_forwards(), input)
+        } else if self.delete_backwards_on.contains(&input.event) {
+            pass_on_if_err(self.editable.delete_backwards(), input)
         } else if self.clear_on.contains(&input.event) {
             pass_on_if_err(self.editable.clear(), input)
+        } else if self.go_to_beginning_of_line_on.contains(&input.event) {
+            pass_on_if_err(self.editable.go_to_beginning_of_line(), input)
+        } else if self.go_to_end_of_line_on.contains(&input.event) {
+            pass_on_if_err(self.editable.go_to_end_of_line(), input)
         } else if let Event::Key(Key::Char(c)) = input.event {
             pass_on_if_err(self.editable.write(c), input)
         } else {
@@ -349,7 +365,9 @@ impl<'a, E: Editable> Behavior for EditBehavior<'a, E> {
 }
 
 pub trait Editable: Navigatable + Writable {
-    fn delete_symbol(&mut self) -> OperationResult;
-    fn remove_symbol(&mut self) -> OperationResult;
+    fn delete_forwards(&mut self) -> OperationResult;
+    fn delete_backwards(&mut self) -> OperationResult;
+    fn go_to_beginning_of_line(&mut self) -> OperationResult;
+    fn go_to_end_of_line(&mut self) -> OperationResult;
     fn clear(&mut self) -> OperationResult;
 }

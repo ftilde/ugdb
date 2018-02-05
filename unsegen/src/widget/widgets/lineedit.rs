@@ -186,11 +186,11 @@ impl Writable for LineEdit {
 }
 
 impl Editable for LineEdit {
-    fn delete_symbol(&mut self) -> OperationResult { //i.e., "del" key
+    fn delete_forwards(&mut self) -> OperationResult { //i.e., "del" key
         let to_erase = self.cursor_pos;
         self.erase_symbol_at(to_erase)
     }
-    fn remove_symbol(&mut self) -> OperationResult { //i.e., "backspace"
+    fn delete_backwards(&mut self) -> OperationResult { //i.e., "backspace"
         if self.cursor_pos > 0 {
             let to_erase = self.cursor_pos - 1;
             let _ = self.erase_symbol_at(to_erase);
@@ -199,6 +199,14 @@ impl Editable for LineEdit {
         } else {
             Err(())
         }
+    }
+    fn go_to_beginning_of_line(&mut self) -> OperationResult {
+        self.move_cursor_to_beginning_of_line();
+        Ok(())
+    }
+    fn go_to_end_of_line(&mut self) -> OperationResult {
+        self.move_cursor_to_end_of_line();
+        Ok(())
     }
     fn clear(&mut self) -> OperationResult {
         if self.text.is_empty() {

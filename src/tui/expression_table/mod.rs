@@ -65,8 +65,10 @@ impl TableRow for ExpressionRow {
                             .right_on(Key::Right)
                             .up_on(Key::Up)
                             .down_on(Key::Down)
-                            .delete_symbol_on(Key::Delete)
-                            .remove_symbol_on(Key::Backspace)
+                            .delete_forwards_on(Key::Delete)
+                            .delete_backwards_on(Key::Backspace)
+                            .go_to_beginning_of_line_on(Key::Home)
+                            .go_to_end_of_line_on(Key::End)
                             .clear_on(Key::Ctrl('c'))
                            ).finish()
             }

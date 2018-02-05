@@ -75,6 +75,13 @@ impl PromptLine {
             self.line.set(&self.history[state.pos]);
         }
     }
+
+    fn note_edit_operation(&mut self, res: OperationResult) -> OperationResult {
+        if res.is_ok() {
+            self.history_scroll_position = None;
+        }
+        res
+    }
 }
 
 impl Widget for PromptLine {
@@ -145,34 +152,30 @@ impl Navigatable for PromptLine {
 
 impl Writable for PromptLine {
     fn write(&mut self, c: char) -> OperationResult {
-        let op_res = self.line.write(c);
-        if op_res.is_ok() {
-            self.history_scroll_position = None;
-        }
-        op_res
+        let res = self.line.write(c);
+        self.note_edit_operation(res)
     }
 }
 
 impl Editable for PromptLine {
-    fn delete_symbol(&mut self) -> OperationResult {
-        let op_res = self.line.delete_symbol();
-        if op_res.is_ok() {
-            self.history_scroll_position = None;
-        }
-        op_res
+    fn delete_forwards(&mut self) -> OperationResult {
+        let res = self.line.delete_forwards();
+        self.note_edit_operation(res)
     }
-    fn remove_symbol(&mut self) -> OperationResult {
-        let op_res = self.line.remove_symbol();
-        if op_res.is_ok() {
-            self.history_scroll_position = None;
-        }
-        op_res
+    fn delete_backwards(&mut self) -> OperationResult {
+        let res = self.line.delete_backwards();
+        self.note_edit_operation(res)
+    }
+    fn go_to_beginning_of_line(&mut self) -> OperationResult {
+        let res = self.line.go_to_beginning_of_line();
+        self.note_edit_operation(res)
+    }
+    fn go_to_end_of_line(&mut self) -> OperationResult {
+        let res = self.line.go_to_end_of_line();
+        self.note_edit_operation(res)
     }
     fn clear(&mut self) -> OperationResult {
-        let op_res = self.line.clear();
-        if op_res.is_ok() {
-            self.history_scroll_position = None;
-        }
-        op_res
+        let res = self.line.clear();
+        self.note_edit_operation(res)
     }
 }

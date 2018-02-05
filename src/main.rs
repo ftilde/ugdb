@@ -288,10 +288,8 @@ fn main() {
                 if esc_in_focused_context_pressed {
                     if focus_esc_timer.has_been_started() {
                         input_mode = InputMode::ContainerSelect;
-                        update_parameters.logger.log(LogMsgType::Debug, format!("focusesc started"));
                     } else {
                         focus_esc_timer.try_start(Duration::from_millis(FOCUS_ESCAPE_MAX_DURATION_MS));
-                        update_parameters.logger.log(LogMsgType::Debug, format!("focusesc start now"));
                     }
                 }
                 tui.update_after_event(&mut update_parameters);

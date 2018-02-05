@@ -244,6 +244,9 @@ impl<'c, 'g: 'c, T: 'c + CursorTarget> Cursor<'c, 'g, T> {
     }
 
     pub fn fill_and_wrap_line(&mut self) {
+        if self.window.get_height() == 0 {
+            return
+        }
         let w = self.window.get_soft_width().from_origin();
         while self.state.x <= 0 || self.state.x % w != 0 {
             self.write(" ");

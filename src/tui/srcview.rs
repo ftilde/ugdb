@@ -600,7 +600,21 @@ impl<'a> Widget for SourceView<'a> {
         self.pager.space_demand()
     }
     fn draw(&self, window: Window, hints: RenderingHints) {
-        self.pager.draw(window, hints)
+        if let Some(file) = self.current_file() {
+            match  window.split_v(RowIndex::new(1)) {
+                Ok((mut up, down)) => {
+                    let mut cursor = Cursor::new(&mut up);
+                    cursor.set_style_modifier(StyleModifier::new().bold(true));
+                    cursor.write(&format!("▶ {}", file.display()));
+                    self.pager.draw(down, hints);
+                }
+                Err(window) => {
+                    self.pager.draw(window, hints);
+                }
+            }
+        } else {
+            self.pager.draw(window, hints);
+        }
     }
 }
 

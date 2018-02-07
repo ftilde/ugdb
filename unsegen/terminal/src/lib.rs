@@ -171,6 +171,12 @@ impl Scrollable for Terminal {
     fn scroll_backwards(&mut self) -> OperationResult {
         self.terminal_window.borrow_mut().scroll_backwards()
     }
+    fn scroll_to_beginning(&mut self) -> OperationResult {
+        self.terminal_window.borrow_mut().scroll_to_beginning()
+    }
+    fn scroll_to_end(&mut self) -> OperationResult {
+        self.terminal_window.borrow_mut().scroll_to_end()
+    }
 }
 
 impl Widget for Terminal {
@@ -188,7 +194,9 @@ impl<P: ?Sized> Container<P> for Terminal {
         input
             .chain(ScrollBehavior::new(self)
                     .forwards_on(Key::PageDown)
-                    .backwards_on(Key::PageUp))
+                    .backwards_on(Key::PageUp)
+                    .to_beginning_on(Key::Home)
+                    .to_end_on(Key::End))
             .chain(PassthroughBehavior::new(self))
             .finish()
 

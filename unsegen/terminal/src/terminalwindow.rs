@@ -798,6 +798,23 @@ impl Scrollable for TerminalWindow {
             Err(())
         }
     }
+    fn scroll_to_beginning(&mut self) -> OperationResult {
+        let current = self.current_scrollback_pos();
+        if current > self.window_height.from_origin() {
+            self.scrollback_position = Some(self.window_height.from_origin());
+            Ok(())
+        } else {
+            Err(())
+        }
+    }
+    fn scroll_to_end(&mut self) -> OperationResult {
+        if self.scrollback_position.is_some() {
+            self.scrollback_position = None;
+            Ok(())
+        } else {
+            Err(())
+        }
+    }
 }
 
 #[cfg(test)]

@@ -95,4 +95,20 @@ impl Scrollable for LogViewer {
         self.scrollback_position = Some(current.checked_sub(self.scroll_step).unwrap_or(0));
         op_res
     }
+    fn scroll_to_beginning(&mut self) -> OperationResult {
+        if Some(0) == self.scrollback_position {
+            Err(())
+        } else {
+            self.scrollback_position = Some(0);
+            Ok(())
+        }
+    }
+    fn scroll_to_end(&mut self) -> OperationResult {
+        if self.scrollback_position.is_none() {
+            Err(())
+        } else {
+            self.scrollback_position = None;
+            Ok(())
+        }
+    }
 }

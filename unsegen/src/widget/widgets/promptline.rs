@@ -128,11 +128,35 @@ impl Scrollable for PromptLine {
             }
         };
         self.sync_line_to_history_scroll_position();
-        if self.history_scroll_position .is_some() {
+        if self.history_scroll_position.is_some() {
             Ok(())
         } else {
             Err(())
         }
+    }
+    fn scroll_to_beginning(&mut self) -> OperationResult {
+        self.history_scroll_position = if self.history.len() > 0 {
+            Some(ScrollBackState::new(self.line.get().to_owned(), 0))
+        } else {
+            None
+        };
+        self.sync_line_to_history_scroll_position();
+        if self.history_scroll_position.is_some() {
+            Ok(())
+        } else {
+            Err(())
+        }
+    }
+    fn scroll_to_end(&mut self) -> OperationResult {
+        let res = if let Some(ref state) = self.history_scroll_position {
+            self.line.set(&state.active_line);
+            Ok(())
+        } else {
+            Err(())
+        };
+        self.history_scroll_position = None;
+        self.sync_line_to_history_scroll_position();
+        res
     }
 }
 impl Navigatable for PromptLine {

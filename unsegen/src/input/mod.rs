@@ -138,6 +138,8 @@ fn pass_on_if_err(res: OperationResult, input: Input) -> Option<Input> {
 
 pub struct ScrollBehavior<'a, S: Scrollable + 'a> {
     scrollable: &'a mut S,
+    to_beginning_on: EventSet,
+    to_end_on: EventSet,
     backwards_on: EventSet,
     forwards_on: EventSet,
 }
@@ -148,9 +150,18 @@ impl<'a, S: Scrollable> ScrollBehavior<'a, S> {
             scrollable: scrollable,
             backwards_on: EventSet::new(),
             forwards_on: EventSet::new(),
+            to_beginning_on: EventSet::new(),
+            to_end_on: EventSet::new(),
         }
     }
-
+    pub fn to_beginning_on<E: ToEvent>(mut self, event: E) -> Self {
+        self.to_beginning_on.insert(event);
+        self
+    }
+    pub fn to_end_on<E: ToEvent>(mut self, event: E) -> Self {
+        self.to_end_on.insert(event);
+        self
+    }
     pub fn backwards_on<E: ToEvent>(mut self, event: E) -> Self {
         self.backwards_on.insert(event);
         self
@@ -167,6 +178,10 @@ impl<'a, S: Scrollable> Behavior for ScrollBehavior<'a, S> {
             pass_on_if_err(self.scrollable.scroll_forwards(), input)
         } else if self.backwards_on.contains(&input.event) {
             pass_on_if_err(self.scrollable.scroll_backwards(), input)
+        } else if self.to_beginning_on.contains(&input.event) {
+            pass_on_if_err(self.scrollable.scroll_to_beginning(), input)
+        } else if self.to_end_on.contains(&input.event) {
+            pass_on_if_err(self.scrollable.scroll_to_end(), input)
         } else {
             Some(input)
         }
@@ -176,6 +191,22 @@ impl<'a, S: Scrollable> Behavior for ScrollBehavior<'a, S> {
 pub trait Scrollable {
     fn scroll_backwards(&mut self) -> OperationResult;
     fn scroll_forwards(&mut self) -> OperationResult;
+    fn scroll_to_beginning(&mut self) -> OperationResult {
+        if self.scroll_backwards().is_err() {
+            return Err(())
+        } else {
+            while self.scroll_backwards().is_ok() { }
+            Ok(())
+        }
+    }
+    fn scroll_to_end(&mut self) -> OperationResult {
+        if self.scroll_forwards().is_err() {
+            return Err(())
+        } else {
+            while self.scroll_forwards().is_ok() { }
+            Ok(())
+        }
+    }
 }
 
 // WriteBehavior ------------------------------------------

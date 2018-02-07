@@ -428,4 +428,16 @@ impl<S, H, D> Scrollable for Pager<S, H, D>
         let new_line = self.current_line + 1;
         self.go_to_line(new_line).map_err(|_| ())
     }
+    fn scroll_to_beginning(&mut self) -> OperationResult {
+        if self.current_line == LineIndex(0) {
+            Err(())
+        } else {
+            self.current_line = LineIndex(0);
+            Ok(())
+        }
+    }
+    // Using default implementation for now. We could try to do something different (but more
+    // complicated) if performance is an issue
+    //fn scroll_to_end(&mut self) -> OperationResult {
+    //}
 }

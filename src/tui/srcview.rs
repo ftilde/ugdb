@@ -511,6 +511,7 @@ impl<'a> SourceView<'a> {
 
     fn show<'b, P: AsRef<Path>, L: Into<LineIndex>>(&mut self, path: P, line: L, p: ::UpdateParameters) -> Result<(), PagerShowError> {
         let need_to_reload = if let Some(ref content) = self.pager.content {
+            //TODO Also check if file itself has changed since last load. Check modification time
             content.storage.get_file_path() != path.as_ref()
         } else {
             true

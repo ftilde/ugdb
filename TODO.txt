@@ -7,7 +7,8 @@ Add MemoryViewer:
 
 Smaller QoL-changes:
  - Add a "running" indicator in prompt
- - Detect changes in active file and reload if needed
+ - Detect changes in active (binary) file and reload if needed
+ - Do not skip reloading source files in viewer if file has changed
 
 Fix bugs:
  - GDB sometimes takes ages to disassemble code blocks. Work around by disassembling lazily, i.e., only when assembly is shown.

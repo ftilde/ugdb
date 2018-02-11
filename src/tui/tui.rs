@@ -87,6 +87,7 @@ impl<'a> Tui<'a> {
 
     pub fn update_after_event(&mut self, p: ::UpdateParameters) {
         self.src_view.update_after_event(p);
+        self.console.update_after_event(p);
     }
 }
 

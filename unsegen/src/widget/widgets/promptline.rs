@@ -53,6 +53,10 @@ impl PromptLine {
         }
     }
 
+    pub fn set_prompt(&mut self, prompt: String) {
+        self.prompt = LineLabel::new(prompt);
+    }
+
     pub fn previous_line(&self, n: usize) -> Option<&str> {
         self.history.get(self.history.len().checked_sub(n).unwrap_or(0)).map(String::as_str)
     }

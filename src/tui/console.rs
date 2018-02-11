@@ -32,13 +32,23 @@ enum ActiveLog {
     Gdb,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+enum GDBState {
+    Running,
+    Stopped,
+}
+
 pub struct Console {
     debug_log: LogViewer,
     gdb_log: LogViewer,
     active_log: ActiveLog,
     prompt_line: PromptLine,
     layout: VerticalLayout,
+    last_gdb_state: GDBState,
 }
+
+static STOPPED_PROMPT: &'static str = "(gdb) ";
+static RUNNING_PROMPT: &'static str = "(↻↻↻) ";
 
 impl Console {
     pub fn new() -> Self {
@@ -46,8 +56,9 @@ impl Console {
             debug_log: LogViewer::new(),
             gdb_log: LogViewer::new(),
             active_log: ActiveLog::Gdb,
-            prompt_line: PromptLine::with_prompt("(gdb) ".into()),
+            prompt_line: PromptLine::with_prompt(STOPPED_PROMPT.into()),
             layout: VerticalLayout::new(SeparatingStyle::Draw(GraphemeCluster::try_from('=').unwrap())),
+            last_gdb_state: GDBState::Stopped,
         }
     }
 
@@ -107,7 +118,7 @@ impl Console {
             },
             // Gdb commands
             _ => {
-                self.write_to_gdb_log(format!("(gdb) {}\n", line));
+                self.write_to_gdb_log(format!("{}{}\n", STOPPED_PROMPT, line));
                 match p.gdb.mi.execute(&gdbmi::input::MiCommand::cli_exec(line)) {
                     Ok(result) => {
                         p.logger.log(LogMsgType::Debug, format!("Result: {:?}", result));
@@ -121,6 +132,19 @@ impl Console {
                     //Err(err) => { panic!("Unknown error {:?}", err) },
                 }
             },
+        }
+    }
+    pub fn update_after_event(&mut self, p: ::UpdateParameters) {
+        if p.gdb.mi.is_running() {
+            if self.last_gdb_state != GDBState::Running {
+                self.last_gdb_state = GDBState::Running;
+                self.prompt_line.set_prompt(RUNNING_PROMPT.to_owned());
+            }
+        } else {
+            if self.last_gdb_state != GDBState::Stopped {
+                self.last_gdb_state = GDBState::Stopped;
+                self.prompt_line.set_prompt(STOPPED_PROMPT.to_owned());
+            }
         }
     }
 }

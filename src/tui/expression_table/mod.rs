@@ -82,6 +82,8 @@ impl TableRow for ExpressionRow {
                             .backwards_on(Key::PageUp)
                             .forwards_on(Key::Down)
                             .backwards_on(Key::Up)
+                            .to_beginning_on(Key::Home)
+                            .to_end_on(Key::End)
                            )
                     .chain(|evt: Input| {
                         if evt.matches(Key::Char(' ')) {

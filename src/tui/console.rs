@@ -10,7 +10,6 @@ use unsegen::base::{
 };
 use unsegen::input::{
     EditBehavior,
-    Event,
     Input,
     Key,
     ScrollBehavior,
@@ -144,19 +143,8 @@ impl Widget for Console {
 impl Container<::UpdateParametersStruct> for Console {
     fn input(&mut self, input: Input, p: ::UpdateParameters) -> Option<Input> {
         input
-            .chain(|input: Input| {
-                match input.event {
-                    Event::Key(Key::F(1)) => {
-                        self.toggle_active_log();
-                        None
-                    },
-                    Event::Key(Key::Char('\n')) => {
-                        self.handle_newline(p);
-                        None
-                    }
-                    _ => Some(input)
-                }
-            })
+            .chain((Key::F(1), || self.toggle_active_log()))
+            .chain((Key::Char('\n'), || self.handle_newline(p)))
             .chain(
                 EditBehavior::new(&mut self.prompt_line)
                 .left_on(Key::Left)
@@ -169,18 +157,17 @@ impl Container<::UpdateParametersStruct> for Console {
                 .go_to_end_of_line_on(Key::End)
                 .clear_on(Key::Ctrl('c'))
                 )
-            .chain(|i: Input| {
-                   if let Event::Key(Key::Ctrl('c')) = i.event {
-                       p.gdb.mi.interrupt_execution().expect("interrupted gdb");
-                       None
-                   } else {
-                       Some(i)
-                   }
-            })
+            .chain(
+                ScrollBehavior::new(&mut self.prompt_line)
+                .to_end_on(Key::Ctrl('r'))
+                )
+            .chain((Key::Ctrl('c'), || p.gdb.mi.interrupt_execution().expect("interrupted gdb")))
             .chain(
                 ScrollBehavior::new(self.get_active_log_viewer_mut())
                 .forwards_on(Key::PageDown)
                 .backwards_on(Key::PageUp)
+                .to_beginning_on(Key::Ctrl('b'))
+                .to_end_on(Key::Ctrl('e'))
                 )
             .finish()
     }

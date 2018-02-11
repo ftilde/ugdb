@@ -7,7 +7,6 @@ use unsegen::base::{
     Window,
 };
 use unsegen::input::{
-    Event,
     Input,
     Key,
     ScrollBehavior,
@@ -363,14 +362,11 @@ impl<'a> AssemblyView<'a> {
                     .forwards_on(Key::Char('j'))
                     .backwards_on(Key::PageUp)
                     .backwards_on(Key::Char('k'))
+                    .to_beginning_on(Key::Home)
+                    .to_end_on(Key::End)
                    )
-            .chain(|evt| match evt {
-                Input { event: Event::Key(Key::Char(' ')), raw: _ } => {
-                    self.toggle_breakpoint(p);
-                    None
-                }
-                e => Some(e)
-            }).finish()
+            .chain((Key::Char(' '), || self.toggle_breakpoint(p)))
+            .finish()
     }
 }
 
@@ -585,14 +581,11 @@ impl<'a> SourceView<'a> {
                     .forwards_on(Key::Char('j'))
                     .backwards_on(Key::PageUp)
                     .backwards_on(Key::Char('k'))
+                    .to_beginning_on(Key::Home)
+                    .to_end_on(Key::End)
                    )
-            .chain(|evt| match evt {
-                Input { event: Event::Key(Key::Char(' ')), raw: _ } => {
-                    self.toggle_breakpoint(p);
-                    None
-                }
-                e => Some(e)
-            }).finish()
+            .chain((Key::Char(' '), || self.toggle_breakpoint(p)))
+            .finish()
     }
 }
 
@@ -838,29 +831,26 @@ impl<'a> Widget for CodeWindow<'a> {
 
 impl<'a> Container<::UpdateParametersStruct> for CodeWindow<'a> {
     fn input(&mut self, input: Input, p: ::UpdateParameters) -> Option<Input> {
-        input.chain(|i: Input| match i.event {
-            Event::Key(Key::Char('d')) => {
-                self.toggle_mode(p);
-                None
-            },
-            _ => Some(i),
-        }).chain(|i: Input| {
-            match self.mode {
-                CodeWindowMode::Assembly | CodeWindowMode::SideBySide => {
-                    let ret = self.asm_view.event(i, p);
-                    if let Some(src_pos) = self.asm_view.pager.current_line().and_then(|line| line.src_position) {
-                        let _  = self.src_view.show(src_pos.file, src_pos.line, p);
+        input
+            .chain((Key::Char('d'), || self.toggle_mode(p)))
+            .chain(|i: Input| {
+                match self.mode {
+                    CodeWindowMode::Assembly | CodeWindowMode::SideBySide => {
+                        let ret = self.asm_view.event(i, p);
+                        if let Some(src_pos) = self.asm_view.pager.current_line().and_then(|line| line.src_position) {
+                            let _  = self.src_view.show(src_pos.file, src_pos.line, p);
+                        }
+                        ret
+                    },
+                    CodeWindowMode::Source => {
+                        self.src_view.event(i, p)
+                    },
+                    CodeWindowMode::Message(_) => {
+                        Some(i)
                     }
-                    ret
-                },
-                CodeWindowMode::Source => {
-                    self.src_view.event(i, p)
-                },
-                CodeWindowMode::Message(_) => {
-                    Some(i)
                 }
-            }
-        }).finish()
+            })
+        .finish()
     }
 }
 

@@ -8,7 +8,8 @@ fn main() {
     let repo = Repository::open(".").expect("Current folder is not a git repositry");
     let head = repo.head().unwrap();
     let oid = head.target().unwrap();
-    let hash = oid.as_bytes().iter().take(4).map(|byte| format!("{:x}", byte)).collect::<String>();
+    let hash = oid.as_bytes().iter().take(4).map(|byte| format!("{:0length$x}", byte, length=2)).collect::<String>();
+    eprintln!("hash: {}", hash);
     println!("cargo:rustc-env=GIT_HASH={}", hash);
 
     let file_str = include_str!("Cargo.toml");

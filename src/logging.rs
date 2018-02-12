@@ -13,8 +13,14 @@ impl Logger {
             messages: Vec::new(),
         }
     }
-    pub fn log<S: Into<String>>(&mut self, msg_type: LogMsgType, msg: S) {
+    fn log<S: Into<String>>(&mut self, msg_type: LogMsgType, msg: S) {
         self.messages.push((msg_type, msg.into()));
+    }
+    pub fn log_debug<S: Into<String>>(&mut self, msg: S) {
+        self.log(LogMsgType::Debug, msg);
+    }
+    pub fn log_message<S: Into<String>>(&mut self, msg: S) {
+        self.log(LogMsgType::Message, msg);
     }
     pub fn drain_messages(&mut self) -> Vec<(LogMsgType, String)> {
         let mut alt_buffer = Vec::new();

@@ -39,10 +39,7 @@ use chan::{Sender, Receiver};
 use chan_signal::Signal;
 
 use gdb::GDB;
-use logging::{
-    Logger,
-    LogMsgType,
-};
+use logging::{Logger};
 use gdbmi::OutOfBandRecordSink;
 use gdbmi::output::OutOfBandRecord;
 use unsegen::base::{Color, StyleModifier, Terminal};
@@ -281,7 +278,7 @@ fn main() {
                             Signal::TERM => { update_parameters.gdb.kill() },
                             _ => {}
                         }
-                        update_parameters.logger.log(LogMsgType::Debug, format!("received signal {:?}", sig));
+                        update_parameters.logger.log_debug(format!("received signal {:?}", sig));
                     },
                 }
                 }

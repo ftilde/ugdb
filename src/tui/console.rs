@@ -121,7 +121,7 @@ impl Console {
                 self.write_to_gdb_log(format!("{}{}\n", STOPPED_PROMPT, line));
                 match p.gdb.mi.execute(&gdbmi::input::MiCommand::cli_exec(line)) {
                     Ok(result) => {
-                        p.logger.log(LogMsgType::Debug, format!("Result: {:?}", result));
+                        p.logger.log_debug(format!("Result: {:?}", result));
                     },
                     Err(gdbmi::ExecuteError::Quit) => {
                         self.write_to_gdb_log("quit");

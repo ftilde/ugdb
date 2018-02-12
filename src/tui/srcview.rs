@@ -45,7 +45,6 @@ use gdbmi::output::{
     Object,
     ResultClass,
 };
-use logging::LogMsgType;
 use gdb::{
     SrcPosition,
     Address,
@@ -297,7 +296,7 @@ impl<'a> AssemblyView<'a> {
                 }
             }
             if lines.is_empty() {
-                p.logger.log(LogMsgType::Debug, format!("Disassembly failed for {:?}:{}", file.as_ref(), line_u));
+                p.logger.log_message(format!("Disassembly failed for {:?}:{}", file.as_ref(), line_u));
                 Err(())
             } else {
                 lines.sort_by_key(|l| l.address);
@@ -340,20 +339,20 @@ impl<'a> AssemblyView<'a> {
                 match p.gdb.insert_breakpoint(BreakPointLocation::Address(line.address.0)) {
                     Ok(()) => { },
                     Err(BreakpointOperationError::Busy) => {
-                        p.logger.log(LogMsgType::Message, "Cannot insert breakpoint: Gdb is busy.");
+                        p.logger.log_message("Cannot insert breakpoint: Gdb is busy.");
                     },
                     Err(BreakpointOperationError::ExecutionError(msg)) => {
-                        p.logger.log(LogMsgType::Message, format!("Cannot insert breakpoint: {}", msg));
+                        p.logger.log_message(format!("Cannot insert breakpoint: {}", msg));
                     },
                 }
             } else {
                 match p.gdb.delete_breakpoints(active_bps.into_iter()) {
                     Ok(()) => { },
                     Err(BreakpointOperationError::Busy) => {
-                        p.logger.log(LogMsgType::Message, "Cannot remove breakpoint: Gdb is busy.");
+                        p.logger.log_message("Cannot remove breakpoint: Gdb is busy.");
                     },
                     Err(BreakpointOperationError::ExecutionError(msg)) => {
-                        p.logger.log(LogMsgType::Message, format!("Cannot remove breakpoint: {}", msg));
+                        p.logger.log_message(format!("Cannot remove breakpoint: {}", msg));
                     },
                 }
             }
@@ -581,11 +580,11 @@ impl<'a> SourceView<'a> {
             }).collect();
             if active_bps.is_empty() {
                 if p.gdb.insert_breakpoint(BreakPointLocation::Line(path, line.into())).is_err() {
-                    p.logger.log(LogMsgType::Message, "Cannot insert breakpoint: Gdb is busy.");
+                    p.logger.log_message("Cannot insert breakpoint: Gdb is busy.");
                 }
             } else {
                 if p.gdb.delete_breakpoints(active_bps.into_iter()).is_err() {
-                    p.logger.log(LogMsgType::Message, "Cannot remove breakpoint: Gdb is busy.");
+                    p.logger.log_message("Cannot remove breakpoint: Gdb is busy.");
                 }
             }
         }
@@ -705,7 +704,7 @@ impl<'a> CodeWindow<'a> {
             self.asm_view.set_last_stop_position(address);
             if self.asm_view.show_file(path, line, p).is_ok() {
                 if self.asm_view.go_to_last_stop_position().is_err() {
-                    p.logger.log(LogMsgType::Debug, format!("Failed to go to address: {}", address));
+                    p.logger.log_message(format!("Failed to go to address: {}", address));
                 }
             } else {
                 self.mode = CodeWindowMode::Source;
@@ -767,7 +766,7 @@ impl<'a> CodeWindow<'a> {
             if let Ok(range) = Self::find_function_range(address, p).or_else(|_| Self::find_valid_address_range(address, 128, p)) {
                 range
             } else {
-                p.logger.log(LogMsgType::Debug, format!("Could not show find function range for address {}", address));
+                p.logger.log_message(format!("Could not show find function range for address {}", address));
                 return;
             }
         };

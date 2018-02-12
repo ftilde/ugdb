@@ -1,6 +1,3 @@
-use logging::{
-    LogMsgType,
-};
 use syntect::highlighting::{
     Theme,
 };
@@ -53,18 +50,18 @@ impl<'a> Tui<'a> {
     fn handle_async_record(&mut self, kind: AsyncKind, class: AsyncClass, results: &Object, p: ::UpdateParameters) {
         match (kind, class) {
             (AsyncKind::Exec, AsyncClass::Stopped) | (AsyncKind::Notify, AsyncClass::Thread(ThreadEvent::Selected))=> {
-                p.logger.log(LogMsgType::Debug, format!("stopped: {}", JsonValue::Object(results.clone()).pretty(2)));
+                p.logger.log_debug(format!("stopped: {}", JsonValue::Object(results.clone()).pretty(2)));
                 if let JsonValue::Object(ref frame) = results["frame"] {
                     self.src_view.show_frame(frame, p);
                 }
                 self.expression_table.update_results(p);
             },
             (AsyncKind::Notify, AsyncClass::BreakPoint(event)) => {
-                p.logger.log(LogMsgType::Debug, format!("bkpoint {:?}: {}", event, JsonValue::Object(results.clone()).pretty(2)));
+                p.logger.log_debug(format!("bkpoint {:?}: {}", event, JsonValue::Object(results.clone()).pretty(2)));
                 p.gdb.handle_breakpoint_event(event, &results);
             },
             (kind, class) => {
-                p.logger.log(LogMsgType::Debug, format!("unhandled async_record: [{:?}, {:?}] {}", kind, class, JsonValue::Object(results.clone()).pretty(2)));
+                p.logger.log_debug(format!("unhandled async_record: [{:?}, {:?}] {}", kind, class, JsonValue::Object(results.clone()).pretty(2)));
             },
         }
     }

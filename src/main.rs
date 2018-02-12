@@ -3,6 +3,8 @@
 #[macro_use]
 extern crate chan;
 extern crate chan_signal;
+#[macro_use]
+extern crate structopt;
 extern crate time;
 extern crate gdbmi;
 
@@ -38,19 +40,100 @@ use std::time::{Duration};
 use chan::{Sender, Receiver};
 use chan_signal::Signal;
 
-use gdb::GDB;
+use gdb::{GDB};
 use logging::{Logger};
-use gdbmi::OutOfBandRecordSink;
+use gdbmi::{GDBBuilder, OutOfBandRecordSink};
 use gdbmi::output::OutOfBandRecord;
 use unsegen::base::{Color, StyleModifier, Terminal};
 use unsegen::container::{Application, HSplit, VSplit, Leaf};
 use unsegen::input::{Input, Key, NavigateBehavior, ToEvent};
+use structopt::StructOpt;
 use tui::{Tui, TuiContainerType};
+use std::path::PathBuf;
 
 
 const EVENT_BUFFER_DURATION_MS: u64 = 10;
 const FOCUS_ESCAPE_MAX_DURATION_MS: u64 = 200;
 
+
+#[derive(StructOpt)]
+#[structopt()]
+struct Options {
+    #[structopt(long="gdb", help="Path to gdb binary.", default_value="/bin/gdb", parse(from_os_str))]
+    gdb_path: PathBuf,
+    #[structopt(long="nh", help="Do not execute commands from ~/.gdbinit.")]
+    nh: bool,
+    #[structopt(short = "n", long="nx", help="Do not execute commands from any .gdbinit initialization files.")]
+    nx: bool,
+    #[structopt(short = "q", long="quiet", help="\"Quiet\".  Do not print the introductory and copyright messages.  These messages are also suppressed in batch mode.")]
+    quiet: bool,
+    #[structopt(long="cd", help="Run GDB using directory as its working directory, instead of the current directory.", parse(from_os_str))]
+    cd: Option<PathBuf>,
+    #[structopt(long="b", help="Set the line speed (baud rate or bits per second) of any serial interface used by GDB for remote debugging.")]
+    bps: Option<u32>,
+    #[structopt(short="s", long="symbols", help="Read symbols from the given file.", parse(from_os_str))]
+    symbol_file: Option<PathBuf>,
+    #[structopt(short="c", long="core", help="Use file file as a core dump to examine.", parse(from_os_str))]
+    core_file: Option<PathBuf>,
+    #[structopt(short="p", long="pid", help="Attach to process with given id.")]
+    proc_id: Option<u32>,
+    #[structopt(short="x", long="command", help="Execute GDB commands from file.", parse(from_os_str))]
+    command_file: Option<PathBuf>,
+    #[structopt(short="d", long="directory", help="Add directory to the path to search for source files.", parse(from_os_str))]
+    source_dir: Option<PathBuf>,
+    #[structopt(short="a", long="args", help="Arguments after executable-file are passed to inferior.", parse(from_os_str))]
+    args: Vec<OsString>,
+    #[structopt(help="Path to program to debug.", parse(from_os_str))]
+    program: Option<PathBuf>,
+
+    // Not sure how to mimic gdbs cmdline behavior for the positional arguments...
+    //#[structopt(help="Attach to process with given id.")]
+    //proc_id: Option<u32>,
+    //#[structopt(help="Use file file as a core dump to examine.", parse(from_os_str))]
+    //core_file: Option<PathBuf>,
+}
+
+impl Options {
+    fn create_gdb_builder(self) -> GDBBuilder {
+        let mut gdb_builder = GDBBuilder::new(self.gdb_path);
+        if self.nh {
+            gdb_builder = gdb_builder.nh();
+        }
+        if self.nx {
+            gdb_builder = gdb_builder.nx();
+        }
+        if self.quiet {
+            gdb_builder = gdb_builder.quiet();
+        }
+        if let Some(cd) = self.cd {
+            gdb_builder = gdb_builder.working_dir(cd);
+        }
+        if let Some(bps) = self.bps {
+            gdb_builder = gdb_builder.bps(bps);
+        }
+        if let Some(symbol_file) = self.symbol_file {
+            gdb_builder = gdb_builder.symbol_file(symbol_file);
+        }
+        if let Some(core_file) = self.core_file {
+            gdb_builder = gdb_builder.core_file(core_file);
+        }
+        if let Some(proc_id) = self.proc_id {
+            gdb_builder = gdb_builder.proc_id(proc_id);
+        }
+        if let Some(command_file) = self.command_file {
+            gdb_builder = gdb_builder.command_file(command_file);
+        }
+        if let Some(src_dir) = self.source_dir {
+            gdb_builder = gdb_builder.source_dir(src_dir);
+        }
+        gdb_builder = gdb_builder.args(&self.args);
+        if let Some(program) = self.program {
+            gdb_builder = gdb_builder.program(program);
+        }
+
+        gdb_builder
+    }
+}
 
 struct MpscOobRecordSink(Sender<OutOfBandRecord>);
 
@@ -148,6 +231,8 @@ fn main() {
     let signal_event_source = chan_signal::notify(&[Signal::WINCH, Signal::TSTP, Signal::TERM]);
     chan_signal::block(&[Signal::CONT]);
 
+    let options = Options::from_args();
+
     // Create terminal and setup slave input piping
     let (pts_sink, pts_source) = chan::async();
     let tui_terminal = ::unsegen_terminal::Terminal::new(MpscSlaveInputSink(pts_sink));
@@ -157,9 +242,10 @@ fn main() {
 
     // Start gdb and setup output event piping
     let (oob_sink, oob_source) = chan::async();
-    let all_args: Vec<OsString> = ::std::env::args_os().collect();
-    let gdb_arguments = &all_args[1..];
-    let gdb = GDB::new(gdbmi::GDB::spawn(gdb_arguments, tui_terminal.get_slave_name(), MpscOobRecordSink(oob_sink)).expect("spawn gdb"));
+
+    let mut gdb_builder = options.create_gdb_builder();
+    gdb_builder = gdb_builder.tty(tui_terminal.get_slave_name().into());
+    let gdb = GDB::new(gdb_builder.try_spawn(MpscOobRecordSink(oob_sink)).expect("spawn gdb"));
 
     // Setup input piping
     let (keyboard_sink, keyboard_source) = chan::async();

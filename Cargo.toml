@@ -2,6 +2,7 @@
 name = "ugdb"
 version = "0.1.0"
 authors = ["ftilde <ftilde@protonmail.com>"]
+description = "An unsegen-based GDB frontend."
 
 [[bin]]
 doc = false
@@ -13,6 +14,7 @@ debug = true
 [dependencies]
 chan = "0.1"
 chan-signal = "0.3"
+structopt = "0.2.1"
 time = "0.1"
 unicode-width = "0.1"
 

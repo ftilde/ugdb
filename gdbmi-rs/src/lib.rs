@@ -22,9 +22,9 @@ use std::sync::atomic::{
     Ordering,
 };
 use std::ffi::{
-    OsStr,
     OsString
 };
+use std::path::PathBuf;
 
 type Token = u64;
 
@@ -47,17 +47,160 @@ pub enum ExecuteError {
     Quit,
 }
 
-impl GDB {
-    pub fn spawn_with_executable<S>(executable_path: &str, process_tty_name: &str, oob_sink: S) -> Result<GDB, ::std::io::Error> where S: OutOfBandRecordSink + 'static {
-        Self::spawn(&[executable_path], process_tty_name, oob_sink)
+pub struct GDBBuilder {
+    gdb_path: PathBuf,
+    opt_nh: bool,
+    opt_nx: bool,
+    opt_quiet: bool,
+    opt_batch: bool,
+    opt_cd: Option<PathBuf>,
+    opt_bps: Option<u32>,
+    opt_symbol_file: Option<PathBuf>,
+    opt_core_file: Option<PathBuf>,
+    opt_proc_id: Option<u32>,
+    opt_command: Option<PathBuf>,
+    opt_source_dir: Option<PathBuf>,
+    opt_args: Vec<OsString>,
+    opt_program: Option<PathBuf>,
+    opt_tty: Option<PathBuf>,
+}
+impl GDBBuilder {
+    pub fn new(gdb: PathBuf) -> Self {
+        GDBBuilder {
+            gdb_path: gdb,
+            opt_nh: false,
+            opt_nx: false,
+            opt_quiet: false,
+            opt_batch: false,
+            opt_cd: None,
+            opt_bps: None,
+            opt_symbol_file: None,
+            opt_core_file: None,
+            opt_proc_id: None,
+            opt_command: None,
+            opt_source_dir: None,
+            opt_args: Vec::new(),
+            opt_program: None,
+            opt_tty: None,
+        }
     }
-    pub fn spawn<S, A: AsRef<OsStr>, B: AsRef<OsStr>>(arguments: &[A], process_tty_name: B, oob_sink: S) -> Result<GDB, ::std::io::Error> where S: OutOfBandRecordSink + 'static {
-        let mut tty_arg = OsString::from("--tty=");
-        tty_arg.push(process_tty_name.as_ref());
-        let mut child = try!{Command::new("/bin/gdb")
+
+    pub fn nh(mut self) -> Self {
+        self.opt_nh = true;
+        self
+    }
+    pub fn nx(mut self) -> Self {
+        self.opt_nx = true;
+        self
+    }
+    pub fn quiet(mut self) -> Self {
+        self.opt_quiet = true;
+        self
+    }
+    pub fn batch(mut self) -> Self {
+        self.opt_batch = true;
+        self
+    }
+    pub fn working_dir(mut self, dir: PathBuf) -> Self {
+        self.opt_cd = Some(dir);
+        self
+    }
+    pub fn bps(mut self, bps: u32) -> Self {
+        self.opt_bps = Some(bps);
+        self
+    }
+    pub fn symbol_file(mut self, file: PathBuf) -> Self {
+        self.opt_symbol_file = Some(file);
+        self
+    }
+    pub fn core_file(mut self, file: PathBuf) -> Self {
+        self.opt_core_file = Some(file);
+        self
+    }
+    pub fn proc_id(mut self, pid: u32) -> Self {
+        self.opt_proc_id = Some(pid);
+        self
+    }
+    pub fn command_file(mut self, command_file: PathBuf) -> Self {
+        self.opt_command = Some(command_file);
+        self
+    }
+    pub fn source_dir(mut self, dir: PathBuf) -> Self {
+        self.opt_source_dir = Some(dir);
+        self
+    }
+    pub fn args(mut self, args: &[OsString]) -> Self {
+        self.opt_args.extend_from_slice(args);
+        self
+    }
+    pub fn program(mut self, program: PathBuf) -> Self {
+        self.opt_program = Some(program);
+        self
+    }
+    pub fn tty(mut self, tty: PathBuf) -> Self {
+        self.opt_tty = Some(tty);
+        self
+    }
+    pub fn try_spawn<S>(self, oob_sink: S) -> Result<GDB, ::std::io::Error> where S: OutOfBandRecordSink + 'static
+    {
+        let mut args = Vec::<OsString>::new();
+        if self.opt_nh {
+            args.push("--nh".into());
+        }
+        if self.opt_nx {
+            args.push("--nx".into());
+        }
+        if self.opt_quiet {
+            args.push("--quiet".into());
+        }
+        if self.opt_batch {
+            args.push("--batch".into());
+        }
+        if let Some(cd) = self.opt_cd {
+            args.push("--cd=".into());
+            args.last_mut().unwrap().push(&cd);
+        }
+        if let Some(bps) = self.opt_bps {
+            args.push("-b".into());
+            args.push(bps.to_string().into());
+        }
+        if let Some(symbol_file) = self.opt_symbol_file {
+            args.push("--symbols=".into());
+            args.last_mut().unwrap().push(&symbol_file);
+        }
+        if let Some(core_file) = self.opt_core_file {
+            args.push("--core=".into());
+            args.last_mut().unwrap().push(&core_file);
+        }
+        if let Some(proc_id) = self.opt_proc_id {
+            args.push("--pid=".into());
+            args.last_mut().unwrap().push(proc_id.to_string());
+        }
+        if let Some(command) = self.opt_command {
+            args.push("--command=".into());
+            args.last_mut().unwrap().push(&command);
+        }
+        if let Some(source_dir) = self.opt_source_dir {
+            args.push("--directory=".into());
+            args.last_mut().unwrap().push(&source_dir);
+        }
+        if let Some(tty) = self.opt_tty {
+            args.push("--tty=".into());
+            args.last_mut().unwrap().push(&tty);
+        }
+        if !self.opt_args.is_empty() {
+            args.push("--args=".into());
+            for arg in self.opt_args {
+                args.push(arg.into());
+            }
+        }
+        if let Some(program) = self.opt_program {
+            args.push(program.into());
+        }
+
+        let mut child = try!{Command::new(self.gdb_path)
             .arg("--interpreter=mi")
-            .arg(tty_arg)
-            .args(arguments)
+            .args(args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()};
@@ -80,7 +223,9 @@ impl GDB {
             }
           )
     }
+}
 
+impl GDB {
     pub fn interrupt_execution(&self) -> Result<(), ::nix::Error> {
         use ::nix::sys::signal;
         signal::kill(self.process.id() as i32, signal::SIGINT)

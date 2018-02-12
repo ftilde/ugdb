@@ -1,3 +1,4 @@
+pub mod commands;
 pub mod console;
 pub mod expression_table;
 pub mod srcview;

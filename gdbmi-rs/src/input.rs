@@ -6,7 +6,7 @@ use std::fmt;
 
 #[derive(Debug)]
 pub struct MiCommand {
-    operation: String,
+    operation: &'static str,
     options: Vec<String>,
     parameters: Vec<String>,
 }
@@ -81,7 +81,7 @@ impl MiCommand {
     }
     pub fn interpreter_exec(interpreter: String, command: String) -> MiCommand {
         MiCommand {
-            operation: "interpreter-exec".to_owned(),
+            operation: "interpreter-exec",
             options: vec![interpreter, command],
             parameters: Vec::new(),
         }
@@ -94,7 +94,7 @@ impl MiCommand {
 
     pub fn data_disassemble_file<P: AsRef<Path>>(file: P, linenum: usize, lines: Option<usize>, mode: DisassembleMode) -> MiCommand {
         MiCommand {
-            operation: "data-disassemble".to_owned(),
+            operation: "data-disassemble",
             options: vec!["-f".to_owned(), file.as_ref().to_string_lossy().to_string(), "-l".to_owned(), linenum.to_string(), "-n".to_owned(), lines.map(|l| l as isize).unwrap_or(-1).to_string()],
             parameters: vec![format!("{}",(mode as u8))],
         }
@@ -102,7 +102,7 @@ impl MiCommand {
 
     pub fn data_disassemble_address(start_addr: usize, end_addr: usize, mode: DisassembleMode) -> MiCommand {
         MiCommand {
-            operation: "data-disassemble".to_owned(),
+            operation: "data-disassemble",
             options: vec!["-s".to_owned(), start_addr.to_string(), "-e".to_owned(), end_addr.to_string()],
             parameters: vec![format!("{}",(mode as u8))],
         }
@@ -110,7 +110,7 @@ impl MiCommand {
 
     pub fn data_evaluate_expression(expression: String) -> MiCommand {
         MiCommand {
-            operation: "data-evaluate-expression".to_owned(),
+            operation: "data-evaluate-expression",
             options: vec![format!("\"{}\"", expression)], //TODO: maybe we need to quote existing " in expression. Is this even possible?
             parameters: vec![],
         }
@@ -118,7 +118,7 @@ impl MiCommand {
 
     pub fn insert_breakpoint(location: BreakPointLocation) -> MiCommand {
         MiCommand {
-            operation: "break-insert".to_owned(),
+            operation: "break-insert",
             options: match location {
                 BreakPointLocation::Address(addr) => {
                     vec![format!("*0x{:x}", addr)] //TODO: is this correct?
@@ -141,7 +141,7 @@ impl MiCommand {
         options.sort();
         options.dedup();
         MiCommand {
-            operation: "break-delete".to_owned(),
+            operation: "break-delete",
             options: options,
             parameters: Vec::new(),
         }
@@ -149,7 +149,7 @@ impl MiCommand {
 
     pub fn environment_pwd() -> MiCommand {
         MiCommand {
-            operation: "environment-pwd".to_owned(),
+            operation: "environment-pwd",
             options: Vec::new(),
             parameters: Vec::new(),
         }
@@ -159,15 +159,23 @@ impl MiCommand {
     // Use gdb.interrupt_execution instead.
     pub fn exec_interrupt(/*TODO incorporate all & threadgroup? */) -> MiCommand {
         MiCommand {
-            operation: "exec-interrupt".to_owned(),
+            operation: "exec-interrupt",
             options: Vec::new(),
             parameters: Vec::new(),
         }
     }
     pub fn exit() -> MiCommand {
         MiCommand {
-            operation: "gdb-exit".to_owned(),
+            operation: "gdb-exit",
             options: Vec::new(),
+            parameters: Vec::new(),
+        }
+    }
+
+    pub fn thread_info(thread_id: Option<u64>) -> MiCommand {
+        MiCommand {
+            operation: "thread-info",
+            options: if let Some(id) = thread_id { vec![id.to_string()] } else { vec![] },
             parameters: Vec::new(),
         }
     }

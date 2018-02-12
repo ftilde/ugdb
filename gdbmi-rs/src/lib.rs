@@ -120,4 +120,9 @@ impl GDB {
         command.write_interpreter_string(&mut self.stdin, command_token).expect("write interpreter command");
         let _ = self.result_output.recv();
     }
+
+    pub fn is_session_active(&mut self) -> Result<bool, ExecuteError> {
+        let res = self.execute(input::MiCommand::thread_info(None))?;
+        Ok(!res.results["threads"].is_empty())
+    }
 }

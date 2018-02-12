@@ -1,7 +1,9 @@
-use gdbmi;
 use logging::{
     Logger,
     LogMsgType,
+};
+use tui::commands::{
+    CommandState,
 };
 
 use unsegen::base::{
@@ -45,6 +47,7 @@ pub struct Console {
     prompt_line: PromptLine,
     layout: VerticalLayout,
     last_gdb_state: GDBState,
+    command_state: CommandState,
 }
 
 static STOPPED_PROMPT: &'static str = "(gdb) ";
@@ -59,6 +62,7 @@ impl Console {
             prompt_line: PromptLine::with_prompt(STOPPED_PROMPT.into()),
             layout: VerticalLayout::new(SeparatingStyle::Draw(GraphemeCluster::try_from('=').unwrap())),
             last_gdb_state: GDBState::Stopped,
+            command_state: CommandState::Idle,
         }
     }
 
@@ -108,31 +112,8 @@ impl Console {
         } else {
             self.prompt_line.finish_line().to_owned()
         };
-        match line.as_ref() {
-            "!stop" => {
-                p.gdb.mi.interrupt_execution().expect("interrupted gdb");
-
-                // This does not always seem to unblock gdb, but only hang it
-                //use gdbmi::input::MiCommand;
-                //gdb.execute(&MiCommand::exec_interrupt()).expect("Interrupt ");
-            },
-            // Gdb commands
-            _ => {
-                self.write_to_gdb_log(format!("{}{}\n", STOPPED_PROMPT, line));
-                match p.gdb.mi.execute(&gdbmi::input::MiCommand::cli_exec(line)) {
-                    Ok(result) => {
-                        p.logger.log_debug(format!("Result: {:?}", result));
-                    },
-                    Err(gdbmi::ExecuteError::Quit) => {
-                        self.write_to_gdb_log("quit");
-                    },
-                    Err(gdbmi::ExecuteError::Busy) => {
-                        self.write_to_gdb_log("GDB is running!");
-                    },
-                    //Err(err) => { panic!("Unknown error {:?}", err) },
-                }
-            },
-        }
+        self.write_to_gdb_log(format!("{}{}\n", STOPPED_PROMPT, line));
+        self.command_state.handle_input_line(&line, p);
     }
     pub fn update_after_event(&mut self, p: ::UpdateParameters) {
         if p.gdb.mi.is_running() {

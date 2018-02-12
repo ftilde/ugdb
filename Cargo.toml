@@ -31,14 +31,14 @@ syntect = "1.0"
 path = "unsegen/"
 
 [dependencies.unsegen-signals]
-path = "unsegen/signals"
+path = "unsegen-signals"
 
 [dependencies.unsegen-terminal]
-path = "unsegen/terminal"
+path = "unsegen-terminal"
 
 # For ExpressionTable
 [dependencies.unsegen-jsonviewer]
-path = "unsegen/jsonviewer"
+path = "unsegen-jsonviewer"
 
 [dependencies.gdbmi]
 path = "gdbmi-rs/"
@@ -46,3 +46,5 @@ path = "gdbmi-rs/"
 [build-dependencies]
 git2 = "0.6"
 toml = "0.4"
+
+[workspace]

@@ -179,5 +179,13 @@ impl MiCommand {
             parameters: Vec::new(),
         }
     }
+
+    pub fn file_exec_and_symbols(file: &Path) -> MiCommand {
+        MiCommand {
+            operation: "file-exec-and-symbols",
+            options: vec![file.to_string_lossy().to_string()],
+            parameters: Vec::new(),
+        }
+    }
 }
 

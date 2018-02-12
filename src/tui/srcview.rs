@@ -67,6 +67,9 @@ use std::path::{
 use std::collections::{
     HashSet,
 };
+use std::fs::{
+    File,
+};
 use std::ops::{
     Range,
 };
@@ -505,14 +508,27 @@ impl<'a> SourceView<'a> {
         }
     }
 
-    fn show<'b, P: AsRef<Path>, L: Into<LineIndex>>(&mut self, path: P, line: L, p: ::UpdateParameters) -> Result<(), PagerShowError> {
-        let need_to_reload = if let Some(ref content) = self.pager.content {
-            //TODO Also check if file itself has changed since last load. Check modification time
-            content.storage.get_file_path() != path.as_ref()
+    fn need_to_load_file(&self, path: &Path) -> bool {
+        if let Some(ref content) = self.pager.content {
+            if content.storage.get_file_path() != path {
+                return true
+            }
+            if let (Ok(modified_new), Ok(modified_old)) = (
+                File::open(path).and_then(|f| f.metadata()).and_then(|m| m.modified()),
+                content.storage.get_file_metadata().and_then(|m| m.modified())
+                )
+            {
+                modified_new > modified_old
+            } else {
+                true
+            }
         } else {
             true
-        };
-        if need_to_reload {
+        }
+    }
+
+    fn show<'b, P: AsRef<Path>, L: Into<LineIndex>>(&mut self, path: P, line: L, p: ::UpdateParameters) -> Result<(), PagerShowError> {
+        if self.need_to_load_file(path.as_ref()) {
             let path_ref = path.as_ref();
             try!{self.load(path_ref, p.gdb.breakpoints.values()).map_err(|e| PagerShowError::CouldNotOpenFile(path_ref.to_path_buf(), e))};
         } else {

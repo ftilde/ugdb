@@ -5,7 +5,10 @@ use std::cell::{
     RefCell,
 };
 use std::fmt;
-use std::fs::File;
+use std::fs::{
+    File,
+    Metadata,
+};
 use std::io;
 use std::io::{
     BufReader,
@@ -286,6 +289,10 @@ impl FileLineStorage {
 
     pub fn get_file_path(&self) -> &Path {
         &self.file_path.as_path()
+    }
+
+    pub fn get_file_metadata(&self) -> ::std::io::Result<Metadata> {
+        self.reader.borrow().get_ref().metadata()
     }
 
     fn get_line(&self, index: usize) -> Option<String> {

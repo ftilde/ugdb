@@ -52,7 +52,7 @@ use gdb::{
     BreakpointOperationError,
 };
 use gdbmi::ExecuteError;
-use gdbmi::input::{
+use gdbmi::commands::{
     MiCommand,
     BreakPointLocation,
     BreakPointNumber,

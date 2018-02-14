@@ -1,4 +1,4 @@
-use gdbmi::input::MiCommand;
+use gdbmi::commands::MiCommand;
 use gdbmi::ExecuteError;
 
 pub enum CommandState {

@@ -13,7 +13,7 @@ use std::path::{
     Path,
     PathBuf,
 };
-use gdbmi::input::{
+use gdbmi::commands::{
     MiCommand,
     BreakPointLocation,
 };

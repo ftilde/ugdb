@@ -3,7 +3,7 @@ extern crate nix;
 #[macro_use]
 extern crate nom;
 
-pub mod input;
+pub mod commands;
 pub mod output;
 
 use std::process::{
@@ -239,7 +239,7 @@ impl GDB {
         self.current_command_token
     }
 
-    pub fn execute<C: std::borrow::Borrow<input::MiCommand>>(&mut self, command: C) -> Result<output::ResultRecord, ExecuteError> {
+    pub fn execute<C: std::borrow::Borrow<commands::MiCommand>>(&mut self, command: C) -> Result<output::ResultRecord, ExecuteError> {
         if self.is_running() {
             return Err(ExecuteError::Busy)
         }
@@ -260,14 +260,14 @@ impl GDB {
         }
     }
 
-    pub fn execute_later(&mut self, command: &input::MiCommand) {
+    pub fn execute_later(&mut self, command: &commands::MiCommand) {
         let command_token = self.get_usable_token();
         command.write_interpreter_string(&mut self.stdin, command_token).expect("write interpreter command");
         let _ = self.result_output.recv();
     }
 
     pub fn is_session_active(&mut self) -> Result<bool, ExecuteError> {
-        let res = self.execute(input::MiCommand::thread_info(None))?;
+        let res = self.execute(commands::MiCommand::thread_info(None))?;
         Ok(!res.results["threads"].is_empty())
     }
 }

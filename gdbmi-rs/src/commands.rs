@@ -3,12 +3,13 @@ use std::path::{
     Path,
 };
 use std::fmt;
+use std::ffi::OsString;
 
 #[derive(Debug)]
 pub struct MiCommand {
     operation: &'static str,
-    options: Vec<String>,
-    parameters: Vec<String>,
+    options: Vec<OsString>,
+    parameters: Vec<OsString>,
 }
 
 pub enum DisassembleMode {
@@ -66,23 +67,26 @@ impl fmt::Display for BreakPointNumber {
 
 impl MiCommand {
     pub fn write_interpreter_string<S: Write>(&self, sink: &mut S, token: super::Token) -> Result<(), Error> {
-        try!{write!(sink, "{}-{}", token, self.operation)};
+        use std::os::unix::ffi::OsStrExt;
+        write!(sink, "{}-{}", token, self.operation)?;
         for option in &self.options {
-            try!{write!(sink, " {}", option)};
+            write!(sink, " ")?;
+            sink.write_all(option.as_bytes())?;
         }
         if !self.parameters.is_empty() {
-            try!{write!(sink, " --")};
+            write!(sink, " --")?;
             for parameter in &self.parameters {
-                try!{write!(sink, " {}", parameter)};
+                write!(sink, " ")?;
+                sink.write_all(parameter.as_bytes())?;
             }
         }
-        try!{write!(sink, "\n")};
+        write!(sink, "\n")?;
         Ok(())
     }
-    pub fn interpreter_exec(interpreter: String, command: String) -> MiCommand {
+    pub fn interpreter_exec<S1: Into<OsString>, S2: Into<OsString>>(interpreter: S1, command: S2) -> MiCommand {
         MiCommand {
             operation: "interpreter-exec",
-            options: vec![interpreter, command],
+            options: vec![interpreter.into(), command.into()],
             parameters: Vec::new(),
         }
     }
@@ -95,23 +99,23 @@ impl MiCommand {
     pub fn data_disassemble_file<P: AsRef<Path>>(file: P, linenum: usize, lines: Option<usize>, mode: DisassembleMode) -> MiCommand {
         MiCommand {
             operation: "data-disassemble",
-            options: vec!["-f".to_owned(), file.as_ref().to_string_lossy().to_string(), "-l".to_owned(), linenum.to_string(), "-n".to_owned(), lines.map(|l| l as isize).unwrap_or(-1).to_string()],
-            parameters: vec![format!("{}",(mode as u8))],
+            options: vec![OsString::from("-f"), OsString::from(file.as_ref()), OsString::from("-l"), OsString::from(linenum.to_string()), OsString::from("-n"), OsString::from(lines.map(|l| l as isize).unwrap_or(-1).to_string())],
+            parameters: vec![OsString::from((mode as u8).to_string())],
         }
     }
 
     pub fn data_disassemble_address(start_addr: usize, end_addr: usize, mode: DisassembleMode) -> MiCommand {
         MiCommand {
             operation: "data-disassemble",
-            options: vec!["-s".to_owned(), start_addr.to_string(), "-e".to_owned(), end_addr.to_string()],
-            parameters: vec![format!("{}",(mode as u8))],
+            options: vec![OsString::from("-s"), OsString::from(start_addr.to_string()), OsString::from("-e"), OsString::from(end_addr.to_string())],
+            parameters: vec![OsString::from((mode as u8).to_string())],
         }
     }
 
     pub fn data_evaluate_expression(expression: String) -> MiCommand {
         MiCommand {
             operation: "data-evaluate-expression",
-            options: vec![format!("\"{}\"", expression)], //TODO: maybe we need to quote existing " in expression. Is this even possible?
+            options: vec![OsString::from(format!("\"{}\"", expression))], //TODO: maybe we need to quote existing " in expression. Is this even possible?
             parameters: vec![],
         }
     }
@@ -121,13 +125,13 @@ impl MiCommand {
             operation: "break-insert",
             options: match location {
                 BreakPointLocation::Address(addr) => {
-                    vec![format!("*0x{:x}", addr)] //TODO: is this correct?
+                    vec![OsString::from(format!("*0x{:x}", addr))] //TODO: is this correct?
                 },
                 BreakPointLocation::Function(path, func_name) => {
-                    vec!["--source".to_owned(), path.to_string_lossy().into_owned(), "--function".to_owned(), func_name.to_owned()] //TODO: is this correct?
+                    vec![OsString::from("--source"), OsString::from(path), OsString::from("--function"), OsString::from(func_name)] //TODO: is this correct?
                 },
                 BreakPointLocation::Line(path, line_number) => {
-                    vec!["--source".to_owned(), path.to_string_lossy().into_owned(), "--line".to_owned(), format!("{}", line_number)]
+                    vec![OsString::from("--source"), OsString::from(path), OsString::from("--line"), OsString::from(format!("{}", line_number))]
                 },
             },
             parameters: Vec::new(),
@@ -137,7 +141,7 @@ impl MiCommand {
     pub fn delete_breakpoints<I: Iterator<Item=BreakPointNumber>>(breakpoint_numbers: I) -> MiCommand {
         //let options = options: breakpoint_numbers.map(|n| format!("{} ", n)).collect(),
         //GDB is broken: see http://sourceware-org.1504.n7.nabble.com/Bug-breakpoints-20133-New-unable-to-delete-a-sub-breakpoint-td396197.html
-        let mut options = breakpoint_numbers.map(|n| format!("{} ", n.major)).collect::<Vec<String>>();
+        let mut options = breakpoint_numbers.map(|n| format!("{} ", n.major).into()).collect::<Vec<OsString>>();
         options.sort();
         options.dedup();
         MiCommand {
@@ -175,7 +179,7 @@ impl MiCommand {
     pub fn thread_info(thread_id: Option<u64>) -> MiCommand {
         MiCommand {
             operation: "thread-info",
-            options: if let Some(id) = thread_id { vec![id.to_string()] } else { vec![] },
+            options: if let Some(id) = thread_id { vec![id.to_string().into()] } else { vec![] },
             parameters: Vec::new(),
         }
     }
@@ -183,7 +187,19 @@ impl MiCommand {
     pub fn file_exec_and_symbols(file: &Path) -> MiCommand {
         MiCommand {
             operation: "file-exec-and-symbols",
-            options: vec![file.to_string_lossy().to_string()],
+            options: vec![file.into()],
+            parameters: Vec::new(),
+        }
+    }
+
+    pub fn file_symbol_file(file: Option<&Path>) -> MiCommand {
+        MiCommand {
+            operation: "file-symbol-file",
+            options: if let Some(file) = file {
+                vec![file.into()]
+            } else {
+                vec![]
+            },
             parameters: Vec::new(),
         }
     }

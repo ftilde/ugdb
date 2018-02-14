@@ -32,7 +32,7 @@ use unsegen::input::{
 };
 use unsegen::container::Container;
 use gdbmi::ExecuteError;
-use gdbmi::input::MiCommand;
+use gdbmi::commands::MiCommand;
 use gdbmi::output::ResultClass;
 use self::expression_parsing::parse_gdb_value;
 

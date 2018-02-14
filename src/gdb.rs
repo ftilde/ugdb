@@ -14,7 +14,7 @@ use gdbmi::output::{
     Object,
     ResultClass,
 };
-use gdbmi::input::{
+use gdbmi::commands::{
     BreakPointNumber,
     BreakPointLocation,
     MiCommand,
@@ -183,7 +183,7 @@ impl GDB {
 
     pub fn kill(&mut self) {
         self.mi.interrupt_execution().expect("interrupt worked");
-        self.mi.execute_later(&gdbmi::input::MiCommand::exit());
+        self.mi.execute_later(&gdbmi::commands::MiCommand::exit());
     }
 
     pub fn insert_breakpoint(&mut self, location: BreakPointLocation) -> Result<(), BreakpointOperationError> {

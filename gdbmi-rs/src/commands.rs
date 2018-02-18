@@ -5,7 +5,7 @@ use std::path::{
 use std::fmt;
 use std::ffi::OsString;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MiCommand {
     operation: &'static str,
     options: Vec<OsString>,
@@ -201,6 +201,18 @@ impl MiCommand {
                 vec![]
             },
             parameters: Vec::new(),
+        }
+    }
+
+    pub fn list_thread_groups(list_all_available: bool, thread_group_ids: &[u32]) -> MiCommand {
+        MiCommand {
+            operation: "list-thread-groups",
+            options: if list_all_available {
+                vec![OsString::from("--available")]
+            } else {
+                vec![]
+            },
+            parameters: thread_group_ids.iter().map(|id| id.to_string().into()).collect(),
         }
     }
 }

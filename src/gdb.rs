@@ -282,5 +282,16 @@ impl GDB {
             },
         }
     }
+
+    // Warning: This is a hack, as gdbmi does not currently offer a command to query the current target
+    // May not work and can break at any time.
+    pub fn get_target(&mut self) -> Result<Option<PathBuf>, ExecuteError> {
+        let result = self.mi.execute(MiCommand::list_thread_groups(false, &[]))?;
+        if result.class == ResultClass::Done {
+            Ok(result.results["groups"].members().filter_map(|thread| thread["executable"].as_str()).next().map(|exec| exec.into()))
+        } else {
+            Ok(None)
+        }
+    }
 }
 

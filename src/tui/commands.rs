@@ -1,9 +1,38 @@
 use gdbmi::commands::MiCommand;
 use gdbmi::ExecuteError;
 
+pub struct Command {
+    cmd: Box<FnMut(::UpdateParameters)->Result<(),ExecuteError>>,
+}
+
+impl Command {
+    fn new(cmd: Box<FnMut(::UpdateParameters)->Result<(),ExecuteError>>) -> Command {
+        Command {
+            cmd: cmd,
+        }
+    }
+    fn from_mi_with_msg(cmd: MiCommand, success_msg: &'static str) -> Command {
+        Command::new(
+            Box::new(move |p: ::UpdateParameters| {
+                let res = p.gdb.mi.execute(cmd.clone()).map(|_|());
+                if res.is_ok() {
+                    p.logger.log_message(success_msg);
+                }
+                res
+            }))
+    }
+    fn from_mi(cmd: MiCommand) -> Command {
+        Command::new(
+            Box::new(move |p: ::UpdateParameters| {
+                p.gdb.mi.execute(cmd.clone()).map(|_|())
+            }))
+    }
+}
+
+
 pub enum CommandState {
     Idle,
-    WaitingForConfirmation(MiCommand),
+    WaitingForConfirmation(Command),
 }
 
 impl CommandState {
@@ -16,10 +45,10 @@ impl CommandState {
         }
     }
 
-    fn execute_if_confirmed(line: &str, cmd: MiCommand, p: ::UpdateParameters) -> Self {
+    fn execute_if_confirmed(line: &str, cmd: Command, p: ::UpdateParameters) -> Self {
         match line {
             "y" | "Y" | "yes" => {
-                Self::execute_command(cmd, p);
+                Self::try_execute(cmd, p);
                 CommandState::Idle
             },
             "n" | "N" | "no" => {
@@ -32,16 +61,33 @@ impl CommandState {
         }
     }
 
-    fn execute_command(cmd: MiCommand, p: ::UpdateParameters) {
-        match p.gdb.mi.execute(&cmd) {
-            Ok(result) => {
-                p.logger.log_debug(format!("Result: {:?}", result));
+    fn print_execute_error(e: ExecuteError, p: ::UpdateParameters) {
+        match e {
+            ExecuteError::Quit => p.logger.log_message("quit"),
+            ExecuteError::Busy => p.logger.log_message("GDB is running!"),
+        }
+    }
+
+    fn try_execute(mut cmd: Command, p: ::UpdateParameters) {
+        match (cmd.cmd)(p) {
+            Ok(_) => { },
+            Err(e) => Self::print_execute_error(e, p),
+        }
+    }
+
+    fn ask_if_session_active(cmd: Command, confirmation_question: &'static str, p: ::UpdateParameters) -> Self {
+        match p.gdb.mi.is_session_active() {
+            Ok(true) => {
+                p.logger.log_message(format!("A debugging session is active. {} (y or n)", confirmation_question));
+                CommandState::WaitingForConfirmation(cmd)
             },
-            Err(ExecuteError::Quit) => {
-                p.logger.log_message("quit");
-            },
-            Err(ExecuteError::Busy) => {
-                p.logger.log_message("GDB is running!");
+            Ok(false) => {
+                Self::try_execute(cmd, p);
+                CommandState::Idle
+            }
+            Err(e) => {
+                Self::print_execute_error(e, p);
+                CommandState::Idle
             },
         }
     }
@@ -58,35 +104,31 @@ impl CommandState {
             "!stop" => {
                 p.gdb.mi.interrupt_execution().expect("interrupted gdb");
                 // This does not always seem to unblock gdb, but only hang it
-                //use gdbmi::input::MiCommand;
-                //gdb.execute(&MiCommand::exec_interrupt()).expect("Interrupt ");
-                //
+                //gdb.execute(&MiCommand::exec_interrupt()).expect("Interrupt");
+
                 CommandState::Idle
             },
-            "q" => {
-                let cmd = MiCommand::exit();
-                match p.gdb.mi.is_session_active() {
-                    Ok(true) => {
-                        p.logger.log_message("A debugging session is active. Quit anyway? (y or n)");
-                        CommandState::WaitingForConfirmation(cmd)
+            "!reload" => {
+                match p.gdb.get_target() {
+                    Ok(Some(target)) => {
+                        Self::ask_if_session_active(Command::from_mi_with_msg(MiCommand::file_exec_and_symbols(&target), "Reloaded target."), "Reload anyway?", p)
                     },
-                    Ok(false) => {
-                        Self::execute_command(cmd, p);
-                        CommandState::Idle
-                    }
-                    Err(ExecuteError::Quit) => {
-                        p.logger.log_message("quit");
+                    Ok(None) => {
+                        p.logger.log_message("No target. Use the 'file' command to specify one.");
                         CommandState::Idle
                     },
-                    Err(ExecuteError::Busy) => {
-                        p.logger.log_message("GDB is running!");
+                    Err(e) => {
+                        Self::print_execute_error(e, p);
                         CommandState::Idle
                     },
                 }
+            },
+            "q" => {
+                Self::ask_if_session_active(Command::from_mi(MiCommand::exit()), "Quit anyway?", p)
             }
             // Gdb commands
             _ => {
-                Self::execute_command(MiCommand::cli_exec(line.to_owned()), p);
+                Self::try_execute(Command::from_mi(MiCommand::cli_exec(line.to_owned())), p);
                 CommandState::Idle
             },
         }

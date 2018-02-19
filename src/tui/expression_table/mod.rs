@@ -37,6 +37,7 @@ use gdbmi::output::ResultClass;
 use self::expression_parsing::parse_gdb_value;
 
 mod expression_parsing;
+mod lexer;
 
 pub struct ExpressionRow {
     expression: LineEdit,

@@ -160,7 +160,7 @@ impl DisplayArray {
             length_changed: self.values.len() != values.len(),
         };
 
-        let num_old_values = self.values.len();
+        let num_old_values = min(self.values.len(), values.len());
         for (value, old_val) in values[..num_old_values].iter().zip(self.values.iter()) {
             result.values.push(old_val.replace(value));
         }

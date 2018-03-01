@@ -1,0 +1,62 @@
+use super::lexer;
+use super::lexer::{Span};
+use super::ast::{Node, build_vec};
+
+grammar;
+
+#[inline]
+TextOrString: Span  = {
+    <@L> String <@R> => (<>),
+    <@L> Text <@R> => (<>),
+};
+
+#[inline]
+Scalar: Span  = {
+    <@L> TextOrString+ <@R> => (<>),
+};
+
+#[inline]
+Array: Node = {
+    "[" "]" => Node::Array(Vec::new()),
+    "[" <r:(<Value> ",")*> <f:Value>"]" => Node::Array(build_vec(r, f)),
+};
+
+#[inline]
+Key: Span = {
+    <@L> TextOrString <@R> => (<>), //TODO: Maybe be more liberal here?
+};
+
+#[inline]
+MapElement: (Span, Node) = {
+    <k:Key> "=" <v:Value> => (k, v),
+    <v:Value> => ((0,0), v),
+};
+
+#[inline]
+Map: Node = {
+    "{" "}" => Node::Map(Vec::new()),
+    "{" <r:(<MapElement> ",")*> <l:MapElement>"}" => Node::Map(build_vec(r, l)),
+};
+
+pub Value: Node = {
+    Array,
+    Map,
+    Scalar => Node::Leaf((<>)),
+    <@L> ! <@R> => Node::Leaf((<>)),
+};
+
+extern {
+    type Location = lexer::Location;
+    type Error = lexer::LexicalError;
+
+    enum lexer::Token {
+        "{" => lexer::Token::LBrace,
+        "}" => lexer::Token::RBrace,
+        "[" => lexer::Token::LSquareBracket,
+        "]" => lexer::Token::RSquareBracket,
+        "," => lexer::Token::Comma,
+        "=" => lexer::Token::Equals,
+        String => lexer::Token::String,
+        Text => lexer::Token::Text,
+    }
+}

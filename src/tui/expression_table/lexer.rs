@@ -1,6 +1,8 @@
 use std::str::CharIndices;
 
-pub type TokenWithLocation = (usize, Token, usize);
+pub type Location = usize;
+pub type TokenWithLocation = (Location, Token, Location);
+pub type Span = (Location, Location);
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Token {
@@ -14,19 +16,20 @@ pub enum Token {
     Text,
 }
 
+
 #[derive(Copy, Clone)]
 enum LexerState {
     Free,
     PendingOutput(TokenWithLocation),
-    InString(usize),
-    InStringEscapedChar(usize),
-    InText(usize, usize)
+    InString(Location),
+    InStringEscapedChar(Location),
+    InText(Location, Location)
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum LexicalError {
     UnfinishedString {
-        begin_index: usize
+        begin_index: Location
     }
 }
 
@@ -77,7 +80,7 @@ impl<'input> Iterator for Lexer<'input> {
                 },
                 LexerState::InString(begin) => {
                     match c {
-                        '"' => (Some((begin, Token::String, i)), LexerState::Free),
+                        '"' => (Some((begin, Token::String, i+1)), LexerState::Free),
                         '\\' => (None, LexerState::InStringEscapedChar(begin)),
                         _ => (None, LexerState::InString(begin)),
                     }
@@ -97,7 +100,7 @@ impl<'input> Iterator for Lexer<'input> {
                         ',' => (Some((begin, Token::Text, end)), LexerState::PendingOutput((i, Token::Comma, i+1))),
                         '=' => (Some((begin, Token::Text, end)), LexerState::PendingOutput((i, Token::Equals, i+1))),
                         ' ' | '\t' | '\n' => (None, LexerState::InText(begin, end)),
-                        _ => (None, LexerState::InText(begin, i)),
+                        _ => (None, LexerState::InText(begin, i+1)),
                     }
                 },
             };

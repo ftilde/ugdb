@@ -24,7 +24,7 @@ rand = "0.3"
 unix_socket = "0.5"
 
 # For ExpressionTable (gdb expression parsing)
-pest = "0.4"
+lalrpop-util = "0.14.0"
 
 #unsegen
 syntect = "1.0"
@@ -48,5 +48,6 @@ path = "gdbmi-rs/"
 [build-dependencies]
 git2 = "0.6"
 toml = "0.4"
+lalrpop = "0.14.0"
 
 [workspace]

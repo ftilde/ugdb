@@ -1,5 +1,3 @@
-#![recursion_limit = "200"] // See https://github.com/pest-parser/pest
-
 #[macro_use]
 extern crate chan;
 extern crate chan_signal;
@@ -7,6 +5,7 @@ extern crate chan_signal;
 extern crate structopt;
 extern crate time;
 extern crate gdbmi;
+extern crate lalrpop_util;
 
 // For ipc
 #[macro_use]
@@ -19,8 +18,6 @@ extern crate unsegen;
 extern crate unsegen_signals;
 extern crate unsegen_terminal;
 extern crate unsegen_jsonviewer; // For ExpressionTable
-#[macro_use]
-extern crate pest; // For ExpressionTable (gdb structure parsing)
 
 extern crate unicode_width; // For AssemblyLineDecorator
 

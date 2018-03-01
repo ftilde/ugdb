@@ -2,3 +2,4 @@ target
 Makefile
 *.swp
 output.log
+src/tui/expression_table/parser.rs

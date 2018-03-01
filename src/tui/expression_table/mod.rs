@@ -38,6 +38,8 @@ use self::expression_parsing::parse_gdb_value;
 
 mod expression_parsing;
 mod lexer;
+mod ast;
+mod parser;
 
 pub struct ExpressionRow {
     expression: LineEdit,
@@ -146,7 +148,11 @@ impl ExpressionTable {
                                 res.results["msg"].clone()
                             },
                             ResultClass::Done => {
-                                parse_gdb_value(res.results["value"].as_str().expect("value present"))
+                                let to_parse = res.results["value"].as_str().expect("value present");
+                                match parse_gdb_value(to_parse) {
+                                    Ok(p) => p,
+                                    Err(_) => JsonValue::String(format!("*Error parsing*: {}", to_parse)),
+                                }
                             },
                             other => {
                                 panic!("unexpected result class: {:?}", other)

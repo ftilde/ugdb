@@ -1,5 +1,5 @@
 use super::lexer::{Span};
-use unsegen_jsonviewer::json_ext::{
+use json::{
     JsonValue,
     object,
 };

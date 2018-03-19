@@ -1,9 +1,15 @@
-use unsegen_jsonviewer::json_ext::{
+#[macro_use]
+extern crate json;
+extern crate lalrpop_util;
+
+mod lexer;
+mod ast;
+mod parser;
+
+use json::{
     JsonValue,
 };
-use super::lexer;
-use super::parser;
-use lalrpop_util;
+
 
 pub type ParseError = lalrpop_util::ParseError<lexer::Location, lexer::Token, lexer::LexicalError>;
 

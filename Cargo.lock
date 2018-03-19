@@ -251,6 +251,15 @@ version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "gdb-expression-parsing"
+version = "0.1.0"
+dependencies = [
+ "json 0.11.10 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lalrpop 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lalrpop-util 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "gdbmi"
 version = "0.1.0"
 dependencies = [
@@ -885,11 +894,11 @@ version = "0.1.0"
 dependencies = [
  "chan 0.1.19 (registry+https://github.com/rust-lang/crates.io-index)",
  "chan-signal 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "gdb-expression-parsing 0.1.0",
  "gdbmi 0.1.0",
  "git2 0.6.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "json 0.11.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "lalrpop 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "lalrpop-util 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.3.17 (registry+https://github.com/rust-lang/crates.io-index)",
  "structopt 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "syntect 1.8.0 (registry+https://github.com/rust-lang/crates.io-index)",

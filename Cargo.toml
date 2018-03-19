@@ -23,9 +23,6 @@ json = "0.11"
 rand = "0.3"
 unix_socket = "0.5"
 
-# For ExpressionTable (gdb expression parsing)
-lalrpop-util = "0.14.0"
-
 #unsegen
 syntect = "1.0"
 
@@ -41,6 +38,8 @@ path = "unsegen-terminal"
 # For ExpressionTable
 [dependencies.unsegen-jsonviewer]
 path = "unsegen-jsonviewer"
+[dependencies.gdb-expression-parsing]
+path = "gdb-expression-parsing"
 
 [dependencies.gdbmi]
 path = "gdbmi-rs/"

@@ -34,12 +34,7 @@ use unsegen::container::Container;
 use gdbmi::ExecuteError;
 use gdbmi::commands::MiCommand;
 use gdbmi::output::ResultClass;
-use self::expression_parsing::parse_gdb_value;
-
-mod expression_parsing;
-mod lexer;
-mod ast;
-mod parser;
+use gdb_expression_parsing::parse_gdb_value;
 
 pub struct ExpressionRow {
     expression: LineEdit,

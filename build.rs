@@ -1,4 +1,3 @@
-extern crate lalrpop;
 extern crate git2;
 extern crate toml;
 
@@ -6,9 +5,6 @@ use git2::{Repository};
 use toml::{Value, from_str};
 
 fn main() {
-    // Preprocess lalrpop grammar files
-    lalrpop::process_root().unwrap();
-
     // Find git revision of current version
     let repo = Repository::open(".").expect("Current folder is not a git repositry");
     let head = repo.head().unwrap();

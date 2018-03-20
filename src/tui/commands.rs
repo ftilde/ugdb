@@ -1,5 +1,6 @@
 use gdbmi::commands::MiCommand;
 use gdbmi::ExecuteError;
+use gdbmi::output::{ResultClass, ResultRecord};
 
 pub struct Command {
     cmd: Box<FnMut(::UpdateParameters)->Result<(),ExecuteError>>,
@@ -128,7 +129,15 @@ impl CommandState {
             }
             // Gdb commands
             _ => {
-                Self::try_execute(Command::from_mi(MiCommand::cli_exec(line.to_owned())), p);
+                match p.gdb.mi.execute(MiCommand::cli_exec(line)) {
+                    Ok(ResultRecord { class: ResultClass::Error, results, .. }) => {
+                        // Most of the time gdb seems to also write error messages to the console.
+                        // We therefore (only) write the error message to debug log to avoid duplicates.
+                        p.logger.log_debug(results["msg"].as_str().unwrap_or(&results.pretty(2)));
+                    },
+                    Ok(_) => {},
+                    Err(e) => Self::print_execute_error(e, p),
+                }
                 CommandState::Idle
             },
         }

@@ -1,7 +1,6 @@
 extern crate json;
 extern crate nix;
-#[macro_use]
-extern crate nom;
+#[macro_use] extern crate nom;
 
 pub mod commands;
 pub mod output;

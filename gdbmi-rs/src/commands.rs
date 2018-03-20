@@ -65,6 +65,22 @@ impl fmt::Display for BreakPointNumber {
     }
 }
 
+fn escape_command(input: &str) -> String {
+    let mut output = String::new();
+    output.push('\"');
+    for c in input.chars() {
+        match c {
+            '\\' => output.push_str("\\\\"),
+            '\"' => output.push_str("\\\""),
+            '\r' => output.push_str("\\\r"),
+            '\n' => output.push_str("\\\n"),
+            other => output.push(other),
+        }
+    }
+    output.push('\"');
+    output
+}
+
 impl MiCommand {
     pub fn write_interpreter_string<S: Write>(&self, sink: &mut S, token: super::Token) -> Result<(), Error> {
         use std::os::unix::ffi::OsStrExt;
@@ -91,9 +107,8 @@ impl MiCommand {
         }
     }
 
-    pub fn cli_exec(command: String) -> MiCommand {
-        //TODO need quotes everywhere?
-        Self::interpreter_exec("console".to_owned(), format!("\"{}\"", command))
+    pub fn cli_exec(command: &str) -> MiCommand {
+        Self::interpreter_exec("console".to_owned(), escape_command(&command))
     }
 
     pub fn data_disassemble_file<P: AsRef<Path>>(file: P, linenum: usize, lines: Option<usize>, mode: DisassembleMode) -> MiCommand {

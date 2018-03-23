@@ -27,17 +27,18 @@ unix_socket = "0.5"
 syntect = "1.0"
 
 [dependencies.unsegen]
-path = "unsegen/"
+path = "../unsegen"
 
 [dependencies.unsegen-signals]
-path = "unsegen-signals"
+path = "../unsegen/unsegen-signals"
 
 [dependencies.unsegen-terminal]
-path = "unsegen-terminal"
+path = "../unsegen/unsegen-terminal"
 
 # For ExpressionTable
 [dependencies.unsegen-jsonviewer]
-path = "unsegen-jsonviewer"
+path = "../unsegen/unsegen-jsonviewer"
+
 [dependencies.gdb-expression-parsing]
 path = "gdb-expression-parsing"
 

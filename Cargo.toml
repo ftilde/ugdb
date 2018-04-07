@@ -27,17 +27,17 @@ unix_socket = "0.5"
 syntect = "1.0"
 
 [dependencies.unsegen]
-path = "../unsegen"
+git = "https://github.com/ftilde/unsegen"
 
 [dependencies.unsegen-signals]
-path = "../unsegen/unsegen-signals"
+git = "https://github.com/ftilde/unsegen"
 
 [dependencies.unsegen-terminal]
-path = "../unsegen/unsegen-terminal"
+git = "https://github.com/ftilde/unsegen"
 
 # For ExpressionTable
 [dependencies.unsegen-jsonviewer]
-path = "../unsegen/unsegen-jsonviewer"
+git = "https://github.com/ftilde/unsegen"
 
 [dependencies.gdb-expression-parsing]
 path = "gdb-expression-parsing"

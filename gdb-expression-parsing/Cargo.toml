@@ -3,7 +3,6 @@ name = "gdb-expression-parsing"
 version = "0.1.0"
 authors = ["ftilde <ftilde@protonmail.com>"]
 
-
 [dependencies]
 lalrpop-util = "0.14.0"
 json = "0.11"

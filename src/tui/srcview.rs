@@ -12,20 +12,18 @@ use unsegen::input::{
     ScrollBehavior,
 };
 use unsegen::widget::{
+    text_width,
     ColDemand,
     Demand,
     Demand2D,
-    FileLineStorage,
     HorizontalLayout,
     LineNumber,
     LineIndex,
-    LineStorage,
-    MemoryLineStorage,
     RenderingHints,
     SeparatingStyle,
     Widget,
 };
-use unsegen::widget::widgets::{
+use unsegen_pager::{
     LineDecorator,
     Pager,
     PagerContent,
@@ -34,10 +32,8 @@ use unsegen::widget::widgets::{
     SyntectHighlighter,
 };
 use unsegen::container::Container;
-use syntect::highlighting::{
+use unsegen_pager::{
     Theme,
-};
-use syntect::parsing::{
     SyntaxSet,
 };
 use gdbmi::output::{
@@ -63,11 +59,9 @@ use std::path::{
     Path,
     PathBuf,
 };
+use std::fs;
 use std::collections::{
     HashSet,
-};
-use std::fs::{
-    File,
 };
 use std::ops::{
     Range,
@@ -151,9 +145,9 @@ impl AssemblyDecorator {
 
 impl LineDecorator for AssemblyDecorator {
     type Line = AssemblyLine;
-    fn horizontal_space_demand<'a, 'b: 'a>(&'a self, lines: Box<DoubleEndedIterator<Item=(LineIndex, Self::Line)> + 'b>) -> ColDemand {
+    fn horizontal_space_demand<'a, 'b: 'a>(&'a self, lines: Box<DoubleEndedIterator<Item=(LineIndex, &Self::Line)> + 'b>) -> ColDemand {
         let max_space = lines.last().map(|(_,l)| {
-            ::unicode_width::UnicodeWidthStr::width(format!(" 0x{:x} ", l.address.0).as_str())
+            text_width(format!(" 0x{:x} ", l.address.0).as_str())
         }).unwrap_or(0);
         Demand::from_to(0, max_space)
     }
@@ -189,7 +183,7 @@ impl LineDecorator for AssemblyDecorator {
 pub struct AssemblyView<'a> {
     highlighting_theme: &'a Theme,
     syntax_set: SyntaxSet,
-    pager: Pager<MemoryLineStorage<AssemblyLine>, SyntectHighlighter<'a>, AssemblyDecorator>,
+    pager: Pager<AssemblyLine, AssemblyDecorator>,
     last_stop_position: Option<Address>,
 }
 
@@ -244,25 +238,24 @@ impl<'a> AssemblyView<'a> {
 
     fn update_decoration(&mut self, p: ::UpdateParameters) {
         if let Some(ref mut content) = self.pager.content {
-            if let Some(first_line) = content.storage.view_line(LineIndex(0)) {
-                let min_address = first_line.address;
-                let max_address = content.storage.view(LineIndex(0)..).last().expect("we know we have at least one line").1.address;
+            let first_line_address = content.view_line(LineIndex(0)).map(|l| l.address);
+            if let Some(min_address) = first_line_address {
+                let max_address = { content.view(LineIndex(0)..).last().expect("we know we have at least one line").1.address };
                 content.decorator = AssemblyDecorator::new(min_address..max_address, self.last_stop_position, p.gdb.breakpoints.values())
             }
         }
     }
 
     fn show_lines(&mut self, lines: Vec<AssemblyLine>, p: ::UpdateParameters) {
-        let asm_storage = MemoryLineStorage::with_lines(lines);
 
-        let min_address = asm_storage.lines.first().expect("At least one instruction").address;
+        let min_address = lines.first().expect("At least one instruction").address;
         //TODO: use RangeInclusive when available on stable
-        let max_address = asm_storage.lines.last().expect("At least one instruction").address + 1;
+        let max_address = lines.last().expect("At least one instruction").address + 1;
 
         let syntax = self.syntax_set.find_syntax_by_extension("s")
             .unwrap_or(self.syntax_set.find_syntax_plain_text());
         self.pager.load(
-            PagerContent::create(asm_storage)
+            PagerContent::from_lines(lines)
             .with_highlighter(SyntectHighlighter::new(syntax, self.highlighting_theme))
             .with_decorator(AssemblyDecorator::new(min_address..max_address, self.last_stop_position, p.gdb.breakpoints.values())));
     }
@@ -406,9 +399,9 @@ impl SourceDecorator {
 
 impl LineDecorator for SourceDecorator {
     type Line = String;
-    fn horizontal_space_demand<'a, 'b: 'a>(&'a self, lines: Box<DoubleEndedIterator<Item=(LineIndex, Self::Line)> + 'b>) -> ColDemand {
+    fn horizontal_space_demand<'a, 'b: 'a>(&'a self, lines: Box<DoubleEndedIterator<Item=(LineIndex, &Self::Line)> + 'b>) -> ColDemand {
         let max_space = lines.last().map(|(i,_)| {
-            ::unicode_width::UnicodeWidthStr::width(format!(" {} ", i).as_str())
+            text_width(format!(" {} ", i).as_str())
         }).unwrap_or(0);
         Demand::from_to(0, max_space)
     }
@@ -441,9 +434,21 @@ impl LineDecorator for SourceDecorator {
 pub struct SourceView<'a> {
     highlighting_theme: &'a Theme,
     syntax_set: SyntaxSet,
-    pager: Pager<FileLineStorage, SyntectHighlighter<'a>, SourceDecorator>,
+    pager: Pager<String, SourceDecorator>,
+    file_path: Option<PathBuf>,
     last_stop_position: Option<SrcPosition>,
 }
+
+macro_rules! current_file_and_content_mut {
+    ($x:expr) => (
+        match (&$x.file_path, &mut $x.pager.content) {
+            (&Some(ref file_path), &mut Some(ref mut content)) => Some((file_path, content)),
+            (&None, &mut None) => None,
+            (&Some(_), &mut None) => panic!("Pager has file path, but no content"),
+            (&None, &mut Some(_)) => panic!("Pager has content, but no file path"),
+        });
+}
+
 
 impl<'a> SourceView<'a> {
     pub fn new(highlighting_theme: &'a Theme) -> Self {
@@ -451,6 +456,7 @@ impl<'a> SourceView<'a> {
             highlighting_theme: highlighting_theme,
             syntax_set: SyntaxSet::load_defaults_nonewlines(),
             pager: Pager::new(),
+            file_path: None,
             last_stop_position: None,
         }
     }
@@ -463,9 +469,9 @@ impl<'a> SourceView<'a> {
     }
 
     fn go_to_last_stop_position(&mut self) -> Result<(), GotoError> {
-        let line = if let Some(ref content) = self.pager.content {
+        let line = if let Some(ref file_path) = self.file_path {
             if let Some(ref src_pos) = self.last_stop_position {
-                if src_pos.file == content.storage.get_file_path() {
+                if &src_pos.file == file_path {
                     src_pos.line
                 } else {
                     return Err(GotoError::MismatchedPagerContent);
@@ -491,30 +497,29 @@ impl<'a> SourceView<'a> {
     }
 
     fn update_decoration(&mut self, p: ::UpdateParameters) {
-        if let Some(ref mut content) = self.pager.content {
-            let path = content.storage.get_file_path();
+        if let Some((ref file_path, ref mut content)) = current_file_and_content_mut!(self) {
 
             // This sucks: we basically want to call get_last_line_number_for, but can't because we
             // borrowed content mutably...
             let last_line_number = self.last_stop_position.clone().and_then(|last_src_pos| {
-                if path == last_src_pos.file {
+                if last_src_pos.file == **file_path {
                     Some(last_src_pos.line)
                 } else {
                     None
                 }
             });
-            content.decorator = SourceDecorator::new(path, last_line_number, p.gdb.breakpoints.values())
+            content.decorator = SourceDecorator::new(file_path, last_line_number, p.gdb.breakpoints.values())
         }
     }
 
     fn need_to_load_file(&self, path: &Path) -> bool {
-        if let Some(ref content) = self.pager.content {
-            if content.storage.get_file_path() != path {
+        if let Some(ref loaded_path) = self.file_path {
+            if loaded_path != path {
                 return true
             }
             if let (Ok(modified_new), Ok(modified_old)) = (
-                File::open(path).and_then(|f| f.metadata()).and_then(|m| m.modified()),
-                content.storage.get_file_metadata().and_then(|m| m.modified())
+                fs::metadata(loaded_path).and_then(|m| m.modified()),
+                fs::metadata(path).and_then(|m| m.modified())
                 )
             {
                 modified_new > modified_old
@@ -529,7 +534,7 @@ impl<'a> SourceView<'a> {
     fn show<'b, P: AsRef<Path>, L: Into<LineIndex>>(&mut self, path: P, line: L, p: ::UpdateParameters) -> Result<(), PagerShowError> {
         if self.need_to_load_file(path.as_ref()) {
             let path_ref = path.as_ref();
-            try!{self.load(path_ref, p.gdb.breakpoints.values()).map_err(|e| PagerShowError::CouldNotOpenFile(path_ref.to_path_buf(), e))};
+            self.load(path_ref, p.gdb.breakpoints.values()).map_err(|e| PagerShowError::CouldNotOpenFile(path_ref.to_path_buf(), e))?;
         } else {
             let last_line_number = self.get_last_line_number_for(path.as_ref());
             if let Some(ref mut content) = self.pager.content {
@@ -541,16 +546,17 @@ impl<'a> SourceView<'a> {
     }
 
     fn load<'b, P: AsRef<Path>, I: Iterator<Item=&'b BreakPoint>>(&mut self, path: P, breakpoints: I) -> io::Result<()> {
-        let file_storage = try!{FileLineStorage::new(path.as_ref())};
+        let pager_content = PagerContent::from_file(path.as_ref())?;
         let syntax = self.syntax_set.find_syntax_for_file(path.as_ref())
-            .expect("file IS openable, see file storage")
+            .expect("file IS openable, see pager content")
             .unwrap_or(self.syntax_set.find_syntax_plain_text());
         let last_line_number = self.get_last_line_number_for(path.as_ref());
         self.pager.load(
-            PagerContent::create(file_storage)
+            pager_content
             .with_highlighter(SyntectHighlighter::new(syntax, self.highlighting_theme))
             .with_decorator(SourceDecorator::new(path.as_ref(), last_line_number, breakpoints))
             );
+        self.file_path = Some(path.as_ref().to_owned());
         Ok(())
     }
 
@@ -559,8 +565,8 @@ impl<'a> SourceView<'a> {
     }
 
     fn current_file(&self) -> Option<&Path> {
-        if let Some(ref content) = self.pager.content {
-            Some(content.storage.get_file_path())
+        if let Some(ref file_path) = self.file_path {
+            Some(file_path)
         } else {
             None
         }
@@ -852,7 +858,7 @@ impl<'a> Container<::UpdateParametersStruct> for CodeWindow<'a> {
                 match self.mode {
                     CodeWindowMode::Assembly | CodeWindowMode::SideBySide => {
                         let ret = self.asm_view.event(i, p);
-                        if let Some(src_pos) = self.asm_view.pager.current_line().and_then(|line| line.src_position) {
+                        if let Some(src_pos) = self.asm_view.pager.current_line().and_then(|ref line| line.src_position.clone()) {
                             let _  = self.src_view.show(src_pos.file, src_pos.line, p);
                         }
                         ret
@@ -898,7 +904,7 @@ impl<'a> Widget for MsgWindow<'a> {
         let mut c = Cursor::new(&mut window);
         c.set_position_y(start_line);
         for line in lines {
-            let start_x = ((window_width - ::unicode_width::UnicodeWidthStr::width(line) as i32) / 2).from_origin();
+            let start_x = ((window_width - text_width(line) as i32) / 2).from_origin();
             c.set_position_x(start_x);
             c.write(line);
             c.wrap_line();

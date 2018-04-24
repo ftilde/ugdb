@@ -16,14 +16,9 @@ extern crate unsegen;
 
 extern crate unsegen_signals;
 extern crate unsegen_terminal;
-extern crate unsegen_jsonviewer; // For ExpressionTable
-extern crate gdb_expression_parsing; // For ExpressionTable
-
-extern crate unicode_width; // For AssemblyLineDecorator
-
-// These are used because (due to lifetime issues) we have to manage SyntaxSet, TermRead etc. ourselves
-// TODO: maybe reexport types in unsegen?
-extern crate syntect;
+extern crate unsegen_pager;
+extern crate unsegen_jsonviewer;
+extern crate gdb_expression_parsing;
 
 mod gdb;
 mod ipc;
@@ -256,7 +251,7 @@ fn main() {
     });
     let stdout = std::io::stdout();
 
-    let theme_set = syntect::highlighting::ThemeSet::load_defaults();
+    let theme_set = unsegen_pager::ThemeSet::load_defaults();
 
     let left_pane = VSplit::new(vec![
           Box::new(Leaf::new(TuiContainerType::SrcView)),

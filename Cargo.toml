@@ -16,15 +16,11 @@ chan = "0.1"
 chan-signal = "0.3"
 structopt = "0.2.1"
 time = "0.1"
-unicode-width = "0.1"
 
 # For IPC
 json = "0.11"
 rand = "0.3"
 unix_socket = "0.5"
-
-#unsegen
-syntect = "1.0"
 
 [dependencies.unsegen]
 git = "https://github.com/ftilde/unsegen"
@@ -33,6 +29,9 @@ git = "https://github.com/ftilde/unsegen"
 git = "https://github.com/ftilde/unsegen"
 
 [dependencies.unsegen-terminal]
+git = "https://github.com/ftilde/unsegen"
+
+[dependencies.unsegen-pager]
 git = "https://github.com/ftilde/unsegen"
 
 # For ExpressionTable

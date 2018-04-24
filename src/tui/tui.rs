@@ -1,4 +1,4 @@
-use syntect::highlighting::{
+use unsegen_pager::{
     Theme,
 };
 

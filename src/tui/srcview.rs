@@ -151,27 +151,24 @@ impl LineDecorator for AssemblyDecorator {
         }).unwrap_or(0);
         Demand::from_to(0, max_space)
     }
-    fn decorate(&self, line: &Self::Line, _: LineIndex, mut window: Window) {
+    fn decorate(&self, line: &Self::Line, current_line: LineIndex, active_line: LineIndex, mut window: Window) {
         let width = window.get_width();
         let mut cursor = Cursor::new(&mut window).position(ColIndex::new(0),RowIndex::new(0));
 
-        use std::fmt::Write;
         let at_stop_position = self.stop_position.map(|p| p ==line.address).unwrap_or(false);
-        let right_border = if at_stop_position {
-            '▶'
-        } else {
-            ' '
+        let at_breakpoint_position = self.breakpoint_addresses.contains(&line.address);
+
+        let (right_border, style_modifier) = match (at_stop_position, at_breakpoint_position) {
+            (true, true) => ('▶', StyleModifier::new().fg_color(Color::Red).bold(true)),
+            (true, false) => ('▶', StyleModifier::new().fg_color(Color::Green).bold(true)),
+            (false, true) => ('●', StyleModifier::new().fg_color(Color::Red)),
+            (false, false) => (' ', StyleModifier::none()),
         };
-        let mut style_modifier = StyleModifier::none();
-        if self.breakpoint_addresses.contains(&line.address) {
-            style_modifier = StyleModifier::new().fg_color(Color::Red).on_top_of(&style_modifier);
-        }
-        if at_stop_position {
-            style_modifier = StyleModifier::new().fg_color(Color::Green).bold(true).on_top_of(&style_modifier);
-        }
+
         cursor.set_style_modifier(style_modifier);
 
-        if let Some(offset) = line.debug_location.iter().map(|l| l.offset).filter(|&offset| offset != 0).next() {
+        use std::fmt::Write;
+        if let (false, Some(offset)) = (current_line == active_line, line.debug_location.iter().map(|l| l.offset).filter(|&offset| offset != 0).next()) {
             let formatted_offset = format!("<+{}>", offset);
             write!(cursor, "{:>width$}{}", formatted_offset, right_border, width=(width-1).positive_or_zero().into()).unwrap();
         } else {
@@ -405,25 +402,21 @@ impl LineDecorator for SourceDecorator {
         }).unwrap_or(0);
         Demand::from_to(0, max_space)
     }
-    fn decorate(&self, _: &Self::Line, index: LineIndex, mut window: Window) {
+    fn decorate(&self, _: &Self::Line, current_index: LineIndex, _active_index: LineIndex, mut window: Window) {
         let width = (window.get_width() - 2).positive_or_zero();
-        let line_number = LineNumber::from(index);
+        let line_number = LineNumber::from(current_index);
         let mut cursor = Cursor::new(&mut window).position(ColIndex::new(0),RowIndex::new(0));
 
-        let at_stop_position = self.stop_position.map(|p| p == index.into()).unwrap_or(false);
-        let right_border = if at_stop_position {
-            '▶'
-        } else {
-            ' '
+        let at_stop_position = self.stop_position.map(|p| p == current_index.into()).unwrap_or(false);
+        let at_breakpoint_position = self.breakpoint_lines.contains(&current_index.into());
+
+        let (right_border, style_modifier) = match (at_stop_position, at_breakpoint_position) {
+            (true, true) => ('▶', StyleModifier::new().fg_color(Color::Red).bold(true)),
+            (true, false) => ('▶', StyleModifier::new().fg_color(Color::Green).bold(true)),
+            (false, true) => ('●', StyleModifier::new().fg_color(Color::Red)),
+            (false, false) => (' ', StyleModifier::none()),
         };
 
-        let mut style_modifier = StyleModifier::none();
-        if self.breakpoint_lines.contains(&index.into()) {
-            style_modifier = StyleModifier::new().fg_color(Color::Red).on_top_of(&style_modifier);
-        }
-        if at_stop_position {
-            style_modifier = StyleModifier::new().fg_color(Color::Green).bold(true).on_top_of(&style_modifier);
-        }
         cursor.set_style_modifier(style_modifier);
 
         use std::fmt::Write;

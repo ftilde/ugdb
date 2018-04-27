@@ -836,7 +836,7 @@ impl<'a> Widget for CodeWindow<'a> {
     fn draw(&self, window: Window, hints: RenderingHints) {
         match &self.mode {
             &CodeWindowMode::Assembly => self.asm_view.draw(window, hints),
-            &CodeWindowMode::SideBySide => self.layout.draw(window, &[(&self.asm_view, hints), (&self.src_view, RenderingHints{ active: false, ..hints})]),
+            &CodeWindowMode::SideBySide => self.layout.draw(window, &[(&self.asm_view, hints), (&self.src_view, hints.active(false))]),
             &CodeWindowMode::Source => self.src_view.draw(window, hints),
             &CodeWindowMode::Message(ref m) => MsgWindow::new(&m).draw(window, hints),
         }

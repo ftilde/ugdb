@@ -37,6 +37,7 @@ use logging::{Logger};
 use gdbmi::{GDBBuilder, OutOfBandRecordSink};
 use gdbmi::output::OutOfBandRecord;
 use unsegen::base::{Color, StyleModifier, Terminal};
+use unsegen::widget::{RenderingHints, Blink};
 use unsegen::container::{Application, HSplit, VSplit, Leaf};
 use unsegen::input::{Input, Key, NavigateBehavior, ToEvent};
 use structopt::StructOpt;
@@ -46,6 +47,8 @@ use std::path::PathBuf;
 
 const EVENT_BUFFER_DURATION_MS: u64 = 10;
 const FOCUS_ESCAPE_MAX_DURATION_MS: u64 = 200;
+const CURSOR_BLINK_PERIOD_MS: u64 = 500;
+const CURSOR_BLINK_TIMES: u8 = 20;
 
 
 #[derive(StructOpt)]
@@ -278,11 +281,17 @@ fn main() {
         let mut app = Application::<Tui>::from_layout(Box::new(layout));
         let mut input_mode = InputMode::Normal;
         let mut focus_esc_timer = MpscTimer::new();
+        let mut cursor_status = Blink::On;
+        let mut cursor_blinks_since_last_input = 0;
 
         // Somehow ipc.requests does not work in the chan_select macro...
         let ipc_requests = &mut ipc.requests;
 
         'runloop: loop {
+            let mut cursor_update_timer = MpscTimer::new();
+            if cursor_blinks_since_last_input < CURSOR_BLINK_TIMES {
+                cursor_update_timer.try_start(Duration::from_millis(CURSOR_BLINK_PERIOD_MS));
+            }
 
             let mut render_delay_timer = MpscTimer::new();
             let mut esc_timer_needs_reset = false;
@@ -290,7 +299,14 @@ fn main() {
                 let mut esc_in_focused_context_pressed = false;
                 #[allow(unused_mut)] { // Not sure where the unused mut in the chan_select macro is coming from...
                 chan_select! {
+                    cursor_update_timer.recv() => {
+                        cursor_status.toggle();
+                        cursor_blinks_since_last_input += 1;
+                        break 'displayloop;
+                    },
                     render_delay_timer.recv() => {
+                        cursor_status = Blink::On;
+                        cursor_blinks_since_last_input = 0;
                         break 'displayloop;
                     },
                     focus_esc_timer.recv() => {
@@ -374,7 +390,7 @@ fn main() {
                 focus_esc_timer.reset();
             }
             tui.console.display_log(&mut update_parameters.logger);
-            app.draw(terminal.create_root_window(), &mut tui, input_mode.associated_border_style());
+            app.draw(terminal.create_root_window(), &mut tui, input_mode.associated_border_style(), RenderingHints::default().blink(cursor_status));
             terminal.present();
         }
     }

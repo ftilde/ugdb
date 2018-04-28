@@ -41,7 +41,7 @@ Map: Node = {
 pub Value: Node = {
     Array,
     Map,
-    Scalar => Node::Leaf((<>)),
+    Scalar => Node::Leaf(<>),
     <@L> ! <@R> => Node::Leaf((<>)),
 };
 

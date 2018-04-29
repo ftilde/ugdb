@@ -71,10 +71,10 @@ impl Console {
         for (msg_type, msg) in logger.drain_messages() {
             match msg_type {
                 LogMsgType::Debug => {
-                    writeln!(self.debug_log.storage, " -=- {}", msg).expect("Write Debug Message");
+                    writeln!(self.debug_log, " -=- {}", msg).expect("Write Debug Message");
                 },
                 LogMsgType::Message => {
-                    writeln!(self.gdb_log.storage, "{}", msg).expect("Write Message");
+                    writeln!(self.gdb_log, "{}", msg).expect("Write Message");
                 },
             }
         }
@@ -82,7 +82,7 @@ impl Console {
 
     pub fn write_to_gdb_log<S: AsRef<str>>(&mut self, msg: S) {
         use std::fmt::Write;
-        write!(self.gdb_log.storage, "{}", msg.as_ref()).expect("Write Message");
+        write!(self.gdb_log, "{}", msg.as_ref()).expect("Write Message");
     }
 
     fn toggle_active_log(&mut self) {

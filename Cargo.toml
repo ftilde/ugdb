@@ -24,19 +24,24 @@ unix_socket = "0.5"
 
 [dependencies.unsegen]
 git = "https://github.com/ftilde/unsegen"
+#path = "../unsegen"
 
 [dependencies.unsegen-signals]
 git = "https://github.com/ftilde/unsegen"
+#path = "../unsegen/unsegen-signals"
 
 [dependencies.unsegen-terminal]
 git = "https://github.com/ftilde/unsegen"
+#path = "../unsegen/unsegen-terminal"
 
 [dependencies.unsegen-pager]
 git = "https://github.com/ftilde/unsegen"
+#path = "../unsegen/unsegen-pager"
 
 # For ExpressionTable
 [dependencies.unsegen-jsonviewer]
 git = "https://github.com/ftilde/unsegen"
+#path = "../unsegen/unsegen-jsonviewer"
 
 [dependencies.gdb-expression-parsing]
 path = "gdb-expression-parsing"

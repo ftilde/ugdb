@@ -17,8 +17,6 @@ use unsegen::widget::{
     Demand,
     Demand2D,
     HorizontalLayout,
-    LineNumber,
-    LineIndex,
     RenderingHints,
     SeparatingStyle,
     Widget,
@@ -235,9 +233,9 @@ impl<'a> AssemblyView<'a> {
 
     fn update_decoration(&mut self, p: ::UpdateParameters) {
         if let Some(ref mut content) = self.pager.content {
-            let first_line_address = content.view_line(LineIndex(0)).map(|l| l.address);
+            let first_line_address = content.view_line(LineIndex::new(0)).map(|l| l.address);
             if let Some(min_address) = first_line_address {
-                let max_address = { content.view(LineIndex(0)..).last().expect("we know we have at least one line").1.address };
+                let max_address = { content.view(LineIndex::new(0)..).last().expect("we know we have at least one line").1.address };
                 content.decorator = AssemblyDecorator::new(min_address..max_address, self.last_stop_position, p.gdb.breakpoints.values())
             }
         }
@@ -275,7 +273,7 @@ impl<'a> AssemblyView<'a> {
         if let &JsonValue::Array(ref line_objs) = &disass_results["asm_insns"] {
             let mut lines = Vec::<AssemblyLine>::new();
             for line_obj in line_objs {
-                let line = LineNumber(line_obj["line"].as_str().expect("line present").parse::<usize>().expect("parse line"));
+                let line = LineNumber::new(line_obj["line"].as_str().expect("line present").parse::<usize>().expect("parse line"));
                 let file = line_obj["fullname"].as_str().expect("full name present");
                 let src_pos = Some(SrcPosition::new(PathBuf::from(file), line));
                 for tuple in line_obj["line_asm_insn"].members() {
@@ -685,7 +683,7 @@ impl<'a> CodeWindow<'a> {
     fn show_from_file(&mut self, frame: &Object, p: ::UpdateParameters) -> Result<(),()> {
         let address = Address::parse(frame["addr"].as_str().expect("Address should always be present")).expect("Parse address");
         if let Some(path) = frame["fullname"].as_str() { // File information may not be present
-            let line = LineNumber(frame["line"].as_str().expect("line should be present with file").parse::<usize>().expect("Parse line number"));
+            let line = LineNumber::new(frame["line"].as_str().expect("line should be present with file").parse::<usize>().expect("Parse line number"));
             self.src_view.set_last_stop_position(path, line);
 
             match self.src_view.show(path, line, p) {

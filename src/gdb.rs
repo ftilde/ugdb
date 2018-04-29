@@ -1,9 +1,8 @@
 // This module encapsulates some functionality of gdb. Depending on how general this turns out, we
 // may want to move it to a separate crate or merge it with gdbmi-rs
-use unsegen::widget::{
+use unsegen::base::{
     LineNumber,
 };
-
 use gdbmi;
 use gdbmi::{
     ExecuteError,
@@ -87,7 +86,7 @@ impl BreakPoint {
         let address = bkpt["addr"].as_str().and_then(|addr| Address::parse(addr).ok()); //addr may not be present or contain
         let src_pos = {
             let maybe_file = bkpt["fullname"].as_str();
-            let maybe_line = bkpt["line"].as_str().map(|l_nr| LineNumber(l_nr.parse::<usize>().expect("Parse usize")));
+            let maybe_line = bkpt["line"].as_str().map(|l_nr| LineNumber::new(l_nr.parse::<usize>().expect("Parse usize")));
             if let (Some(file), Some(line)) = (maybe_file, maybe_line) {
                 Some(SrcPosition::new(PathBuf::from(file), line))
             } else {

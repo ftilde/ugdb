@@ -422,18 +422,23 @@ impl LineDecorator for SourceDecorator {
     }
 }
 
+struct FileInfo {
+    path: PathBuf,
+    modified: ::std::time::SystemTime,
+}
+
 pub struct SourceView<'a> {
     highlighting_theme: &'a Theme,
     syntax_set: SyntaxSet,
     pager: Pager<String, SourceDecorator>,
-    file_path: Option<PathBuf>,
+    file_info: Option<FileInfo>,
     last_stop_position: Option<SrcPosition>,
 }
 
 macro_rules! current_file_and_content_mut {
     ($x:expr) => (
-        match (&$x.file_path, &mut $x.pager.content) {
-            (&Some(ref file_path), &mut Some(ref mut content)) => Some((file_path, content)),
+        match (&$x.file_info, &mut $x.pager.content) {
+            (&Some(ref file_info), &mut Some(ref mut content)) => Some((&file_info.path, content)),
             (&None, &mut None) => None,
             (&Some(_), &mut None) => panic!("Pager has file path, but no content"),
             (&None, &mut Some(_)) => panic!("Pager has content, but no file path"),
@@ -447,7 +452,7 @@ impl<'a> SourceView<'a> {
             highlighting_theme: highlighting_theme,
             syntax_set: SyntaxSet::load_defaults_nonewlines(),
             pager: Pager::new(),
-            file_path: None,
+            file_info: None,
             last_stop_position: None,
         }
     }
@@ -460,9 +465,9 @@ impl<'a> SourceView<'a> {
     }
 
     fn go_to_last_stop_position(&mut self) -> Result<(), GotoError> {
-        let line = if let Some(ref file_path) = self.file_path {
+        let line = if let Some(ref file_info) = self.file_info {
             if let Some(ref src_pos) = self.last_stop_position {
-                if &src_pos.file == file_path {
+                if &src_pos.file == &file_info.path {
                     src_pos.line
                 } else {
                     return Err(GotoError::MismatchedPagerContent);
@@ -504,16 +509,13 @@ impl<'a> SourceView<'a> {
     }
 
     fn need_to_load_file(&self, path: &Path) -> bool {
-        if let Some(ref loaded_path) = self.file_path {
-            if loaded_path != path {
+        if let Some(ref loaded_file_info) = self.file_info {
+            if loaded_file_info.path != path {
                 return true
             }
-            if let (Ok(modified_new), Ok(modified_old)) = (
-                fs::metadata(loaded_path).and_then(|m| m.modified()),
-                fs::metadata(path).and_then(|m| m.modified())
-                )
+            if let Ok(modified_new) = fs::metadata(path).and_then(|m| m.modified())
             {
-                modified_new > modified_old
+                modified_new > loaded_file_info.modified
             } else {
                 true
             }
@@ -547,7 +549,10 @@ impl<'a> SourceView<'a> {
             .with_highlighter(SyntectHighlighter::new(syntax, self.highlighting_theme))
             .with_decorator(SourceDecorator::new(path.as_ref(), last_line_number, breakpoints))
             );
-        self.file_path = Some(path.as_ref().to_owned());
+        self.file_info = Some(FileInfo {
+            path: path.as_ref().to_owned(),
+            modified: fs::metadata(path)?.modified()?,
+        });
         Ok(())
     }
 
@@ -556,8 +561,8 @@ impl<'a> SourceView<'a> {
     }
 
     fn current_file(&self) -> Option<&Path> {
-        if let Some(ref file_path) = self.file_path {
-            Some(file_path)
+        if let Some(ref file_info) = self.file_info {
+            Some(&file_info.path)
         } else {
             None
         }
@@ -607,7 +612,7 @@ impl<'a> Widget for SourceView<'a> {
     }
     fn draw(&self, window: Window, hints: RenderingHints) {
         if let Some(file) = self.current_file() {
-            match  window.split_v(RowIndex::new(1)) {
+            match window.split(RowIndex::new(1)) {
                 Ok((mut up, down)) => {
                     let mut cursor = Cursor::new(&mut up);
                     cursor.set_style_modifier(StyleModifier::new().bold(true));

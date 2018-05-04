@@ -109,8 +109,11 @@ pub fn process_output<T: Read, S: OutOfBandRecordSink>(output: T, result_pipe: S
                 }
                 match Output::parse(&buffer) {
                     Output::Result(record) => {
-                        if let ResultRecord{token: _, class: ResultClass::Running, results: _} = record {
-                            is_running.store(true, Ordering::SeqCst);
+                        match record.class {
+                            ResultClass::Running => is_running.store(true, Ordering::SeqCst),
+                            //Apparently sometimes gdb first claims to be running, only to then stop again (without notifying the user)...
+                            ResultClass::Error => is_running.store(false, Ordering::SeqCst),
+                            _ => {},
                         }
                         result_pipe.send(record).expect("send result to pipe");
                     },

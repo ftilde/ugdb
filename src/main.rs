@@ -54,7 +54,7 @@ const CURSOR_BLINK_TIMES: u8 = 20;
 #[derive(StructOpt)]
 #[structopt()]
 struct Options {
-    #[structopt(long="gdb", help="Path to gdb binary.", default_value="/bin/gdb", parse(from_os_str))]
+    #[structopt(long="gdb", help="Path to gdb binary.", default_value="/usr/bin/gdb", parse(from_os_str))]
     gdb_path: PathBuf,
     #[structopt(long="nh", help="Do not execute commands from ~/.gdbinit.")]
     nh: bool,
@@ -245,13 +245,6 @@ fn main() {
     // Setup input piping
     let (keyboard_sink, keyboard_source) = chan::async();
 
-    /* let keyboard_input = */ ::std::thread::spawn(move || {
-        let stdin = ::std::io::stdin();
-        let stdin = stdin.lock();
-        for e in Input::real_all(stdin) {
-            keyboard_sink.send(e.expect("event"));
-        }
-    });
     let stdout = std::io::stdout();
 
     let theme_set = unsegen_pager::ThemeSet::load_defaults();
@@ -277,6 +270,16 @@ fn main() {
     {
         let mut terminal = Terminal::new(stdout.lock());
         let mut tui = Tui::new(tui_terminal, &theme_set.themes["base16-ocean.dark"]);
+
+        // Start stdin thread _after_ building terminal (and setting the actual terminal to raw
+        // mode to avoid race condition where the first 'set of input' is buffered
+        /* let keyboard_input = */ ::std::thread::spawn(move || {
+            let stdin = ::std::io::stdin();
+            let stdin = stdin.lock();
+            for e in Input::real_all(stdin) {
+                keyboard_sink.send(e.expect("event"));
+            }
+        });
 
         let mut app = Application::<Tui>::from_layout(Box::new(layout));
         let mut input_mode = InputMode::Normal;

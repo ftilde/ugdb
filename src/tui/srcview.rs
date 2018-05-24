@@ -776,7 +776,9 @@ impl<'a> CodeWindow<'a> {
         self.asm_view.set_last_stop_position(address);
 
         if self.asm_view.show_address(begin, end, p).is_ok() {
-            self.asm_view.go_to_last_stop_position().expect("We just set a last stop pos and it must be valid!");
+            if let Err(e) = self.asm_view.go_to_last_stop_position() {
+                p.logger.log_debug(format!("We just set a last stop pos {}, but it does not seem to be valid must be valid: {:?}", address, e));
+            }
             self.mode = CodeWindowMode::Assembly;
         } else {
             self.mode = CodeWindowMode::Message("Disassembly failed!".to_owned());

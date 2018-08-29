@@ -63,6 +63,12 @@ pub struct GDBBuilder {
     opt_program: Option<PathBuf>,
     opt_tty: Option<PathBuf>,
 }
+#[derive(Debug)]
+pub enum SpawnError {
+    Io(::std::io::Error),
+    Execute(ExecuteError),
+
+}
 impl GDBBuilder {
     pub fn new(gdb: PathBuf) -> Self {
         GDBBuilder {
@@ -140,7 +146,7 @@ impl GDBBuilder {
         self.opt_tty = Some(tty);
         self
     }
-    pub fn try_spawn<S>(self, oob_sink: S) -> Result<GDB, ::std::io::Error> where S: OutOfBandRecordSink + 'static
+    pub fn try_spawn<S>(self, oob_sink: S) -> Result<GDB, SpawnError> where S: OutOfBandRecordSink + 'static
     {
         let mut args = Vec::<OsString>::new();
         if self.opt_nh {
@@ -187,22 +193,16 @@ impl GDBBuilder {
             args.push("--tty=".into());
             args.last_mut().unwrap().push(&tty);
         }
-        if !self.opt_args.is_empty() {
-            args.push("--args=".into());
-            for arg in self.opt_args {
-                args.push(arg.into());
-            }
-        }
         if let Some(program) = self.opt_program {
             args.push(program.into());
         }
 
-        let mut child = try!{Command::new(self.gdb_path)
+        let mut child = Command::new(self.gdb_path)
             .arg("--interpreter=mi")
             .args(args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .spawn()};
+            .spawn().map_err(SpawnError::Io)?;
         let stdin = child.stdin.take().expect("take stdin");
         let stdout = child.stdout.take().expect("take stdout");
         let is_running = Arc::new(AtomicBool::new(false));
@@ -210,17 +210,19 @@ impl GDBBuilder {
         let (result_input, result_output) = mpsc::channel();
         /*let outputThread = */ thread::Builder::new().name("gdbmi parser".to_owned()).spawn(move || {
             output::process_output(stdout, result_input, oob_sink, is_running_for_thread);
-        }).expect("Spawn gdbmi parser thread");
-        Ok(
-            GDB {
-                process: child,
-                stdin: stdin,
-                is_running: is_running,
-                result_output: result_output,
-                current_command_token: 0,
-                //outputThread: outputThread,
-            }
-          )
+        }).map_err(SpawnError::Io)?;
+        let mut gdb = GDB {
+            process: child,
+            stdin: stdin,
+            is_running: is_running,
+            result_output: result_output,
+            current_command_token: 0,
+            //outputThread: outputThread,
+        };
+        if !self.opt_args.is_empty() {
+            gdb.execute(commands::MiCommand::exec_arguments(self.opt_args)).map_err(SpawnError::Execute)?;
+        }
+        Ok(gdb)
     }
 }
 

@@ -76,10 +76,8 @@ struct Options {
     command_file: Option<PathBuf>,
     #[structopt(short="d", long="directory", help="Add directory to the path to search for source files.", parse(from_os_str))]
     source_dir: Option<PathBuf>,
-    #[structopt(short="a", long="args", help="Arguments after executable-file are passed to inferior.", parse(from_os_str))]
-    args: Vec<OsString>,
-    #[structopt(help="Path to program to debug.", parse(from_os_str))]
-    program: Option<PathBuf>,
+    #[structopt(help="Path to program to debug (with arguments).", parse(from_os_str))]
+    program: Vec<OsString>,
 
     // Not sure how to mimic gdbs cmdline behavior for the positional arguments...
     //#[structopt(help="Attach to process with given id.")]
@@ -121,9 +119,10 @@ impl Options {
         if let Some(src_dir) = self.source_dir {
             gdb_builder = gdb_builder.source_dir(src_dir);
         }
-        gdb_builder = gdb_builder.args(&self.args);
-        if let Some(program) = self.program {
-            gdb_builder = gdb_builder.program(program);
+        let (program, args) = self.program.split_first().map(|(p,a)| (Some(p), a)).unwrap_or_else(|| (None, &[]));
+        gdb_builder = gdb_builder.args(args);
+        if let Some(program) = program {
+            gdb_builder = gdb_builder.program(PathBuf::from(program));
         }
 
         gdb_builder

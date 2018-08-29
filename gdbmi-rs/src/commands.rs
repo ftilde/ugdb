@@ -183,6 +183,15 @@ impl MiCommand {
             parameters: Vec::new(),
         }
     }
+
+    pub fn exec_arguments(args: Vec<OsString>) -> MiCommand {
+        MiCommand {
+            operation: "exec-arguments",
+            options: args,
+            parameters: Vec::new(),
+        }
+    }
+
     pub fn exit() -> MiCommand {
         MiCommand {
             operation: "gdb-exit",

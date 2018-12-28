@@ -1,10 +1,9 @@
 #[macro_use]
 extern crate chan;
 extern crate chan_signal;
-#[macro_use]
+extern crate gdbmi;
 extern crate structopt;
 extern crate time;
-extern crate gdbmi;
 
 // For ipc
 #[macro_use]
@@ -14,11 +13,11 @@ extern crate unix_socket;
 
 extern crate unsegen;
 
+extern crate gdb_expression_parsing;
+extern crate unsegen_jsonviewer;
+extern crate unsegen_pager;
 extern crate unsegen_signals;
 extern crate unsegen_terminal;
-extern crate unsegen_pager;
-extern crate unsegen_jsonviewer;
-extern crate gdb_expression_parsing;
 
 mod gdb;
 mod ipc;
@@ -27,58 +26,98 @@ mod tui;
 
 use std::ffi::OsString;
 use std::ops::{Deref, DerefMut};
-use std::time::{Duration};
+use std::time::Duration;
 
-use chan::{Sender, Receiver};
+use chan::{Receiver, Sender};
 use chan_signal::Signal;
 
-use gdb::{GDB};
-use logging::{Logger};
-use gdbmi::{GDBBuilder, OutOfBandRecordSink};
+use gdb::GDB;
 use gdbmi::output::OutOfBandRecord;
-use unsegen::base::{Color, StyleModifier, Terminal};
-use unsegen::widget::{RenderingHints, Blink};
-use unsegen::container::{Application, HSplit, VSplit, Leaf};
-use unsegen::input::{Input, Key, NavigateBehavior, ToEvent};
+use gdbmi::{GDBBuilder, OutOfBandRecordSink};
+use logging::Logger;
+use std::path::PathBuf;
 use structopt::StructOpt;
 use tui::{Tui, TuiContainerType};
-use std::path::PathBuf;
-
+use unsegen::base::{Color, StyleModifier, Terminal};
+use unsegen::container::{Application, HSplit, Leaf, VSplit};
+use unsegen::input::{Input, Key, NavigateBehavior, ToEvent};
+use unsegen::widget::{Blink, RenderingHints};
 
 const EVENT_BUFFER_DURATION_MS: u64 = 10;
 const FOCUS_ESCAPE_MAX_DURATION_MS: u64 = 200;
 const CURSOR_BLINK_PERIOD_MS: u64 = 500;
 const CURSOR_BLINK_TIMES: u8 = 20;
 
-
 #[derive(StructOpt)]
 #[structopt()]
 struct Options {
-    #[structopt(long="gdb", help="Path to gdb binary.", default_value="/usr/bin/gdb", parse(from_os_str))]
+    #[structopt(
+        long = "gdb",
+        help = "Path to gdb binary.",
+        default_value = "/usr/bin/gdb",
+        parse(from_os_str)
+    )]
     gdb_path: PathBuf,
-    #[structopt(long="nh", help="Do not execute commands from ~/.gdbinit.")]
+    #[structopt(long = "nh", help = "Do not execute commands from ~/.gdbinit.")]
     nh: bool,
-    #[structopt(short = "n", long="nx", help="Do not execute commands from any .gdbinit initialization files.")]
+    #[structopt(
+        short = "n",
+        long = "nx",
+        help = "Do not execute commands from any .gdbinit initialization files."
+    )]
     nx: bool,
-    #[structopt(short = "q", long="quiet", help="\"Quiet\".  Do not print the introductory and copyright messages.  These messages are also suppressed in batch mode.")]
+    #[structopt(
+        short = "q",
+        long = "quiet",
+        help = "\"Quiet\".  Do not print the introductory and copyright messages.  These messages are also suppressed in batch mode."
+    )]
     quiet: bool,
-    #[structopt(long="cd", help="Run GDB using directory as its working directory, instead of the current directory.", parse(from_os_str))]
+    #[structopt(
+        long = "cd",
+        help = "Run GDB using directory as its working directory, instead of the current directory.",
+        parse(from_os_str)
+    )]
     cd: Option<PathBuf>,
-    #[structopt(long="b", help="Set the line speed (baud rate or bits per second) of any serial interface used by GDB for remote debugging.")]
+    #[structopt(
+        long = "b",
+        help = "Set the line speed (baud rate or bits per second) of any serial interface used by GDB for remote debugging."
+    )]
     bps: Option<u32>,
-    #[structopt(short="s", long="symbols", help="Read symbols from the given file.", parse(from_os_str))]
+    #[structopt(
+        short = "s",
+        long = "symbols",
+        help = "Read symbols from the given file.",
+        parse(from_os_str)
+    )]
     symbol_file: Option<PathBuf>,
-    #[structopt(short="c", long="core", help="Use file file as a core dump to examine.", parse(from_os_str))]
+    #[structopt(
+        short = "c",
+        long = "core",
+        help = "Use file file as a core dump to examine.",
+        parse(from_os_str)
+    )]
     core_file: Option<PathBuf>,
-    #[structopt(short="p", long="pid", help="Attach to process with given id.")]
+    #[structopt(short = "p", long = "pid", help = "Attach to process with given id.")]
     proc_id: Option<u32>,
-    #[structopt(short="x", long="command", help="Execute GDB commands from file.", parse(from_os_str))]
+    #[structopt(
+        short = "x",
+        long = "command",
+        help = "Execute GDB commands from file.",
+        parse(from_os_str)
+    )]
     command_file: Option<PathBuf>,
-    #[structopt(short="d", long="directory", help="Add directory to the path to search for source files.", parse(from_os_str))]
+    #[structopt(
+        short = "d",
+        long = "directory",
+        help = "Add directory to the path to search for source files.",
+        parse(from_os_str)
+    )]
     source_dir: Option<PathBuf>,
-    #[structopt(help="Path to program to debug (with arguments).", parse(from_os_str))]
+    #[structopt(
+        help = "Path to program to debug (with arguments).",
+        parse(from_os_str)
+    )]
     program: Vec<OsString>,
-
     // Not sure how to mimic gdbs cmdline behavior for the positional arguments...
     //#[structopt(help="Attach to process with given id.")]
     //proc_id: Option<u32>,
@@ -119,7 +158,11 @@ impl Options {
         if let Some(src_dir) = self.source_dir {
             gdb_builder = gdb_builder.source_dir(src_dir);
         }
-        let (program, args) = self.program.split_first().map(|(p,a)| (Some(p), a)).unwrap_or_else(|| (None, &[]));
+        let (program, args) = self
+            .program
+            .split_first()
+            .map(|(p, a)| (Some(p), a))
+            .unwrap_or_else(|| (None, &[]));
         gdb_builder = gdb_builder.args(args);
         if let Some(program) = program {
             gdb_builder = gdb_builder.program(PathBuf::from(program));
@@ -217,7 +260,6 @@ impl InputMode {
     }
 }
 
-
 fn main() {
     // Setup signal piping:
     // NOTE: This has to be set up before the creation of any other threads!
@@ -239,7 +281,11 @@ fn main() {
 
     let mut gdb_builder = options.create_gdb_builder();
     gdb_builder = gdb_builder.tty(tui_terminal.get_slave_name().into());
-    let gdb = GDB::new(gdb_builder.try_spawn(MpscOobRecordSink(oob_sink)).expect("spawn gdb"));
+    let gdb = GDB::new(
+        gdb_builder
+            .try_spawn(MpscOobRecordSink(oob_sink))
+            .expect("spawn gdb"),
+    );
 
     // Setup input piping
     let (keyboard_sink, keyboard_source) = chan::async();
@@ -249,17 +295,14 @@ fn main() {
     let theme_set = unsegen_pager::ThemeSet::load_defaults();
 
     let left_pane = VSplit::new(vec![
-          Box::new(Leaf::new(TuiContainerType::SrcView)),
-          Box::new(Leaf::new(TuiContainerType::Console)),
+        Box::new(Leaf::new(TuiContainerType::SrcView)),
+        Box::new(Leaf::new(TuiContainerType::Console)),
     ]);
     let right_pane = VSplit::new(vec![
-          Box::new(Leaf::new(TuiContainerType::ExpressionTable)),
-          Box::new(Leaf::new(TuiContainerType::Terminal)),
+        Box::new(Leaf::new(TuiContainerType::ExpressionTable)),
+        Box::new(Leaf::new(TuiContainerType::Terminal)),
     ]);
-    let layout = HSplit::new(vec![
-          Box::new(left_pane),
-          Box::new(right_pane),
-    ]);
+    let layout = HSplit::new(vec![Box::new(left_pane), Box::new(right_pane)]);
 
     let mut update_parameters = UpdateParametersStruct {
         gdb: gdb,
@@ -272,7 +315,8 @@ fn main() {
 
         // Start stdin thread _after_ building terminal (and setting the actual terminal to raw
         // mode to avoid race condition where the first 'set of input' is buffered
-        /* let keyboard_input = */ ::std::thread::spawn(move || {
+        /* let keyboard_input = */
+        ::std::thread::spawn(move || {
             let stdin = ::std::io::stdin();
             let stdin = stdin.lock();
             for e in Input::real_all(stdin) {
@@ -299,90 +343,93 @@ fn main() {
             let mut esc_timer_needs_reset = false;
             'displayloop: loop {
                 let mut esc_in_focused_context_pressed = false;
-                #[allow(unused_mut)] { // Not sure where the unused mut in the chan_select macro is coming from...
-                chan_select! {
-                    cursor_update_timer.recv() => {
-                        cursor_status.toggle();
-                        cursor_blinks_since_last_input += 1;
-                        break 'displayloop;
-                    },
-                    render_delay_timer.recv() => {
-                        cursor_status = Blink::On;
-                        cursor_blinks_since_last_input = 0;
-                        break 'displayloop;
-                    },
-                    focus_esc_timer.recv() => {
-                        Input { event: Key::Esc.to_event(), raw: vec![0x1bu8] }.chain(app.active_container_behavior(&mut tui, &mut update_parameters));
-                        esc_timer_needs_reset = true;
-                        break 'displayloop;
-                    },
-                    keyboard_source.recv() -> input => {
-                        let sig_behavior = ::unsegen_signals::SignalBehavior::new().sig_default::<::unsegen_signals::SIGTSTP>();
-                        let input = input.expect("read keyboard event")
-                            .chain(sig_behavior);
-                        match input_mode {
-                            InputMode::ContainerSelect => {
-                                input
-                                    .chain(NavigateBehavior::new(&mut app.navigatable(&mut tui))
-                                           .up_on(Key::Char('k'))
-                                           .up_on(Key::Up)
-                                           .down_on(Key::Char('j'))
-                                           .down_on(Key::Down)
-                                           .left_on(Key::Char('h'))
-                                           .left_on(Key::Left)
-                                           .right_on(Key::Char('l'))
-                                           .right_on(Key::Right)
-                                          )
-                                    .chain((Key::Char('i'), || { input_mode = InputMode::Normal; app.set_active(TuiContainerType::Console); }))
-                                    .chain((Key::Char('e'), || { input_mode = InputMode::Normal; app.set_active(TuiContainerType::ExpressionTable); }))
-                                    .chain((Key::Char('s'), || { input_mode = InputMode::Normal; app.set_active(TuiContainerType::SrcView); }))
-                                    .chain((Key::Char('t'), || { input_mode = InputMode::Normal; app.set_active(TuiContainerType::Terminal); }))
-                                    .chain((Key::Char('T'), || { input_mode = InputMode::Focused; app.set_active(TuiContainerType::Terminal); }))
-                                    .chain((Key::Char('\n'), || input_mode = InputMode::Normal ))
+                #[allow(unused_mut)]
+                {
+                    // Not sure where the unused mut in the chan_select macro is coming from...
+                    chan_select! {
+                        cursor_update_timer.recv() => {
+                            cursor_status.toggle();
+                            cursor_blinks_since_last_input += 1;
+                            break 'displayloop;
+                        },
+                        render_delay_timer.recv() => {
+                            cursor_status = Blink::On;
+                            cursor_blinks_since_last_input = 0;
+                            break 'displayloop;
+                        },
+                        focus_esc_timer.recv() => {
+                            Input { event: Key::Esc.to_event(), raw: vec![0x1bu8] }.chain(app.active_container_behavior(&mut tui, &mut update_parameters));
+                            esc_timer_needs_reset = true;
+                            break 'displayloop;
+                        },
+                        keyboard_source.recv() -> input => {
+                            let sig_behavior = ::unsegen_signals::SignalBehavior::new().sig_default::<::unsegen_signals::SIGTSTP>();
+                            let input = input.expect("read keyboard event")
+                                .chain(sig_behavior);
+                            match input_mode {
+                                InputMode::ContainerSelect => {
+                                    input
+                                        .chain(NavigateBehavior::new(&mut app.navigatable(&mut tui))
+                                               .up_on(Key::Char('k'))
+                                               .up_on(Key::Up)
+                                               .down_on(Key::Char('j'))
+                                               .down_on(Key::Down)
+                                               .left_on(Key::Char('h'))
+                                               .left_on(Key::Left)
+                                               .right_on(Key::Char('l'))
+                                               .right_on(Key::Right)
+                                              )
+                                        .chain((Key::Char('i'), || { input_mode = InputMode::Normal; app.set_active(TuiContainerType::Console); }))
+                                        .chain((Key::Char('e'), || { input_mode = InputMode::Normal; app.set_active(TuiContainerType::ExpressionTable); }))
+                                        .chain((Key::Char('s'), || { input_mode = InputMode::Normal; app.set_active(TuiContainerType::SrcView); }))
+                                        .chain((Key::Char('t'), || { input_mode = InputMode::Normal; app.set_active(TuiContainerType::Terminal); }))
+                                        .chain((Key::Char('T'), || { input_mode = InputMode::Focused; app.set_active(TuiContainerType::Terminal); }))
+                                        .chain((Key::Char('\n'), || input_mode = InputMode::Normal ))
+                                }
+                                InputMode::Normal => {
+                                    input
+                                        .chain((Key::Esc, || input_mode = InputMode::ContainerSelect ))
+                                        .chain(app.active_container_behavior(&mut tui, &mut update_parameters))
+                                }
+                                InputMode::Focused => {
+                                    input
+                                        .chain((Key::Esc, || esc_in_focused_context_pressed = true ))
+                                        .chain(app.active_container_behavior(&mut tui, &mut update_parameters))
+                                }
+                            }.finish();
+                        },
+                        oob_source.recv() -> oob_evt => {
+                            if let Some(record) = oob_evt {
+                                tui.add_out_of_band_record(record, &mut update_parameters);
+                            } else {
+                                // OOB pipe has closed. => gdb will be stopping soon
+                                break 'runloop;
                             }
-                            InputMode::Normal => {
-                                input
-                                    .chain((Key::Esc, || input_mode = InputMode::ContainerSelect ))
-                                    .chain(app.active_container_behavior(&mut tui, &mut update_parameters))
+                        },
+                        ipc_requests.recv() -> request => {
+                            request.expect("receive request").respond(&mut update_parameters);
+                        },
+                        pts_source.recv() -> pty_output => {
+                            tui.add_pty_input(pty_output.expect("get pty input"));
+                        },
+                        signal_event_source.recv() -> signal_event => {
+                            let sig = signal_event.expect("get signal event");
+                            match sig {
+                                Signal::WINCH => { /* Ignore, we just want to redraw */ },
+                                Signal::TSTP => { terminal.handle_sigtstp() },
+                                Signal::TERM => { update_parameters.gdb.kill() },
+                                _ => {}
                             }
-                            InputMode::Focused => {
-                                input
-                                    .chain((Key::Esc, || esc_in_focused_context_pressed = true ))
-                                    .chain(app.active_container_behavior(&mut tui, &mut update_parameters))
-                            }
-                        }.finish();
-                    },
-                    oob_source.recv() -> oob_evt => {
-                        if let Some(record) = oob_evt {
-                            tui.add_out_of_band_record(record, &mut update_parameters);
-                        } else {
-                            // OOB pipe has closed. => gdb will be stopping soon
-                            break 'runloop;
-                        }
-                    },
-                    ipc_requests.recv() -> request => {
-                        request.expect("receive request").respond(&mut update_parameters);
-                    },
-                    pts_source.recv() -> pty_output => {
-                        tui.add_pty_input(pty_output.expect("get pty input"));
-                    },
-                    signal_event_source.recv() -> signal_event => {
-                        let sig = signal_event.expect("get signal event");
-                        match sig {
-                            Signal::WINCH => { /* Ignore, we just want to redraw */ },
-                            Signal::TSTP => { terminal.handle_sigtstp() },
-                            Signal::TERM => { update_parameters.gdb.kill() },
-                            _ => {}
-                        }
-                        update_parameters.logger.log_debug(format!("received signal {:?}", sig));
-                    },
-                }
+                            update_parameters.logger.log_debug(format!("received signal {:?}", sig));
+                        },
+                    }
                 }
                 if esc_in_focused_context_pressed {
                     if focus_esc_timer.has_been_started() {
                         input_mode = InputMode::ContainerSelect;
                     } else {
-                        focus_esc_timer.try_start(Duration::from_millis(FOCUS_ESCAPE_MAX_DURATION_MS));
+                        focus_esc_timer
+                            .try_start(Duration::from_millis(FOCUS_ESCAPE_MAX_DURATION_MS));
                     }
                 }
                 tui.update_after_event(&mut update_parameters);
@@ -392,7 +439,12 @@ fn main() {
                 focus_esc_timer.reset();
             }
             tui.console.display_log(&mut update_parameters.logger);
-            app.draw(terminal.create_root_window(), &mut tui, input_mode.associated_border_style(), RenderingHints::default().blink(cursor_status));
+            app.draw(
+                terminal.create_root_window(),
+                &mut tui,
+                input_mode.associated_border_style(),
+                RenderingHints::default().blink(cursor_status),
+            );
             terminal.present();
         }
     }

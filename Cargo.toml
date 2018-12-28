@@ -8,9 +8,6 @@ description = "An unsegen-based GDB frontend."
 doc = false
 name = "ugdb"
 
-[profile.release]
-debug = true
-
 [dependencies]
 chan = "0.1"
 chan-signal = "0.3"

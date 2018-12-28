@@ -1,29 +1,17 @@
 extern crate json;
 extern crate nix;
-#[macro_use] extern crate nom;
+#[macro_use]
+extern crate nom;
 
 pub mod commands;
 pub mod output;
 
-use std::process::{
-    Command,
-    Child,
-    ChildStdin,
-    Stdio,
-};
-use std::thread;
-use std::sync::{
-    mpsc,
-    Arc,
-};
-use std::sync::atomic::{
-    AtomicBool,
-    Ordering,
-};
-use std::ffi::{
-    OsString
-};
+use std::ffi::OsString;
 use std::path::PathBuf;
+use std::process::{Child, ChildStdin, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{mpsc, Arc};
+use std::thread;
 
 type Token = u64;
 
@@ -67,7 +55,6 @@ pub struct GDBBuilder {
 pub enum SpawnError {
     Io(::std::io::Error),
     Execute(ExecuteError),
-
 }
 impl GDBBuilder {
     pub fn new(gdb: PathBuf) -> Self {
@@ -146,7 +133,9 @@ impl GDBBuilder {
         self.opt_tty = Some(tty);
         self
     }
-    pub fn try_spawn<S>(self, oob_sink: S) -> Result<GDB, SpawnError> where S: OutOfBandRecordSink + 'static
+    pub fn try_spawn<S>(self, oob_sink: S) -> Result<GDB, SpawnError>
+    where
+        S: OutOfBandRecordSink + 'static,
     {
         let mut args = Vec::<OsString>::new();
         if self.opt_nh {
@@ -193,7 +182,13 @@ impl GDBBuilder {
             args.push("--tty=".into());
             args.last_mut().unwrap().push(&tty);
         }
-        if let Some(program) = self.opt_program {
+        if !self.opt_args.is_empty() {
+            args.push("--args".into());
+            args.push(self.opt_program.unwrap().into());
+            for arg in self.opt_args {
+                args.push(arg.into());
+            }
+        } else if let Some(program) = self.opt_program {
             args.push(program.into());
         }
 
@@ -202,16 +197,21 @@ impl GDBBuilder {
             .args(args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .spawn().map_err(SpawnError::Io)?;
+            .spawn()
+            .map_err(SpawnError::Io)?;
         let stdin = child.stdin.take().expect("take stdin");
         let stdout = child.stdout.take().expect("take stdout");
         let is_running = Arc::new(AtomicBool::new(false));
         let is_running_for_thread = is_running.clone();
         let (result_input, result_output) = mpsc::channel();
-        /*let outputThread = */ thread::Builder::new().name("gdbmi parser".to_owned()).spawn(move || {
-            output::process_output(stdout, result_input, oob_sink, is_running_for_thread);
-        }).map_err(SpawnError::Io)?;
-        let mut gdb = GDB {
+        /*let outputThread = */
+        thread::Builder::new()
+            .name("gdbmi parser".to_owned())
+            .spawn(move || {
+                output::process_output(stdout, result_input, oob_sink, is_running_for_thread);
+            })
+            .map_err(SpawnError::Io)?;
+        let gdb = GDB {
             process: child,
             stdin: stdin,
             is_running: is_running,
@@ -219,16 +219,13 @@ impl GDBBuilder {
             current_command_token: 0,
             //outputThread: outputThread,
         };
-        if !self.opt_args.is_empty() {
-            gdb.execute(commands::MiCommand::exec_arguments(self.opt_args)).map_err(SpawnError::Execute)?;
-        }
         Ok(gdb)
     }
 }
 
 impl GDB {
     pub fn interrupt_execution(&self) -> Result<(), ::nix::Error> {
-        use ::nix::sys::signal;
+        use nix::sys::signal;
         signal::kill(self.process.id() as i32, signal::SIGINT)
     }
 
@@ -240,30 +237,39 @@ impl GDB {
         self.current_command_token
     }
 
-    pub fn execute<C: std::borrow::Borrow<commands::MiCommand>>(&mut self, command: C) -> Result<output::ResultRecord, ExecuteError> {
+    pub fn execute<C: std::borrow::Borrow<commands::MiCommand>>(
+        &mut self,
+        command: C,
+    ) -> Result<output::ResultRecord, ExecuteError> {
         if self.is_running() {
-            return Err(ExecuteError::Busy)
+            return Err(ExecuteError::Busy);
         }
         let command_token = self.get_usable_token();
 
-        command.borrow().write_interpreter_string(&mut self.stdin, command_token).expect("write interpreter command");
+        command
+            .borrow()
+            .write_interpreter_string(&mut self.stdin, command_token)
+            .expect("write interpreter command");
         match self.result_output.recv() {
             Ok(record) => {
                 let token = record.token;
                 if token.is_none() || token.unwrap() != command_token {
-                    panic!("Input token ({}) does not match output token ({:?})", command_token, token);
+                    panic!(
+                        "Input token ({}) does not match output token ({:?})",
+                        command_token, token
+                    );
                 }
                 Ok(record)
-            },
-            Err(_) => {
-                Err(ExecuteError::Quit)
-            },
+            }
+            Err(_) => Err(ExecuteError::Quit),
         }
     }
 
     pub fn execute_later(&mut self, command: &commands::MiCommand) {
         let command_token = self.get_usable_token();
-        command.write_interpreter_string(&mut self.stdin, command_token).expect("write interpreter command");
+        command
+            .write_interpreter_string(&mut self.stdin, command_token)
+            .expect("write interpreter command");
         let _ = self.result_output.recv();
     }
 

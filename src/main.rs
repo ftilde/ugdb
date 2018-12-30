@@ -451,6 +451,17 @@ fn main() {
 
     //keyboard_input.stop_loop(); //TODO make sure all loops stop?
 
-    let child_exit_status = update_parameters.gdb.mi.process.wait().expect("gdb exited");
+    let mut join_retry_counter = 0;
+    let join_retry_duration = Duration::from_millis(100);
+    let child_exit_status = loop {
+        if let Some(ret) = update_parameters.gdb.mi.process.try_wait().expect("gdb exited") {
+            break ret;
+        }
+        std::thread::sleep(join_retry_duration);
+        if join_retry_counter == 10 {
+            println!("Waiting for GDB to exit...");
+        }
+        join_retry_counter += 1;
+    };
     println!("GDB exited with status {}.", child_exit_status);
 }

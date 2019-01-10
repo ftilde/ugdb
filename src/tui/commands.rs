@@ -1,35 +1,30 @@
 use gdbmi::commands::MiCommand;
-use gdbmi::ExecuteError;
 use gdbmi::output::{ResultClass, ResultRecord};
+use gdbmi::ExecuteError;
 
 pub struct Command {
-    cmd: Box<FnMut(::UpdateParameters)->Result<(),ExecuteError>>,
+    cmd: Box<FnMut(::UpdateParameters) -> Result<(), ExecuteError>>,
 }
 
 impl Command {
-    fn new(cmd: Box<FnMut(::UpdateParameters)->Result<(),ExecuteError>>) -> Command {
-        Command {
-            cmd: cmd,
-        }
+    fn new(cmd: Box<FnMut(::UpdateParameters) -> Result<(), ExecuteError>>) -> Command {
+        Command { cmd: cmd }
     }
     fn from_mi_with_msg(cmd: MiCommand, success_msg: &'static str) -> Command {
-        Command::new(
-            Box::new(move |p: ::UpdateParameters| {
-                let res = p.gdb.mi.execute(cmd.clone()).map(|_|());
-                if res.is_ok() {
-                    p.logger.log_message(success_msg);
-                }
-                res
-            }))
+        Command::new(Box::new(move |p: ::UpdateParameters| {
+            let res = p.gdb.mi.execute(cmd.clone()).map(|_| ());
+            if res.is_ok() {
+                p.logger.log_message(success_msg);
+            }
+            res
+        }))
     }
     fn from_mi(cmd: MiCommand) -> Command {
-        Command::new(
-            Box::new(move |p: ::UpdateParameters| {
-                p.gdb.mi.execute(cmd.clone()).map(|_|())
-            }))
+        Command::new(Box::new(move |p: ::UpdateParameters| {
+            p.gdb.mi.execute(cmd.clone()).map(|_| ())
+        }))
     }
 }
-
 
 pub enum CommandState {
     Idle,
@@ -51,14 +46,12 @@ impl CommandState {
             "y" | "Y" | "yes" => {
                 Self::try_execute(cmd, p);
                 CommandState::Idle
-            },
-            "n" | "N" | "no" => {
-                CommandState::Idle
-            },
+            }
+            "n" | "N" | "no" => CommandState::Idle,
             _ => {
                 p.logger.log_message("Please type 'y' or 'n'.");
                 CommandState::WaitingForConfirmation(cmd)
-            },
+            }
         }
     }
 
@@ -71,17 +64,24 @@ impl CommandState {
 
     fn try_execute(mut cmd: Command, p: ::UpdateParameters) {
         match (cmd.cmd)(p) {
-            Ok(_) => { },
+            Ok(_) => {}
             Err(e) => Self::print_execute_error(e, p),
         }
     }
 
-    fn ask_if_session_active(cmd: Command, confirmation_question: &'static str, p: ::UpdateParameters) -> Self {
+    fn ask_if_session_active(
+        cmd: Command,
+        confirmation_question: &'static str,
+        p: ::UpdateParameters,
+    ) -> Self {
         match p.gdb.mi.is_session_active() {
             Ok(true) => {
-                p.logger.log_message(format!("A debugging session is active. {} (y or n)", confirmation_question));
+                p.logger.log_message(format!(
+                    "A debugging session is active. {} (y or n)",
+                    confirmation_question
+                ));
                 CommandState::WaitingForConfirmation(cmd)
-            },
+            }
             Ok(false) => {
                 Self::try_execute(cmd, p);
                 CommandState::Idle
@@ -89,7 +89,7 @@ impl CommandState {
             Err(e) => {
                 Self::print_execute_error(e, p);
                 CommandState::Idle
-            },
+            }
         }
     }
 
@@ -108,20 +108,24 @@ impl CommandState {
                 //gdb.execute(&MiCommand::exec_interrupt()).expect("Interrupt");
 
                 CommandState::Idle
-            },
-            "!reload" => {
-                match p.gdb.get_target() {
-                    Ok(Some(target)) => {
-                        Self::ask_if_session_active(Command::from_mi_with_msg(MiCommand::file_exec_and_symbols(&target), "Reloaded target."), "Reload anyway?", p)
-                    },
-                    Ok(None) => {
-                        p.logger.log_message("No target. Use the 'file' command to specify one.");
-                        CommandState::Idle
-                    },
-                    Err(e) => {
-                        Self::print_execute_error(e, p);
-                        CommandState::Idle
-                    },
+            }
+            "!reload" => match p.gdb.get_target() {
+                Ok(Some(target)) => Self::ask_if_session_active(
+                    Command::from_mi_with_msg(
+                        MiCommand::file_exec_and_symbols(&target),
+                        "Reloaded target.",
+                    ),
+                    "Reload anyway?",
+                    p,
+                ),
+                Ok(None) => {
+                    p.logger
+                        .log_message("No target. Use the 'file' command to specify one.");
+                    CommandState::Idle
+                }
+                Err(e) => {
+                    Self::print_execute_error(e, p);
+                    CommandState::Idle
                 }
             },
             "q" => {
@@ -130,17 +134,21 @@ impl CommandState {
             // Gdb commands
             _ => {
                 match p.gdb.mi.execute(MiCommand::cli_exec(line)) {
-                    Ok(ResultRecord { class: ResultClass::Error, results, .. }) => {
+                    Ok(ResultRecord {
+                        class: ResultClass::Error,
+                        results,
+                        ..
+                    }) => {
                         // Most of the time gdb seems to also write error messages to the console.
                         // We therefore (only) write the error message to debug log to avoid duplicates.
-                        p.logger.log_debug(results["msg"].as_str().unwrap_or(&results.pretty(2)));
-                    },
-                    Ok(_) => {},
+                        p.logger
+                            .log_debug(results["msg"].as_str().unwrap_or(&results.pretty(2)));
+                    }
+                    Ok(_) => {}
                     Err(e) => Self::print_execute_error(e, p),
                 }
                 CommandState::Idle
-            },
+            }
         }
     }
-
 }

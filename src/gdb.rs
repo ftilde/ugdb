@@ -1,35 +1,14 @@
 // This module encapsulates some functionality of gdb. Depending on how general this turns out, we
 // may want to move it to a separate crate or merge it with gdbmi-rs
-use unsegen::base::{
-    LineNumber,
-};
 use gdbmi;
-use gdbmi::{
-    ExecuteError,
-};
-use gdbmi::output::{
-    BreakPointEvent,
-    JsonValue,
-    Object,
-    ResultClass,
-};
-use gdbmi::commands::{
-    BreakPointNumber,
-    BreakPointLocation,
-    MiCommand,
-};
-use std::path::{
-    PathBuf,
-};
-use std::collections::{
-    HashMap,
-    HashSet,
-};
-use std::ops::{
-    Add,
-    Sub,
-};
+use gdbmi::commands::{BreakPointLocation, BreakPointNumber, MiCommand};
+use gdbmi::output::{BreakPointEvent, JsonValue, Object, ResultClass};
+use gdbmi::ExecuteError;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
+use std::ops::{Add, Sub};
+use std::path::PathBuf;
+use unsegen::base::LineNumber;
 
 #[derive(Debug, Clone)]
 pub struct SrcPosition {
@@ -50,7 +29,9 @@ impl SrcPosition {
 pub struct Address(pub usize);
 impl Address {
     pub fn parse(string: &str) -> Result<Self, (::std::num::ParseIntError, String)> {
-        usize::from_str_radix(&string[2..],16).map(|u| Address(u)).map_err(|e| (e, string.to_owned()))
+        usize::from_str_radix(&string[2..], 16)
+            .map(|u| Address(u))
+            .map_err(|e| (e, string.to_owned()))
     }
 }
 impl fmt::Display for Address {
@@ -81,12 +62,20 @@ pub struct BreakPoint {
 
 impl BreakPoint {
     pub fn from_json(bkpt: &Object) -> Self {
-        let number = bkpt["number"].as_str().expect("find bp number").parse::<BreakPointNumber>().expect("Parse usize");
+        let number = bkpt["number"]
+            .as_str()
+            .expect("find bp number")
+            .parse::<BreakPointNumber>()
+            .expect("Parse usize");
         let enabled = bkpt["enabled"].as_str().expect("find enabled") == "y";
-        let address = bkpt["addr"].as_str().and_then(|addr| Address::parse(addr).ok()); //addr may not be present or contain
+        let address = bkpt["addr"]
+            .as_str()
+            .and_then(|addr| Address::parse(addr).ok()); //addr may not be present or contain
         let src_pos = {
             let maybe_file = bkpt["fullname"].as_str();
-            let maybe_line = bkpt["line"].as_str().map(|l_nr| LineNumber::new(l_nr.parse::<usize>().expect("Parse usize")));
+            let maybe_line = bkpt["line"]
+                .as_str()
+                .map(|l_nr| LineNumber::new(l_nr.parse::<usize>().expect("Parse usize")));
             if let (Some(file), Some(line)) = (maybe_file, maybe_line) {
                 Some(SrcPosition::new(PathBuf::from(file), line))
             } else {
@@ -101,23 +90,23 @@ impl BreakPoint {
         }
     }
 
-    pub fn all_from_json(bkpt_obj: &JsonValue) -> Box<Iterator<Item=BreakPoint>> {
+    pub fn all_from_json(bkpt_obj: &JsonValue) -> Box<Iterator<Item = BreakPoint>> {
         match bkpt_obj {
-            &JsonValue::Object(ref bp) => {
-                Box::new(Some(Self::from_json(&bp)).into_iter())
-            },
-            &JsonValue::Array(ref bp_array) => {
-                Box::new(bp_array.iter().map(|bp| {
-                    if let &JsonValue::Object(ref bp) = bp {
-                        Self::from_json(&bp)
-                    } else {
-                        panic!("Invalid breakpoint object in array");
-                    }
-                }).collect::<Vec<BreakPoint>>().into_iter())
-            },
-            _ => {
-                panic!("Invalid breakpoint object")
-            },
+            &JsonValue::Object(ref bp) => Box::new(Some(Self::from_json(&bp)).into_iter()),
+            &JsonValue::Array(ref bp_array) => Box::new(
+                bp_array
+                    .iter()
+                    .map(|bp| {
+                        if let &JsonValue::Object(ref bp) = bp {
+                            Self::from_json(&bp)
+                        } else {
+                            panic!("Invalid breakpoint object in array");
+                        }
+                    })
+                    .collect::<Vec<BreakPoint>>()
+                    .into_iter(),
+            ),
+            _ => panic!("Invalid breakpoint object"),
         }
     }
 }
@@ -185,69 +174,78 @@ impl GDB {
         self.mi.execute_later(&gdbmi::commands::MiCommand::exit());
     }
 
-    pub fn insert_breakpoint(&mut self, location: BreakPointLocation) -> Result<(), BreakpointOperationError> {
-        let bp_result = self.mi.execute(&MiCommand::insert_breakpoint(location)).map_err(|e| match e {
-            ExecuteError::Busy => {
-                BreakpointOperationError::Busy
-            },
-            ExecuteError::Quit => {
-                panic!("Could not insert breakpoint: GDB quit")
-            },
-        })?;
+    pub fn insert_breakpoint(
+        &mut self,
+        location: BreakPointLocation,
+    ) -> Result<(), BreakpointOperationError> {
+        let bp_result = self
+            .mi
+            .execute(&MiCommand::insert_breakpoint(location))
+            .map_err(|e| match e {
+                ExecuteError::Busy => BreakpointOperationError::Busy,
+                ExecuteError::Quit => panic!("Could not insert breakpoint: GDB quit"),
+            })?;
         match bp_result.class {
             ResultClass::Done => {
                 self.handle_breakpoint_event(BreakPointEvent::Created, &bp_result.results);
                 Ok(())
-            },
-            ResultClass::Error => {
-                Err(BreakpointOperationError::ExecutionError(
-                        bp_result.results.get("msg")
-                            .and_then(|msg_obj| msg_obj.as_str())
-                            .map(|s| s.to_owned())
-                            .unwrap_or(bp_result.results.dump())
-                ))
-            },
+            }
+            ResultClass::Error => Err(BreakpointOperationError::ExecutionError(
+                bp_result
+                    .results
+                    .get("msg")
+                    .and_then(|msg_obj| msg_obj.as_str())
+                    .map(|s| s.to_owned())
+                    .unwrap_or(bp_result.results.dump()),
+            )),
             _ => {
                 panic!("Unexpected resultclass: {:?}", bp_result.class);
-            },
+            }
         }
     }
 
-    pub fn delete_breakpoints<I: Clone + Iterator<Item=BreakPointNumber>>(&mut self, bp_numbers: I) -> Result<(), BreakpointOperationError> {
-        let bp_result = self.mi.execute(MiCommand::delete_breakpoints(bp_numbers.clone())).map_err(|e| match e {
-            ExecuteError::Busy => {
-                BreakpointOperationError::Busy
-            },
-            ExecuteError::Quit => {
-                panic!("Could not insert breakpoint: GDB quit")
-            },
-        })?;
+    pub fn delete_breakpoints<I: Clone + Iterator<Item = BreakPointNumber>>(
+        &mut self,
+        bp_numbers: I,
+    ) -> Result<(), BreakpointOperationError> {
+        let bp_result = self
+            .mi
+            .execute(MiCommand::delete_breakpoints(bp_numbers.clone()))
+            .map_err(|e| match e {
+                ExecuteError::Busy => BreakpointOperationError::Busy,
+                ExecuteError::Quit => panic!("Could not insert breakpoint: GDB quit"),
+            })?;
         match bp_result.class {
             ResultClass::Done => {
                 let major_to_delete = bp_numbers.map(|n| n.major).collect::<HashSet<usize>>();
-                let bkpts_to_delete = self.breakpoints.map.keys().filter_map(|&k| {
-                    if major_to_delete.contains(&k.major) {
-                        Some(k)
-                    } else {
-                        None
-                    }
-                }).collect::<Vec<BreakPointNumber>>();
+                let bkpts_to_delete = self
+                    .breakpoints
+                    .map
+                    .keys()
+                    .filter_map(|&k| {
+                        if major_to_delete.contains(&k.major) {
+                            Some(k)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<BreakPointNumber>>();
                 for bkpt in bkpts_to_delete {
                     self.breakpoints.remove_breakpoint(bkpt);
                 }
                 Ok(())
-            },
-            ResultClass::Error => {
-                Err(BreakpointOperationError::ExecutionError(
-                        bp_result.results.get("msg")
-                            .and_then(|msg_obj| msg_obj.as_str())
-                            .map(|s| s.to_owned())
-                            .unwrap_or(bp_result.results.dump())
-                ))
-            },
+            }
+            ResultClass::Error => Err(BreakpointOperationError::ExecutionError(
+                bp_result
+                    .results
+                    .get("msg")
+                    .and_then(|msg_obj| msg_obj.as_str())
+                    .map(|s| s.to_owned())
+                    .unwrap_or(bp_result.results.dump()),
+            )),
             _ => {
                 panic!("Unexpected resultclass: {:?}", bp_result.class);
-            },
+            }
         }
     }
 
@@ -259,7 +257,7 @@ impl GDB {
                         let bp = BreakPoint::from_json(&bkpt);
                         self.breakpoints.update_breakpoint(bp);
                         //debug_assert!(bp_type != BreakPointEvent::Modified || res.is_some(), "Modified non-existent id");
-                    },
+                    }
                     &JsonValue::Array(ref bkpts) => {
                         for bkpt in bkpts {
                             if let &JsonValue::Object(ref bkpt) = bkpt {
@@ -269,16 +267,20 @@ impl GDB {
                                 panic!("Malformed breakpoint list");
                             }
                         }
-                    },
+                    }
                     _ => {
                         panic!("Invalid bkpt structure");
-                    },
+                    }
                 }
-            },
+            }
             BreakPointEvent::Deleted => {
-                let id = info["id"].as_str().expect("find id").parse::<BreakPointNumber>().expect("Parse usize");
+                let id = info["id"]
+                    .as_str()
+                    .expect("find id")
+                    .parse::<BreakPointNumber>()
+                    .expect("Parse usize");
                 self.breakpoints.remove_breakpoint(id);
-            },
+            }
         }
     }
 
@@ -287,10 +289,13 @@ impl GDB {
     pub fn get_target(&mut self) -> Result<Option<PathBuf>, ExecuteError> {
         let result = self.mi.execute(MiCommand::list_thread_groups(false, &[]))?;
         if result.class == ResultClass::Done {
-            Ok(result.results["groups"].members().filter_map(|thread| thread["executable"].as_str()).next().map(|exec| exec.into()))
+            Ok(result.results["groups"]
+                .members()
+                .filter_map(|thread| thread["executable"].as_str())
+                .next()
+                .map(|exec| exec.into()))
         } else {
             Ok(None)
         }
     }
 }
-

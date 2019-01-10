@@ -454,7 +454,13 @@ fn main() {
     let mut join_retry_counter = 0;
     let join_retry_duration = Duration::from_millis(100);
     let child_exit_status = loop {
-        if let Some(ret) = update_parameters.gdb.mi.process.try_wait().expect("gdb exited") {
+        if let Some(ret) = update_parameters
+            .gdb
+            .mi
+            .process
+            .try_wait()
+            .expect("gdb exited")
+        {
             break ret;
         }
         std::thread::sleep(join_retry_duration);

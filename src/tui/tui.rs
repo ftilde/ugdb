@@ -1,23 +1,12 @@
-use unsegen_pager::{
-    Theme,
-};
+use unsegen_pager::Theme;
 
-use gdbmi::output::{
-    AsyncClass,
-    AsyncKind,
-    JsonValue,
-    Object,
-    OutOfBandRecord,
-    ThreadEvent,
-};
+use gdbmi::output::{AsyncClass, AsyncKind, JsonValue, Object, OutOfBandRecord, ThreadEvent};
 
 use super::console::Console;
-use super::srcview::CodeWindow;
-use unsegen_terminal::{
-    Terminal,
-};
 use super::expression_table::ExpressionTable;
+use super::srcview::CodeWindow;
 use unsegen::container::{Container, ContainerProvider};
+use unsegen_terminal::Terminal;
 
 pub struct Tui<'a> {
     pub console: Console,
@@ -26,18 +15,22 @@ pub struct Tui<'a> {
     src_view: CodeWindow<'a>,
 }
 
-const WELCOME_MSG: &'static str = concat!(r#"
+const WELCOME_MSG: &'static str = concat!(
+    r#"
        Welcome to        
  _   _  __ _  __| | |__  
 | | | |/ _` |/ _` | '_ \ 
 | |_| | (_| | (_| | |_) |
  \__,_|\__, |\__,_|_.__/ 
        |___/             
-version             "#, env!("CRATE_VERSION"), r#"
-revision         "#, env!("GIT_HASH"));
+version             "#,
+    env!("CRATE_VERSION"),
+    r#"
+revision         "#,
+    env!("GIT_HASH")
+);
 
 impl<'a> Tui<'a> {
-
     pub fn new(terminal: Terminal, highlighting_theme: &'a Theme) -> Self {
         Tui {
             console: Console::new(),
@@ -47,34 +40,57 @@ impl<'a> Tui<'a> {
         }
     }
 
-    fn handle_async_record(&mut self, kind: AsyncKind, class: AsyncClass, results: &Object, p: ::UpdateParameters) {
+    fn handle_async_record(
+        &mut self,
+        kind: AsyncKind,
+        class: AsyncClass,
+        results: &Object,
+        p: ::UpdateParameters,
+    ) {
         match (kind, class) {
-            (AsyncKind::Exec, AsyncClass::Stopped) | (AsyncKind::Notify, AsyncClass::Thread(ThreadEvent::Selected))=> {
-                p.logger.log_debug(format!("stopped: {}", JsonValue::Object(results.clone()).pretty(2)));
+            (AsyncKind::Exec, AsyncClass::Stopped)
+            | (AsyncKind::Notify, AsyncClass::Thread(ThreadEvent::Selected)) => {
+                p.logger.log_debug(format!(
+                    "stopped: {}",
+                    JsonValue::Object(results.clone()).pretty(2)
+                ));
                 if let JsonValue::Object(ref frame) = results["frame"] {
                     self.src_view.show_frame(frame, p);
                 }
                 self.expression_table.update_results(p);
-            },
+            }
             (AsyncKind::Notify, AsyncClass::BreakPoint(event)) => {
-                p.logger.log_debug(format!("bkpoint {:?}: {}", event, JsonValue::Object(results.clone()).pretty(2)));
+                p.logger.log_debug(format!(
+                    "bkpoint {:?}: {}",
+                    event,
+                    JsonValue::Object(results.clone()).pretty(2)
+                ));
                 p.gdb.handle_breakpoint_event(event, &results);
-            },
+            }
             (kind, class) => {
-                p.logger.log_debug(format!("unhandled async_record: [{:?}, {:?}] {}", kind, class, JsonValue::Object(results.clone()).pretty(2)));
-            },
+                p.logger.log_debug(format!(
+                    "unhandled async_record: [{:?}, {:?}] {}",
+                    kind,
+                    class,
+                    JsonValue::Object(results.clone()).pretty(2)
+                ));
+            }
         }
     }
 
     pub fn add_out_of_band_record(&mut self, record: OutOfBandRecord, p: ::UpdateParameters) {
         match record {
-            OutOfBandRecord::StreamRecord{ kind: _, data} => {
+            OutOfBandRecord::StreamRecord { kind: _, data } => {
                 self.console.write_to_gdb_log(data);
-            },
-            OutOfBandRecord::AsyncRecord{token: _, kind, class, results} => {
+            }
+            OutOfBandRecord::AsyncRecord {
+                token: _,
+                kind,
+                class,
+                results,
+            } => {
                 self.handle_async_record(kind, class, &results, p);
-            },
-
+            }
         }
     }
 
@@ -107,7 +123,10 @@ impl<'t> ContainerProvider for Tui<'t> {
             &TuiContainerType::Terminal => &self.process_pty,
         }
     }
-    fn get_mut<'a, 'b: 'a>(&'b mut self, index: &'a Self::Index) -> &'b mut Container<Self::Parameters> {
+    fn get_mut<'a, 'b: 'a>(
+        &'b mut self,
+        index: &'a Self::Index,
+    ) -> &'b mut Container<Self::Parameters> {
         match index {
             &TuiContainerType::SrcView => &mut self.src_view,
             &TuiContainerType::Console => &mut self.console,

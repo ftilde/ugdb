@@ -1,3 +1,5 @@
+#[allow(unused)]
+#[macro_use]
 extern crate json;
 extern crate lalrpop_util;
 
@@ -17,9 +19,9 @@ pub fn parse_gdb_value(result_string: &str) -> Result<JsonValue, ParseError> {
 
 #[cfg(test)]
 mod test {
-    use super::super::ast::ANON_KEY;
+    use super::ast::ANON_KEY;
     use super::*;
-    use unsegen_jsonviewer::json_ext::{object, Array, JsonValue};
+    use json::{object, Array, JsonValue};
 
     #[test]
     fn test_parse_basic() {

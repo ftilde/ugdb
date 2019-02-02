@@ -206,6 +206,28 @@ impl From<PagerError> for GotoError {
     }
 }
 
+fn get_str<'a>(obj: &'a JsonValue, key: &'static str) -> Result<&'a str, GDBResponseError> {
+    Ok(obj[key]
+        .as_str()
+        .ok_or_else(|| GDBResponseError::MissingField(key, obj.clone()))?)
+}
+
+fn get_str_obj<'a>(obj: &'a Object, key: &'static str) -> Result<&'a str, GDBResponseError> {
+    Ok(obj[key]
+        .as_str()
+        .ok_or_else(|| GDBResponseError::MissingField(key, JsonValue::Object(obj.clone())))?)
+}
+
+fn get_addr<'a>(obj: &'a JsonValue, key: &'static str) -> Result<Address, GDBResponseError> {
+    let s = get_str(obj, key)?;
+    Ok(Address::parse(s)?)
+}
+
+fn get_addr_obj<'a>(obj: &'a Object, key: &'static str) -> Result<Address, GDBResponseError> {
+    let s = get_str_obj(obj, key)?;
+    Ok(Address::parse(s)?)
+}
+
 impl<'a> AssemblyView<'a> {
     pub fn new(highlighting_theme: &'a Theme) -> Self {
         AssemblyView {
@@ -254,7 +276,7 @@ impl<'a> AssemblyView<'a> {
                     content
                         .view(LineIndex::new(0)..)
                         .last()
-                        .expect("we know we have at least one line")
+                        .expect("We know we have at least one line")
                         .1
                         .address
                 };
@@ -268,9 +290,12 @@ impl<'a> AssemblyView<'a> {
     }
 
     fn show_lines(&mut self, lines: Vec<AssemblyLine>, p: ::UpdateParameters) {
-        let min_address = lines.first().expect("At least one instruction").address;
+        if lines.is_empty() {
+            return; //Nothing to show
+        }
+        let min_address = lines.first().expect("We know lines is not empty").address;
         //TODO: use RangeInclusive when available on stable
-        let max_address = lines.last().expect("At least one instruction").address + 1;
+        let max_address = lines.last().expect("We know lines is not empty").address + 1;
 
         let syntax = self
             .syntax_set
@@ -285,6 +310,39 @@ impl<'a> AssemblyView<'a> {
                     p.gdb.breakpoints.values(),
                 )),
         );
+    }
+
+    fn get_instructions(disass_results: &Object) -> Result<Vec<AssemblyLine>, GDBResponseError> {
+        if let &JsonValue::Array(ref line_objs) = &disass_results["asm_insns"] {
+            let mut lines = Vec::<AssemblyLine>::new();
+            for line_obj in line_objs {
+                let line = LineNumber::new(
+                    get_str(&line_obj, "line")?
+                        .parse::<usize>()
+                        .map_err(|_| GDBResponseError::Other(format!("Malformed line")))?,
+                );
+
+                let file = get_str(&line_obj, "fullname")?;
+                let src_pos = Some(SrcPosition::new(PathBuf::from(file), line));
+                for tuple in line_obj["line_asm_insn"].members() {
+                    let instruction = get_str(tuple, "inst")?;
+                    let address = get_addr(tuple, "address")?;
+                    lines.push(AssemblyLine::new(
+                        instruction.to_owned(),
+                        address,
+                        src_pos.clone(),
+                        AssemblyDebugLocation::try_from_value(tuple),
+                    ));
+                }
+            }
+            lines.sort_by_key(|l| l.address);
+            Ok(lines)
+        } else {
+            Err(GDBResponseError::MissingField(
+                "asm_insns",
+                JsonValue::Object(disass_results.clone()),
+            ))
+        }
     }
 
     fn show_file<P: AsRef<Path>, L: Into<LineNumber>>(
@@ -314,50 +372,21 @@ impl<'a> AssemblyView<'a> {
                 return Err(());
             }
         };
-        if let &JsonValue::Array(ref line_objs) = &disass_results["asm_insns"] {
-            let mut lines = Vec::<AssemblyLine>::new();
-            for line_obj in line_objs {
-                let line = LineNumber::new(
-                    line_obj["line"]
-                        .as_str()
-                        .expect("line present")
-                        .parse::<usize>()
-                        .expect("parse line"),
-                );
-                let file = line_obj["fullname"].as_str().expect("full name present");
-                let src_pos = Some(SrcPosition::new(PathBuf::from(file), line));
-                for tuple in line_obj["line_asm_insn"].members() {
-                    let instruction = tuple["inst"]
-                        .as_str()
-                        .expect("No instruction in disassembly object");
-                    let address_str = tuple["address"]
-                        .as_str()
-                        .expect("No address in disassembly object");
-                    let address = Address::parse(address_str).expect("Parse address");
-                    lines.push(AssemblyLine::new(
-                        instruction.to_owned(),
-                        address,
-                        src_pos.clone(),
-                        AssemblyDebugLocation::try_from_value(tuple),
-                    ));
-                }
-            }
-            if lines.is_empty() {
-                p.logger.log_message(format!(
-                    "Disassembly failed for {:?}:{}",
-                    file.as_ref(),
-                    line_u
-                ));
-                Err(())
-            } else {
-                lines.sort_by_key(|l| l.address);
+
+        match Self::get_instructions(&disass_results) {
+            Ok(lines) => {
                 self.show_lines(lines, p);
                 Ok(())
             }
-        } else {
-            // Disassembly object is not an array:
-            // There may be no asm correspondence for the give file and line.
-            Err(())
+            Err(e) => {
+                p.logger.log_message(format!(
+                    "Disassembly failed for {:?}:{}: {:?}",
+                    file.as_ref(),
+                    line_u,
+                    e
+                ));
+                Err(())
+            }
         }
     }
 
@@ -371,13 +400,8 @@ impl<'a> AssemblyView<'a> {
 
         let mut lines = Vec::<AssemblyLine>::new();
         for line_tuple in line_objs {
-            let instruction = line_tuple["inst"]
-                .as_str()
-                .expect("Instruction in disassembly object");
-            let address_str = line_tuple["address"]
-                .as_str()
-                .expect("Address in disassembly object");
-            let address = Address::parse(address_str).expect("Parse address");
+            let instruction = get_str(&line_tuple, "inst")?;
+            let address = get_addr(&line_tuple, "address")?;
             lines.push(AssemblyLine::new(
                 instruction.to_owned(),
                 address,
@@ -803,9 +827,48 @@ pub struct CodeWindow<'a> {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+enum GDBResponseError {
+    MissingField(&'static str, JsonValue),
+    MalformedAddress(String),
+    Other(String),
+}
+
+impl From<(::std::num::ParseIntError, String)> for GDBResponseError {
+    fn from((_, s): (::std::num::ParseIntError, String)) -> Self {
+        GDBResponseError::MalformedAddress(s)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
 enum DisassembleError {
     Execution(ExecuteError),
+    GDB(GDBResponseError),
     Other(String),
+}
+
+impl From<GDBResponseError> for DisassembleError {
+    fn from(error: GDBResponseError) -> Self {
+        DisassembleError::GDB(error)
+    }
+}
+
+impl From<(::std::num::ParseIntError, String)> for DisassembleError {
+    fn from((_, s): (::std::num::ParseIntError, String)) -> Self {
+        GDBResponseError::MalformedAddress(s).into()
+    }
+}
+
+#[derive(Debug)]
+enum ShowError {
+    GDB(GDBResponseError),
+    CouldNotOpenFile(PathBuf),
+    NoLineInfo,
+}
+
+impl From<GDBResponseError> for ShowError {
+    fn from(error: GDBResponseError) -> Self {
+        ShowError::GDB(error)
+    }
 }
 
 fn disassemble_address(
@@ -830,18 +893,23 @@ fn disassemble_address(
             return Err(DisassembleError::Execution(e));
         }
     };
-    if let JsonValue::Array(mut line_objs) = disass_results["asm_insns"].take() {
+    if let JsonValue::Array(line_objs) = disass_results["asm_insns"].take() {
+        let mut line_objs = line_objs
+            .into_iter()
+            .map(|l| {
+                let addr = get_addr(&l, "address")?;
+                Ok((addr, l))
+            })
+            .collect::<Result<Vec<(Address, JsonValue)>, DisassembleError>>()?;
         //I'm not sure if GDB does this already, but we better not rely on it...
-        line_objs.sort_by_key(|l| {
-            Address::parse(l["address"].as_str().expect("address present")).expect("Parse address")
-        });
+        line_objs.sort_by_key(|(a, _)| *a);
 
-        Ok(line_objs)
+        Ok(line_objs.into_iter().map(|(_, o)| o).collect::<Vec<_>>())
     } else {
-        panic!(
-            "Malformed gdb response, no \"asm_insns\": {:?}",
-            disass_results
-        );
+        Err(GDBResponseError::MissingField(
+            "asm_insns",
+            JsonValue::Object(disass_results.clone()),
+        ))?
     }
 }
 
@@ -858,21 +926,15 @@ impl<'a> CodeWindow<'a> {
         }
     }
 
-    fn show_from_file(&mut self, frame: &Object, p: ::UpdateParameters) -> Result<(), ()> {
-        let address = Address::parse(
-            frame["addr"]
-                .as_str()
-                .expect("Address should always be present"),
-        )
-        .expect("Parse address");
+    fn show_from_file(&mut self, frame: &Object, p: ::UpdateParameters) -> Result<(), ShowError> {
+        let address = get_addr_obj(frame, "addr")?;
+
         if let Some(path) = frame["fullname"].as_str() {
             // File information may not be present
             let line = LineNumber::new(
-                frame["line"]
-                    .as_str()
-                    .expect("line should be present with file")
+                get_str_obj(frame, "line")?
                     .parse::<usize>()
-                    .expect("Parse line number"),
+                    .map_err(|_| GDBResponseError::Other(format!("Malformed line")))?,
             );
             self.src_view.set_last_stop_position(path, line);
 
@@ -882,7 +944,9 @@ impl<'a> CodeWindow<'a> {
                         .go_to_last_stop_position()
                         .expect("We just set a last stop pos!");
                 }
-                Err(PagerShowError::CouldNotOpenFile(_, _)) => return Err(()),
+                Err(PagerShowError::CouldNotOpenFile(b, _)) => {
+                    return Err(ShowError::CouldNotOpenFile(b));
+                }
                 Err(PagerShowError::LineDoesNotExist(_)) => {
                     //Ignore
                 }
@@ -904,12 +968,12 @@ impl<'a> CodeWindow<'a> {
             };
             Ok(())
         } else {
-            Err(())
+            Err(ShowError::NoLineInfo)
         }
     }
     fn find_function_range(at: Address, p: ::UpdateParameters) -> Result<(Address, Address), ()> {
         let first_lines = disassemble_address(at, at + 16, p).map_err(|_| ())?;
-        let current = first_lines.first().expect("line at address");
+        let current = first_lines.first().ok_or(())?;
         let asm_debug_location = AssemblyDebugLocation::try_from_value(current).ok_or(())?;
         let begin = at - asm_debug_location.offset;
 
@@ -922,15 +986,10 @@ impl<'a> CodeWindow<'a> {
                 let penultimate_index = current_block_lines.len().checked_sub(2).ok_or(())?;
                 let penultimate = current_block_lines
                     .get(penultimate_index)
-                    .expect("At least two instructions in block");
+                    .expect("We know penulatimate_index is valid");
                 if let Some(penultimate_func_name) = penultimate["func-name"].as_str() {
                     if penultimate_func_name == asm_debug_location.func_name {
-                        current = Address::parse(
-                            penultimate["address"]
-                                .as_str()
-                                .expect("address is a string"),
-                        )
-                        .expect("Well formed address");
+                        current = get_addr(penultimate, "address").map_err(|_| ())?;
                         continue;
                     }
                 }
@@ -940,8 +999,7 @@ impl<'a> CodeWindow<'a> {
         };
         for line in func_change_block {
             if line["func-name"] != asm_debug_location.func_name {
-                let end = Address::parse(line["address"].as_str().expect("address is a string"))
-                    .expect("Well formed address");
+                let end = get_addr(&line, "address").map_err(|_| ())?;
                 return Ok((begin, end));
             }
         }
@@ -951,36 +1009,30 @@ impl<'a> CodeWindow<'a> {
         at: Address,
         approx_byte_size: usize,
         p: ::UpdateParameters,
-    ) -> Result<(Address, Address), ()> {
-        let block_lines = disassemble_address(at, at + approx_byte_size, p).map_err(|_| ())?;
+    ) -> Result<(Address, Address), DisassembleError> {
+        let block_lines = disassemble_address(at, at + approx_byte_size, p)?;
 
-        let penultimate_index = block_lines.len().checked_sub(2).ok_or(())?;
-        let penultimate = block_lines.get(penultimate_index).ok_or(())?;
-        let end_address =
-            Address::parse(penultimate["address"].as_str().ok_or(())?).map_err(|_| ())?;
+        let penultimate_index = block_lines
+            .len()
+            .checked_sub(2)
+            .ok_or(DisassembleError::Other("Not enough lines".to_owned()))?;
+        let penultimate = block_lines
+            .get(penultimate_index)
+            .ok_or(DisassembleError::Other("Not enough lines".to_owned()))?;
+        let end_address = get_addr(penultimate, "address")?;
         Ok((at, end_address))
     }
 
-    fn show_from_address(&mut self, frame: &Object, p: ::UpdateParameters) {
-        let address = Address::parse(
-            frame["addr"]
-                .as_str()
-                .expect("Address should always be present"),
-        )
-        .expect("Parse address");
+    fn show_from_address(
+        &mut self,
+        frame: &Object,
+        p: ::UpdateParameters,
+    ) -> Result<(), DisassembleError> {
+        let address = get_addr_obj(frame, "addr")?;
 
         let (begin, end) = {
-            if let Ok(range) = Self::find_function_range(address, p)
-                .or_else(|_| Self::find_valid_address_range(address, 128, p))
-            {
-                range
-            } else {
-                p.logger.log_message(format!(
-                    "Could not show find function range for address {}",
-                    address
-                ));
-                return;
-            }
+            Self::find_function_range(address, p)
+                .or_else(|_| Self::find_valid_address_range(address, 128, p))?
         };
 
         self.asm_view.set_last_stop_position(address);
@@ -993,10 +1045,27 @@ impl<'a> CodeWindow<'a> {
         } else {
             self.mode = CodeWindowMode::Message("Disassembly failed!".to_owned());
         }
+
+        Ok(())
     }
     pub fn show_frame(&mut self, frame: &Object, p: ::UpdateParameters) {
-        if self.show_from_file(frame, p).is_err() {
-            self.show_from_address(frame, p);
+        match self.show_from_file(frame, p) {
+            Ok(_) => return, /*Done!*/
+            Err(ShowError::NoLineInfo) => {
+                // That's fine, just try disassemble instead
+            }
+            Err(other) => {
+                p.logger
+                    .log_debug(format!("Error showing file: {:?}", other));
+            }
+        }
+        match self.show_from_address(frame, p) {
+            Ok(_) => return, /*Done!*/
+            Err(other) => {
+                p.logger
+                    .log_debug(format!("Error showing asm: {:?}", other));
+                self.mode = CodeWindowMode::Message("Disassembly failed!".to_owned());
+            }
         }
     }
 

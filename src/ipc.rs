@@ -154,7 +154,9 @@ impl IPCRequest {
                 }
                 ExecuteError::Quit => IPCError::new("Could not get working directory", "GDB quit"),
             })?;
-        let working_directory = result.results["cwd"].as_str().expect("no cwd in result");
+        let working_directory = result.results["cwd"].as_str().ok_or_else(|| {
+            IPCError::new("Could not get working directory", "Malformed GDB response")
+        })?;
         Ok(object! {
             "working_directory" => working_directory
         })

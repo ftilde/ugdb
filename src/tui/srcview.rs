@@ -587,6 +587,7 @@ pub struct SourceView<'a> {
     pager: Pager<String, SourceDecorator>,
     file_info: Option<FileInfo>,
     last_stop_position: Option<SrcPosition>,
+    stack_level: Option<u64>,
 }
 
 macro_rules! current_file_and_content_mut {
@@ -608,6 +609,7 @@ impl<'a> SourceView<'a> {
             pager: Pager::new(),
             file_info: None,
             last_stop_position: None,
+            stack_level: None,
         }
     }
     fn set_last_stop_position<P: AsRef<Path>>(&mut self, file: P, pos: LineNumber) {
@@ -805,7 +807,12 @@ impl<'a> Widget for SourceView<'a> {
                 Ok((mut up, down)) => {
                     let mut cursor = Cursor::new(&mut up);
                     cursor.set_style_modifier(StyleModifier::new().bold(true));
-                    cursor.write(&format!("▶ {}", file.display()));
+                    if let Some(level) = self.stack_level {
+                        cursor.write(&format!("[{}]", level));
+                    } else {
+                        cursor.write("[?]");
+                    }
+                    cursor.write(&format!(" ▶ {}", file.display()));
                     self.pager.draw(down, hints);
                 }
                 Err(window) => {
@@ -935,6 +942,11 @@ impl<'a> CodeWindow<'a> {
     }
 
     fn show_from_file(&mut self, frame: &Object, p: ::UpdateParameters) -> Result<(), ShowError> {
+        self.src_view.stack_level = match p.gdb.mi.execute(MiCommand::stack_info_frame(None)) {
+            Ok(o) => get_u64(&o.results["frame"], "level").ok(),
+            Err(_) => None,
+        };
+
         let address = get_addr_obj(frame, "addr")?;
 
         if let Some(path) = frame["fullname"].as_str() {
@@ -1112,30 +1124,16 @@ impl<'a> CodeWindow<'a> {
         p: ::UpdateParameters,
         up: bool,
     ) -> Result<(), GDBResponseError> {
-        let stack_result = match { p.gdb.mi.execute(MiCommand::stack_info_frame(None)) } {
+        let stack_result = match p.gdb.mi.execute(MiCommand::stack_info_frame(None)) {
             Ok(o) => o.results,
-            Err(ExecuteError::Busy) => {
-                // Ignore
-                return Ok(());
-            }
-            Err(ExecuteError::Quit) => {
-                // Ignore
-                return Ok(());
-            }
+            Err(_) => return Ok(()), //Ignore
         };
         let level = get_u64(&stack_result["frame"], "level")?;
 
         let new_level = if up {
-            let depth_result = match { p.gdb.mi.execute(MiCommand::stack_info_depth()) } {
+            let depth_result = match p.gdb.mi.execute(MiCommand::stack_info_depth()) {
                 Ok(o) => o.results,
-                Err(ExecuteError::Busy) => {
-                    // Ignore
-                    return Ok(());
-                }
-                Err(ExecuteError::Quit) => {
-                    // Ignore
-                    return Ok(());
-                }
+                Err(_) => return Ok(()), //Ignore
             };
             let depth = get_u64_obj(&depth_result, "depth")?;
             (level + 1).min(depth.checked_sub(1).unwrap_or(0))
@@ -1148,7 +1146,6 @@ impl<'a> CodeWindow<'a> {
 
             match p.gdb.mi.execute(MiCommand::stack_info_frame(None)) {
                 Ok(o) => {
-                    p.logger.log_debug(format!("OI: {:?}", o));
                     if o.class == ResultClass::Done {
                         if let JsonValue::Object(ref frame) = o.results["frame"] {
                             self.show_frame(frame, p);
@@ -1165,14 +1162,7 @@ impl<'a> CodeWindow<'a> {
                         )));
                     }
                 }
-                Err(ExecuteError::Busy) => {
-                    // Ignore
-                    return Ok(());
-                }
-                Err(ExecuteError::Quit) => {
-                    // Ignore
-                    return Ok(());
-                }
+                Err(_) => return Ok(()), //Ignore
             };
         }
         Ok(())
@@ -1225,7 +1215,6 @@ impl<'a> Widget for CodeWindow<'a> {
 
 impl<'a> Container<::UpdateParametersStruct> for CodeWindow<'a> {
     fn input(&mut self, input: Input, p: ::UpdateParameters) -> Option<Input> {
-        p.logger.log_debug(format!("OI!"));
         input
             .chain((Key::Char('d'), || self.toggle_mode(p)))
             .chain((Key::PageUp, || self.switch_stackframe(p, true)))

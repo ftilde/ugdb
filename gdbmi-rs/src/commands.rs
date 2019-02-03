@@ -243,6 +243,34 @@ impl MiCommand {
         }
     }
 
+    pub fn select_frame(frame_number: u64) -> MiCommand {
+        MiCommand {
+            operation: "stack-select-frame",
+            options: vec![frame_number.to_string().into()],
+            parameters: Vec::new(),
+        }
+    }
+
+    pub fn stack_info_frame(frame_number: Option<u64>) -> MiCommand {
+        MiCommand {
+            operation: "stack-info-frame",
+            options: if let Some(frame_number) = frame_number {
+                vec![frame_number.to_string().into()]
+            } else {
+                vec![]
+            },
+            parameters: Vec::new(),
+        }
+    }
+
+    pub fn stack_info_depth() -> MiCommand {
+        MiCommand {
+            operation: "stack-info-depth",
+            options: Vec::new(),
+            parameters: Vec::new(),
+        }
+    }
+
     pub fn thread_info(thread_id: Option<u64>) -> MiCommand {
         MiCommand {
             operation: "thread-info",

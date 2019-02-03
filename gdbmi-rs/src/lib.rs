@@ -265,9 +265,10 @@ impl GDB {
         }
     }
 
-    pub fn execute_later(&mut self, command: &commands::MiCommand) {
+    pub fn execute_later<C: std::borrow::Borrow<commands::MiCommand>>(&mut self, command: C) {
         let command_token = self.get_usable_token();
         command
+            .borrow()
             .write_interpreter_string(&mut self.stdin, command_token)
             .expect("write interpreter command");
         let _ = self.result_output.recv();

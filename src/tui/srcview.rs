@@ -34,15 +34,11 @@ struct AssemblyDebugLocation {
 
 impl AssemblyDebugLocation {
     fn try_from_value(val: &JsonValue) -> Option<Self> {
-        let func_name = val["func-name"].as_str();
-        let offset = val["offset"]
-            .as_str()
-            .map(|o| o.parse::<usize>().expect("parse offset"));
-        func_name.and_then(|f| {
-            offset.map(|o| AssemblyDebugLocation {
-                func_name: f.to_owned(),
-                offset: o,
-            })
+        let func_name = val["func-name"].as_str()?;
+        let offset = val["offset"].as_str()?.parse::<usize>().ok()?;
+        Some(AssemblyDebugLocation {
+            func_name: func_name.to_owned(),
+            offset,
         })
     }
 }
@@ -226,6 +222,18 @@ fn get_addr<'a>(obj: &'a JsonValue, key: &'static str) -> Result<Address, GDBRes
 fn get_addr_obj<'a>(obj: &'a Object, key: &'static str) -> Result<Address, GDBResponseError> {
     let s = get_str_obj(obj, key)?;
     Ok(Address::parse(s)?)
+}
+
+fn get_u64<'a>(obj: &'a JsonValue, key: &'static str) -> Result<u64, GDBResponseError> {
+    let s = get_str(obj, key)?;
+    Ok(s.parse::<u64>()
+        .map_err(|_| GDBResponseError::Other(format!("Malformed frame description")))?)
+}
+
+fn get_u64_obj<'a>(obj: &'a Object, key: &'static str) -> Result<u64, GDBResponseError> {
+    let s = get_str_obj(obj, key)?;
+    Ok(s.parse::<u64>()
+        .map_err(|_| GDBResponseError::Other(format!("Malformed frame description")))?)
 }
 
 impl<'a> AssemblyView<'a> {
@@ -465,9 +473,9 @@ impl<'a> AssemblyView<'a> {
         event
             .chain(
                 ScrollBehavior::new(&mut self.pager)
-                    .forwards_on(Key::PageDown)
+                    .forwards_on(Key::Down)
                     .forwards_on(Key::Char('j'))
-                    .backwards_on(Key::PageUp)
+                    .backwards_on(Key::Up)
                     .backwards_on(Key::Char('k'))
                     .to_beginning_on(Key::Home)
                     .to_end_on(Key::End),
@@ -775,9 +783,9 @@ impl<'a> SourceView<'a> {
         event
             .chain(
                 ScrollBehavior::new(&mut self.pager)
-                    .forwards_on(Key::PageDown)
+                    .forwards_on(Key::Down)
                     .forwards_on(Key::Char('j'))
-                    .backwards_on(Key::PageUp)
+                    .backwards_on(Key::Up)
                     .backwards_on(Key::Char('k'))
                     .to_beginning_on(Key::Home)
                     .to_end_on(Key::End),
@@ -1099,6 +1107,86 @@ impl<'a> CodeWindow<'a> {
         }
     }
 
+    fn try_switch_stackframe(
+        &mut self,
+        p: ::UpdateParameters,
+        up: bool,
+    ) -> Result<(), GDBResponseError> {
+        let stack_result = match { p.gdb.mi.execute(MiCommand::stack_info_frame(None)) } {
+            Ok(o) => o.results,
+            Err(ExecuteError::Busy) => {
+                // Ignore
+                return Ok(());
+            }
+            Err(ExecuteError::Quit) => {
+                // Ignore
+                return Ok(());
+            }
+        };
+        let level = get_u64(&stack_result["frame"], "level")?;
+
+        let new_level = if up {
+            let depth_result = match { p.gdb.mi.execute(MiCommand::stack_info_depth()) } {
+                Ok(o) => o.results,
+                Err(ExecuteError::Busy) => {
+                    // Ignore
+                    return Ok(());
+                }
+                Err(ExecuteError::Quit) => {
+                    // Ignore
+                    return Ok(());
+                }
+            };
+            let depth = get_u64_obj(&depth_result, "depth")?;
+            (level + 1).min(depth.checked_sub(1).unwrap_or(0))
+        } else {
+            level.checked_sub(1).unwrap_or(0)
+        };
+
+        if level != new_level {
+            p.gdb.mi.execute_later(MiCommand::select_frame(new_level));
+
+            match p.gdb.mi.execute(MiCommand::stack_info_frame(None)) {
+                Ok(o) => {
+                    p.logger.log_debug(format!("OI: {:?}", o));
+                    if o.class == ResultClass::Done {
+                        if let JsonValue::Object(ref frame) = o.results["frame"] {
+                            self.show_frame(frame, p);
+                        } else {
+                            return Err(GDBResponseError::MissingField(
+                                "frame",
+                                JsonValue::Object(o.results.clone()),
+                            ));
+                        }
+                    } else {
+                        return Err(GDBResponseError::Other(format!(
+                            "Unexpected result class: {:?}",
+                            o.class
+                        )));
+                    }
+                }
+                Err(ExecuteError::Busy) => {
+                    // Ignore
+                    return Ok(());
+                }
+                Err(ExecuteError::Quit) => {
+                    // Ignore
+                    return Ok(());
+                }
+            };
+        }
+        Ok(())
+    }
+    fn switch_stackframe(&mut self, p: ::UpdateParameters, up: bool) {
+        match self.try_switch_stackframe(p, up) {
+            Ok(_) => {}
+            Err(e) => {
+                p.logger
+                    .log_debug(format!("Failed to switch stackframe: {:?}", e));
+            }
+        }
+    }
+
     pub fn update_after_event(&mut self, p: ::UpdateParameters) {
         if p.gdb.breakpoints.last_change > self.last_bp_update {
             self.asm_view.update_decoration(p);
@@ -1137,8 +1225,11 @@ impl<'a> Widget for CodeWindow<'a> {
 
 impl<'a> Container<::UpdateParametersStruct> for CodeWindow<'a> {
     fn input(&mut self, input: Input, p: ::UpdateParameters) -> Option<Input> {
+        p.logger.log_debug(format!("OI!"));
         input
             .chain((Key::Char('d'), || self.toggle_mode(p)))
+            .chain((Key::PageUp, || self.switch_stackframe(p, true)))
+            .chain((Key::PageDown, || self.switch_stackframe(p, false)))
             .chain(|i: Input| match self.mode {
                 CodeWindowMode::Assembly | CodeWindowMode::SideBySide => {
                     let ret = self.asm_view.event(i, p);

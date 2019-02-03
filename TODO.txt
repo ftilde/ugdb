@@ -7,6 +7,3 @@ Add MemoryViewer:
 
 Smaller QoL-changes:
  - Detect changes in active (binary) file and reload if needed
-
-Fix bugs:
- - GDB sometimes takes ages to disassemble code blocks. Work around by disassembling lazily, i.e., only when assembly is shown.

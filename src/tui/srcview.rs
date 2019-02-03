@@ -825,7 +825,7 @@ impl<'a> Widget for SourceView<'a> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 enum CodeWindowMode {
     Source,
     Assembly,
@@ -972,14 +972,18 @@ impl<'a> CodeWindow<'a> {
                 }
             }
 
-            self.asm_view.set_last_stop_position(address);
-            if self.asm_view.show_file(path, line, p).is_ok() {
-                if self.asm_view.go_to_last_stop_position().is_err() {
+            if self.mode == CodeWindowMode::Assembly || self.mode == CodeWindowMode::SideBySide {
+                self.asm_view.set_last_stop_position(address);
+                if self.asm_view.show_file(path, line, p).is_ok() {
+                    if self.asm_view.go_to_last_stop_position().is_err() {
+                        p.logger
+                            .log_message(format!("Failed to go to address: {}", address));
+                    }
+                } else {
                     p.logger
-                        .log_message(format!("Failed to go to address: {}", address));
+                        .log_debug(format!("Disassembly failed, switching to source mode"));
+                    self.mode = CodeWindowMode::Source;
                 }
-            } else {
-                self.mode = CodeWindowMode::Source;
             }
 
             self.mode = match &self.mode {

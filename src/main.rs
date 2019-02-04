@@ -53,8 +53,8 @@ const CURSOR_BLINK_TIMES: u8 = 20;
 struct Options {
     #[structopt(
         long = "gdb",
-        help = "Path to gdb binary.",
-        default_value = "/usr/bin/gdb",
+        help = "Path to alternative gdb binary.",
+        default_value = "gdb",
         parse(from_os_str)
     )]
     gdb_path: PathBuf,

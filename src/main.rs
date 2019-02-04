@@ -79,7 +79,7 @@ struct Options {
     )]
     cd: Option<PathBuf>,
     #[structopt(
-        long = "b",
+        short = "b",
         help = "Set the line speed (baud rate or bits per second) of any serial interface used by GDB for remote debugging."
     )]
     bps: Option<u32>,

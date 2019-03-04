@@ -20,25 +20,25 @@ rand = "0.3"
 unix_socket = "0.5"
 
 [dependencies.unsegen]
-git = "https://github.com/ftilde/unsegen"
+#git = "https://github.com/ftilde/unsegen"
 #path = "../unsegen"
+version = "0.0.1"
 
-[dependencies.unsegen-signals]
-git = "https://github.com/ftilde/unsegen"
-#path = "../unsegen/unsegen-signals"
+[dependencies.unsegen_signals]
+git = "https://github.com/ftilde/unsegen_signals"
+#path = "../unsegen_signals"
 
-[dependencies.unsegen-terminal]
-git = "https://github.com/ftilde/unsegen"
-#path = "../unsegen/unsegen-terminal"
+[dependencies.unsegen_terminal]
+git = "https://github.com/ftilde/unsegen_terminal"
+#path = "../unsegen_terminal"
 
-[dependencies.unsegen-pager]
-git = "https://github.com/ftilde/unsegen"
-#path = "../unsegen/unsegen-pager"
+[dependencies.unsegen_pager]
+git = "https://github.com/ftilde/unsegen_pager"
+#path = "../unsegen_pager"
 
-# For ExpressionTable
-[dependencies.unsegen-jsonviewer]
-git = "https://github.com/ftilde/unsegen"
-#path = "../unsegen/unsegen-jsonviewer"
+[dependencies.unsegen_jsonviewer]
+git = "https://github.com/ftilde/unsegen_jsonviewer"
+#path = "../unsegen_jsonviewer"
 
 [dependencies.gdb-expression-parsing]
 path = "gdb-expression-parsing"

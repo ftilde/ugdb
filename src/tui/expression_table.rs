@@ -6,7 +6,7 @@ use gdbmi::ExecuteError;
 use unsegen::base::{Color, GraphemeCluster, StyleModifier, Window};
 use unsegen::container::Container;
 use unsegen::input::{EditBehavior, Input, Key, NavigateBehavior, ScrollBehavior};
-use unsegen::widget::widgets::{Column, LineEdit, Table, TableRow};
+use unsegen::widget::builtin::{Column, LineEdit, Table, TableRow};
 use unsegen::widget::{Demand2D, RenderingHints, SeparatingStyle, Widget};
 use unsegen_jsonviewer::{json_ext, JsonViewer};
 

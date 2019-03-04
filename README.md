@@ -4,6 +4,7 @@ ugdb
 ugdb is an [unsegen](https://github.com/ftilde/unsegen) based alternative TUI for [gdb](https://www.gnu.org/software/gdb/).
 
 TODO: screenshot
+TODO: fix logfile
 
 ## Building
 

@@ -94,7 +94,7 @@ impl<'a> Tui<'a> {
         }
     }
 
-    pub fn add_pty_input(&mut self, input: Box<[u8]>) {
+    pub fn add_pty_input(&mut self, input: &[u8]) {
         self.process_pty.add_byte_input(input);
     }
 

@@ -4,7 +4,7 @@ use tui::commands::CommandState;
 use unsegen::base::{GraphemeCluster, Window};
 use unsegen::container::Container;
 use unsegen::input::{EditBehavior, Input, Key, ScrollBehavior};
-use unsegen::widget::widgets::{LogViewer, PromptLine};
+use unsegen::widget::builtin::{LogViewer, PromptLine};
 use unsegen::widget::{Demand2D, RenderingHints, SeparatingStyle, VerticalLayout, Widget};
 
 enum ActiveLog {

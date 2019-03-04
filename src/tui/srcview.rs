@@ -120,8 +120,8 @@ impl LineDecorator for AssemblyDecorator {
         let max_space = lines
             .last()
             .map(|(_, l)| text_width(format!(" 0x{:x} ", l.address.0).as_str()))
-            .unwrap_or(0);
-        Demand::from_to(0, max_space)
+            .unwrap_or(Width::new(0).unwrap());
+        Demand::from_to(0, max_space.into())
     }
     fn decorate(
         &self,
@@ -146,7 +146,7 @@ impl LineDecorator for AssemblyDecorator {
                 StyleModifier::new().fg_color(Color::Green).bold(true),
             ),
             (false, true) => ('●', StyleModifier::new().fg_color(Color::Red)),
-            (false, false) => (' ', StyleModifier::none()),
+            (false, false) => (' ', StyleModifier::new()),
         };
 
         cursor.set_style_modifier(style_modifier);
@@ -532,8 +532,8 @@ impl LineDecorator for SourceDecorator {
         let max_space = lines
             .last()
             .map(|(i, _)| text_width(format!(" {} ", i).as_str()))
-            .unwrap_or(0);
-        Demand::from_to(0, max_space)
+            .unwrap_or(Width::new(0).unwrap());
+        Demand::from_to(0, max_space.into())
     }
     fn decorate(
         &self,
@@ -559,7 +559,7 @@ impl LineDecorator for SourceDecorator {
                 StyleModifier::new().fg_color(Color::Green).bold(true),
             ),
             (false, true) => ('●', StyleModifier::new().fg_color(Color::Red)),
-            (false, false) => (' ', StyleModifier::none()),
+            (false, false) => (' ', StyleModifier::new()),
         };
 
         cursor.set_style_modifier(style_modifier);
@@ -1268,10 +1268,10 @@ impl<'a> Widget for MsgWindow<'a> {
         let window_width = window.get_width();
 
         let mut c = Cursor::new(&mut window);
-        c.set_position_y(start_line);
+        c.move_to_y(start_line);
         for line in lines {
-            let start_x = ((window_width - text_width(line) as i32) / 2).from_origin();
-            c.set_position_x(start_x);
+            let start_x = ((window_width - text_width(line)) / 2).from_origin();
+            c.move_to_x(start_x);
             c.write(line);
             c.wrap_line();
         }

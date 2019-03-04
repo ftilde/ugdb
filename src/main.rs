@@ -39,7 +39,7 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 use tui::{Tui, TuiContainerType};
 use unsegen::base::{Color, StyleModifier, Terminal};
-use unsegen::container::{Application, HSplit, Leaf, VSplit};
+use unsegen::container::{ContainerManager, HSplit, Leaf, VSplit};
 use unsegen::input::{Input, Key, NavigateBehavior, ToEvent};
 use unsegen::widget::{Blink, RenderingHints};
 
@@ -183,7 +183,7 @@ impl OutOfBandRecordSink for MpscOobRecordSink {
 struct MpscSlaveInputSink(Sender<Box<[u8]>>);
 
 impl ::unsegen_terminal::SlaveInputSink for MpscSlaveInputSink {
-    fn send(&self, data: Box<[u8]>) {
+    fn receive_bytes_from_pty(&mut self, data: Box<[u8]>) {
         self.0.send(data);
     }
 }
@@ -253,7 +253,7 @@ enum InputMode {
 impl InputMode {
     fn associated_border_style(&self) -> StyleModifier {
         match self {
-            &InputMode::Normal => StyleModifier::none(),
+            &InputMode::Normal => StyleModifier::new(),
             &InputMode::Focused => StyleModifier::new().fg_color(Color::Red),
             &InputMode::ContainerSelect => StyleModifier::new().fg_color(Color::LightYellow),
         }
@@ -271,7 +271,8 @@ fn main() {
 
     // Create terminal and setup slave input piping
     let (pts_sink, pts_source) = chan::async();
-    let tui_terminal = ::unsegen_terminal::Terminal::new(MpscSlaveInputSink(pts_sink));
+    let tui_terminal =
+        ::unsegen_terminal::Terminal::new(MpscSlaveInputSink(pts_sink)).expect("Create PTY");
 
     // Setup ipc
     let mut ipc = ipc::IPC::setup().expect("Setup ipc");
@@ -280,7 +281,7 @@ fn main() {
     let (oob_sink, oob_source) = chan::async();
 
     let mut gdb_builder = options.create_gdb_builder();
-    gdb_builder = gdb_builder.tty(tui_terminal.get_slave_name().into());
+    gdb_builder = gdb_builder.tty(tui_terminal.slave_name().into());
     let gdb = GDB::new(
         gdb_builder
             .try_spawn(MpscOobRecordSink(oob_sink))
@@ -319,12 +320,12 @@ fn main() {
         ::std::thread::spawn(move || {
             let stdin = ::std::io::stdin();
             let stdin = stdin.lock();
-            for e in Input::real_all(stdin) {
+            for e in Input::read_all(stdin) {
                 keyboard_sink.send(e.expect("event"));
             }
         });
 
-        let mut app = Application::<Tui>::from_layout(Box::new(layout));
+        let mut app = ContainerManager::<Tui>::from_layout(Box::new(layout));
         let mut input_mode = InputMode::Normal;
         let mut focus_esc_timer = MpscTimer::new();
         let mut cursor_status = Blink::On;
@@ -363,7 +364,7 @@ fn main() {
                             break 'displayloop;
                         },
                         keyboard_source.recv() -> input => {
-                            let sig_behavior = ::unsegen_signals::SignalBehavior::new().sig_default::<::unsegen_signals::SIGTSTP>();
+                            let sig_behavior = ::unsegen_signals::SignalBehavior::new().on_default::<::unsegen_signals::SIGTSTP>();
                             let input = input.expect("read keyboard event")
                                 .chain(sig_behavior);
                             match input_mode {
@@ -410,7 +411,7 @@ fn main() {
                             request.expect("receive request").respond(&mut update_parameters);
                         },
                         pts_source.recv() -> pty_output => {
-                            tui.add_pty_input(pty_output.expect("get pty input"));
+                            tui.add_pty_input(&pty_output.expect("get pty input"));
                         },
                         signal_event_source.recv() -> signal_event => {
                             let sig = signal_event.expect("get signal event");

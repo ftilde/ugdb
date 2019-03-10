@@ -1,8 +1,11 @@
 #[macro_use]
 extern crate chan;
+extern crate backtrace;
 extern crate chan_signal;
 extern crate gdbmi;
+extern crate nix;
 extern crate structopt;
+extern crate termion;
 extern crate time;
 
 // For ipc
@@ -10,7 +13,6 @@ extern crate time;
 extern crate json;
 extern crate rand;
 extern crate unix_socket;
-
 extern crate unsegen;
 
 extern crate gdb_expression_parsing;
@@ -35,6 +37,7 @@ use gdb::GDB;
 use gdbmi::output::OutOfBandRecord;
 use gdbmi::{GDBBuilder, OutOfBandRecordSink};
 use logging::Logger;
+use nix::sys::termios;
 use std::path::PathBuf;
 use structopt::StructOpt;
 use tui::{Tui, TuiContainerType};
@@ -267,6 +270,29 @@ fn main() {
     let signal_event_source = chan_signal::notify(&[Signal::WINCH, Signal::TSTP, Signal::TERM]);
     chan_signal::block(&[Signal::CONT]);
 
+    // Set up a panic hook that ALWAYS displays panic information (including stack) to the main
+    // terminal screen.
+    const STDOUT: std::os::unix::io::RawFd = 0;
+    let orig_attr = std::sync::Mutex::new(
+        termios::tcgetattr(STDOUT).expect("Failed to get terminal attributes"),
+    );
+    ::std::panic::set_hook(Box::new(move |info| {
+        // Switch back to main screen
+        println!("{}{}", termion::screen::ToMainScreen, termion::cursor::Show);
+        // Restore old terminal behavior (will be restored later automatically, but we want to be
+        // able to properly print the panic info)
+        let _ = termios::tcsetattr(STDOUT, termios::SetArg::TCSANOW, &orig_attr.lock().unwrap());
+
+        println!("Oh no! ugdb crashed!");
+        println!(
+            "Consider filing an issue including the following information at {}:\n",
+            env!("CARGO_PKG_REPOSITORY")
+        );
+
+        println!("{}", info);
+        println!("{:?}", backtrace::Backtrace::new());
+    }));
+
     let options = Options::from_args();
 
     // Create terminal and setup slave input piping
@@ -450,8 +476,6 @@ fn main() {
         }
     }
 
-    //keyboard_input.stop_loop(); //TODO make sure all loops stop?
-
     let mut join_retry_counter = 0;
     let join_retry_duration = Duration::from_millis(100);
     let child_exit_status = loop {
@@ -470,5 +494,7 @@ fn main() {
         }
         join_retry_counter += 1;
     };
-    println!("GDB exited with status {}.", child_exit_status);
+    if !child_exit_status.success() {
+        println!("GDB exited with status {}.", child_exit_status);
+    }
 }

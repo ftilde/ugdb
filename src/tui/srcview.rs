@@ -277,7 +277,7 @@ impl<'a> AssemblyView<'a> {
     }
 
     fn update_decoration(&mut self, p: ::UpdateParameters) {
-        if let Some(ref mut content) = self.pager.content {
+        if let Some(ref mut content) = self.pager.content_mut() {
             let first_line_address = content.view_line(LineIndex::new(0)).map(|l| l.address);
             if let Some(min_address) = first_line_address {
                 let max_address = {
@@ -288,11 +288,11 @@ impl<'a> AssemblyView<'a> {
                         .1
                         .address
                 };
-                content.decorator = AssemblyDecorator::new(
+                content.set_decorator(AssemblyDecorator::new(
                     min_address..max_address,
                     self.last_stop_position,
                     p.gdb.breakpoints.values(),
-                )
+                ));
             }
         }
     }
@@ -592,7 +592,7 @@ pub struct SourceView<'a> {
 
 macro_rules! current_file_and_content_mut {
     ($x:expr) => {
-        match (&$x.file_info, &mut $x.pager.content) {
+        match (&$x.file_info, &mut $x.pager.content_mut()) {
             (&Some(ref file_info), &mut Some(ref mut content)) => Some((&file_info.path, content)),
             (&None, &mut None) => None,
             (&Some(_), &mut None) => panic!("Pager has file path, but no content"),
@@ -659,8 +659,11 @@ impl<'a> SourceView<'a> {
                     None
                 }
             });
-            content.decorator =
-                SourceDecorator::new(file_path, last_line_number, p.gdb.breakpoints.values())
+            content.set_decorator(SourceDecorator::new(
+                file_path,
+                last_line_number,
+                p.gdb.breakpoints.values(),
+            ));
         }
     }
 
@@ -691,12 +694,12 @@ impl<'a> SourceView<'a> {
                 .map_err(|e| PagerShowError::CouldNotOpenFile(path_ref.to_path_buf(), e))?;
         } else {
             let last_line_number = self.get_last_line_number_for(path.as_ref());
-            if let Some(ref mut content) = self.pager.content {
-                content.decorator = SourceDecorator::new(
+            if let Some(ref mut content) = self.pager.content_mut() {
+                content.set_decorator(SourceDecorator::new(
                     path.as_ref(),
                     last_line_number,
                     p.gdb.breakpoints.values(),
-                );
+                ));
             }
         }
         let line = line.into();

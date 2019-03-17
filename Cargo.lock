@@ -1007,7 +1007,7 @@ dependencies = [
  "unix_socket 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "unsegen 0.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "unsegen_jsonviewer 0.0.1 (git+https://github.com/ftilde/unsegen_jsonviewer)",
- "unsegen_pager 0.1.0 (git+https://github.com/ftilde/unsegen_pager)",
+ "unsegen_pager 0.0.1 (git+https://github.com/ftilde/unsegen_pager)",
  "unsegen_signals 0.0.1 (git+https://github.com/ftilde/unsegen_signals)",
  "unsegen_terminal 0.0.1 (git+https://github.com/ftilde/unsegen_terminal)",
 ]
@@ -1081,8 +1081,8 @@ dependencies = [
 
 [[package]]
 name = "unsegen_pager"
-version = "0.1.0"
-source = "git+https://github.com/ftilde/unsegen_pager#60fcf99f05b9ea42e18ae9cbb66babfb267caf8a"
+version = "0.0.1"
+source = "git+https://github.com/ftilde/unsegen_pager#3cd5e80ff2e28dd1b1fd8bae27135bff851438a4"
 dependencies = [
  "syntect 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "unsegen 0.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1344,7 +1344,7 @@ dependencies = [
 "checksum unix_socket 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "6aa2700417c405c38f5e6902d699345241c28c0b7ade4abaad71e35a87eb1564"
 "checksum unsegen 0.0.1 (registry+https://github.com/rust-lang/crates.io-index)" = "6a4ce6723cbaff7ccf6ebf4ef2785b46fe16525a0c206a569d5e240a4cc4d1da"
 "checksum unsegen_jsonviewer 0.0.1 (git+https://github.com/ftilde/unsegen_jsonviewer)" = "<none>"
-"checksum unsegen_pager 0.1.0 (git+https://github.com/ftilde/unsegen_pager)" = "<none>"
+"checksum unsegen_pager 0.0.1 (git+https://github.com/ftilde/unsegen_pager)" = "<none>"
 "checksum unsegen_signals 0.0.1 (git+https://github.com/ftilde/unsegen_signals)" = "<none>"
 "checksum unsegen_terminal 0.0.1 (git+https://github.com/ftilde/unsegen_terminal)" = "<none>"
 "checksum url 1.7.2 (registry+https://github.com/rust-lang/crates.io-index)" = "dd4e7c0d531266369519a4aa4f399d748bd37043b00bde1e4ff1f60a120b355a"

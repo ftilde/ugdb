@@ -115,7 +115,7 @@ impl LineDecorator for AssemblyDecorator {
     type Line = AssemblyLine;
     fn horizontal_space_demand<'a, 'b: 'a>(
         &'a self,
-        lines: Box<DoubleEndedIterator<Item = (LineIndex, &Self::Line)> + 'b>,
+        lines: impl DoubleEndedIterator<Item = (LineIndex, &'b Self::Line)> + 'b,
     ) -> ColDemand {
         let max_space = lines
             .last()
@@ -311,7 +311,7 @@ impl<'a> AssemblyView<'a> {
             .unwrap_or(self.syntax_set.find_syntax_plain_text());
         self.pager.load(
             PagerContent::from_lines(lines)
-                .with_highlighter(SyntectHighlighter::new(syntax, self.highlighting_theme))
+                .with_highlighter(&SyntectHighlighter::new(syntax, self.highlighting_theme))
                 .with_decorator(AssemblyDecorator::new(
                     min_address..max_address,
                     self.last_stop_position,
@@ -527,7 +527,7 @@ impl LineDecorator for SourceDecorator {
     type Line = String;
     fn horizontal_space_demand<'a, 'b: 'a>(
         &'a self,
-        lines: Box<DoubleEndedIterator<Item = (LineIndex, &Self::Line)> + 'b>,
+        lines: impl DoubleEndedIterator<Item = (LineIndex, &'b Self::Line)> + 'b,
     ) -> ColDemand {
         let max_space = lines
             .last()
@@ -722,7 +722,7 @@ impl<'a> SourceView<'a> {
         let last_line_number = self.get_last_line_number_for(path.as_ref());
         self.pager.load(
             pager_content
-                .with_highlighter(SyntectHighlighter::new(syntax, self.highlighting_theme))
+                .with_highlighter(&SyntectHighlighter::new(syntax, self.highlighting_theme))
                 .with_decorator(SourceDecorator::new(
                     path.as_ref(),
                     last_line_number,

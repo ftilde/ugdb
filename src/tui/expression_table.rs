@@ -136,7 +136,7 @@ impl ExpressionTable {
                     }
                 }
             };
-            row.result.replace(&result);
+            row.result.update(&result);
         }
     }
 }

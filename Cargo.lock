@@ -1073,7 +1073,7 @@ dependencies = [
 [[package]]
 name = "unsegen_jsonviewer"
 version = "0.0.1"
-source = "git+https://github.com/ftilde/unsegen_jsonviewer#23850229e9391595f13a441684b6539b042e9671"
+source = "git+https://github.com/ftilde/unsegen_jsonviewer#6614b834901277e1cab9f9a91bfacab5f236cdad"
 dependencies = [
  "json 0.11.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "unsegen 0.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1082,7 +1082,7 @@ dependencies = [
 [[package]]
 name = "unsegen_pager"
 version = "0.0.1"
-source = "git+https://github.com/ftilde/unsegen_pager#3cd5e80ff2e28dd1b1fd8bae27135bff851438a4"
+source = "git+https://github.com/ftilde/unsegen_pager#ed562f49345dcfe3d9dc1827b6bfd4641fdc6ac1"
 dependencies = [
  "syntect 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "unsegen 0.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1100,7 +1100,7 @@ dependencies = [
 [[package]]
 name = "unsegen_terminal"
 version = "0.0.1"
-source = "git+https://github.com/ftilde/unsegen_terminal#3de41b1fa6a3aaefaa888e1d65c088cec7ffb295"
+source = "git+https://github.com/ftilde/unsegen_terminal#86182e64b4e6d01e664470fec5368c3419a13d0b"
 dependencies = [
  "libc 0.2.50 (registry+https://github.com/rust-lang/crates.io-index)",
  "nix 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",

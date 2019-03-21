@@ -3,8 +3,13 @@ ugdb
 
 ugdb is an [unsegen](https://github.com/ftilde/unsegen) based alternative TUI for [gdb](https://www.gnu.org/software/gdb/).
 
-TODO: screenshot
 TODO: fix logfile
+
+## Screenshots
+![](screenshot.png)
+
+Oh, and in case you were wondering: Yes, you can totally use `ugdb` to debug `ugdb` debugging `ugdb`.
+![](ugdbception.png)
 
 ## Building
 

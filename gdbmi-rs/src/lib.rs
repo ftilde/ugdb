@@ -2,6 +2,7 @@ extern crate json;
 extern crate nix;
 #[macro_use]
 extern crate nom;
+extern crate log;
 
 pub mod commands;
 pub mod output;

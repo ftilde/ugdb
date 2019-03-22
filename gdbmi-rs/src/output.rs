@@ -2,6 +2,8 @@ use super::Token;
 pub use json::object::Object;
 pub use json::JsonValue;
 
+use log::{error, info};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResultClass {
     Done,
@@ -95,9 +97,6 @@ pub fn process_output<T: Read, S: OutOfBandRecordSink>(
 ) {
     let mut reader = BufReader::new(output);
 
-    use std::fs::File;
-    let mut f = File::create("/home/dominik/gdbmi.log").unwrap();
-
     loop {
         let mut buffer = String::new();
         match reader.read_line(&mut buffer) {
@@ -105,14 +104,12 @@ pub fn process_output<T: Read, S: OutOfBandRecordSink>(
                 return;
             }
             Ok(_) => {
-                /* TODO */
-                use std::io::Write;
-                write!(f, "{}", buffer).unwrap();
+                info!("{}", buffer.trim_end());
 
                 let parse_result = match Output::parse(&buffer) {
                     Ok(r) => r,
                     Err(e) => {
-                        write!(f, "PARSING ERROR: {}", e).unwrap();
+                        error!("PARSING ERROR: {}", e);
                         continue;
                     }
                 };
@@ -128,10 +125,8 @@ pub fn process_output<T: Read, S: OutOfBandRecordSink>(
                     }
                     Output::OutOfBand(record) => {
                         if let OutOfBandRecord::AsyncRecord {
-                            token: _,
-                            kind: _,
                             class: AsyncClass::Stopped,
-                            results: _,
+                            ..
                         } = record
                         {
                             is_running.store(false, Ordering::SeqCst);

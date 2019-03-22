@@ -3,7 +3,8 @@ ugdb
 
 ugdb is an [unsegen](https://github.com/ftilde/unsegen) based alternative TUI for [gdb](https://www.gnu.org/software/gdb/).
 
-TODO: fix logfile
+TODO: remove TODO.txt
+TODO: figure out how to deal with run_and_log.sh, and debug output
 
 ## Screenshots
 ![](screenshot.png)
@@ -26,7 +27,7 @@ $ target/release/ugdb
 
 The command line interface is aimed to be *mostly* compatible with gdb:
 ```
-$ linkcheck --help
+$ ugdb --help
 ugdb 0.1.0
 ftilde <ftilde@protonmail.com>
 An unsegen-based GDB frontend.
@@ -49,6 +50,7 @@ OPTIONS:
     -x, --command <command_file>    Execute GDB commands from file.
     -c, --core <core_file>          Use file file as a core dump to examine.
         --gdb <gdb_path>            Path to alternative gdb binary. [default: gdb]
+        --log_dir <log_dir>         Directory in which the log file will be stored [default: /tmp]
     -p, --pid <proc_id>             Attach to process with given id.
     -d, --directory <source_dir>    Add directory to the path to search for source files.
     -s, --symbols <symbol_file>     Read symbols from the given file.
@@ -61,6 +63,7 @@ Some notable differences:
 
 * Command line arguments to the program to be debugged can be specified without the `-a`-flag of gdb. (But don't forget `--`!)
 * You can specify an alternative gdb via the `--gdb` argument. Go debug your Rust: `$ ugdb --gdb=rust-gdb`! By default, `gdb` in `$PATH` will be used.
+* An alternative log file directory can be specified using `--log_dir` argument. By default, log files are created in `/tmp/`.
 * Some flags might be missing either because they make now sense (e.g., `--tui`) or because I forgot to add them. In the latter case feel free to open an issue.
 
 

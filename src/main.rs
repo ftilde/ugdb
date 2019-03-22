@@ -2,7 +2,9 @@
 extern crate chan;
 extern crate backtrace;
 extern crate chan_signal;
+extern crate flexi_logger;
 extern crate gdbmi;
+extern crate log;
 extern crate nix;
 extern crate structopt;
 extern crate termion;
@@ -116,6 +118,13 @@ struct Options {
         parse(from_os_str)
     )]
     source_dir: Option<PathBuf>,
+    #[structopt(
+        long = "log_dir",
+        help = "Directory in which the log file will be stored",
+        parse(from_os_str),
+        default_value = "/tmp"
+    )]
+    log_dir: PathBuf,
     #[structopt(
         help = "Path to program to debug (with arguments).",
         parse(from_os_str)
@@ -276,6 +285,10 @@ fn main() {
     let orig_attr = std::sync::Mutex::new(
         termios::tcgetattr(STDOUT).expect("Failed to get terminal attributes"),
     );
+
+    let options = Options::from_args();
+    let log_dir = options.log_dir.to_owned();
+
     ::std::panic::set_hook(Box::new(move |info| {
         // Switch back to main screen
         println!("{}{}", termion::screen::ToMainScreen, termion::cursor::Show);
@@ -291,9 +304,21 @@ fn main() {
 
         println!("{}", info);
         println!("{:?}", backtrace::Backtrace::new());
+        println!("");
+        println!(
+            "Possibly also include the contents of the log file located in {}",
+            log_dir.to_string_lossy()
+        );
     }));
 
-    let options = Options::from_args();
+    if let Err(e) = flexi_logger::Logger::with_env_or_str("info")
+        .log_to_file()
+        .directory(options.log_dir.to_owned())
+        .start()
+    {
+        eprintln!("Unable to initialize Logger: {}", e);
+        return;
+    }
 
     // Create terminal and setup slave input piping
     let (pts_sink, pts_source) = chan::async();

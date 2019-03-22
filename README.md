@@ -3,8 +3,6 @@ ugdb
 
 ugdb is an [unsegen](https://github.com/ftilde/unsegen) based alternative TUI for [gdb](https://www.gnu.org/software/gdb/).
 
-TODO: remove TODO.txt
-
 ## Screenshots
 ![](screenshot.png)
 

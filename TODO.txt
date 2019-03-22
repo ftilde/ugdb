@@ -1,9 +1,0 @@
-Improve Container management:
- - More layouts, center tile (large) with smaller tiles around it
- - Configurable by layout file, use serde
-
-Add MemoryViewer:
- - It may be useful to use a table, or just use split windows
-
-Smaller QoL-changes:
- - Detect changes in active (binary) file and reload if needed

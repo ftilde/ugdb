@@ -272,7 +272,7 @@ impl InputMode {
     }
 }
 
-fn main() {
+fn run() -> i32 {
     // Setup signal piping:
     // NOTE: This has to be set up before the creation of any other threads!
     // (See chan_signal documentation)
@@ -317,7 +317,7 @@ fn main() {
         .start()
     {
         eprintln!("Unable to initialize Logger: {}", e);
-        return;
+        return 0xfe;
     }
 
     // Create terminal and setup slave input piping
@@ -519,7 +519,15 @@ fn main() {
         }
         join_retry_counter += 1;
     };
-    if !child_exit_status.success() {
+    if child_exit_status.success() {
+        0
+    } else {
         println!("GDB exited with status {}.", child_exit_status);
+        child_exit_status.code().unwrap_or(0xff)
     }
+}
+
+fn main() {
+    let exit_code = run();
+    std::process::exit(exit_code);
 }

@@ -4,7 +4,6 @@ ugdb
 ugdb is an [unsegen](https://github.com/ftilde/unsegen) based alternative TUI for [gdb](https://www.gnu.org/software/gdb/).
 
 TODO: remove TODO.txt
-TODO: figure out how to deal with run_and_log.sh, and debug output
 
 ## Screenshots
 ![](screenshot.png)

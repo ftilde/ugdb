@@ -5,7 +5,8 @@ ugdb is an [unsegen](https://github.com/ftilde/unsegen) based alternative TUI fo
 ## Screenshots
 ![](screenshot.png)
 
-Oh, and in case you were wondering: Yes, you can totally use `ugdb` to debug `ugdb` debugging `ugdb`.
+What's that? Oh, yes. Yes, you can totally use `ugdb` to debug `ugdb` debugging `ugdb`.
+
 ![](ugdbception.png)
 
 ## Building
@@ -60,7 +61,7 @@ Some notable differences:
 * Command line arguments to the program to be debugged can be specified without the `-a`-flag of gdb. (But don't forget `--`!)
 * You can specify an alternative gdb via the `--gdb` argument. Go debug your Rust: `$ ugdb --gdb=rust-gdb`! By default, `gdb` in `$PATH` will be used.
 * An alternative log file directory can be specified using `--log_dir` argument. By default, log files are created in `/tmp/`.
-* Some flags might be missing either because they make now sense (e.g., `--tui`) or because I forgot to add them. In the latter case feel free to open an issue.
+* Some flags might be missing either because they make no sense (e.g., `--tui`) or because I forgot to add them. In the latter case feel free to open an issue.
 
 
 ## User interface
@@ -76,7 +77,7 @@ Interact using the standard gdb interface. Enter by pressing `i`.
 
 * `PageUp`/`PageDown` scroll the output of the console.
 * `Ctrl-B`/`Ctrl-E` jump to the beginning/end of the buffer.
-* Use arrow keys/Backspace/`Home`/`End` to navigate the prompt.
+* Use arrow keys/Backspace/`Home`/`End` to move the cursor.
 * Characters are inserted at the cursor position.
 
 ### Pager
@@ -97,7 +98,7 @@ Enter by pressing `e`.
 * Enter an expression in the left column
 * Press `Enter` to advance to the next row to enter another expression.
 * Navigate using arrow keys.
-* Use `Space` in the left column to interact with the structure viewer.
+* Use `Space` in the right column to interact with the structure viewer.
 
 Note: The viewer is somewhat broken for displaying structures with custom pretty-printers.
 A workaround would be to use [variable objects](https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI-Variable-Objects.html), but that would not allow for evaluation of arbitrary expressions.

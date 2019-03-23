@@ -277,11 +277,11 @@ enum InputMode {
 }
 
 impl InputMode {
-    fn associated_border_style(&self) -> StyleModifier {
+    fn associated_border_style(self) -> StyleModifier {
         match self {
-            &InputMode::Normal => StyleModifier::new(),
-            &InputMode::Focused => StyleModifier::new().fg_color(Color::Red),
-            &InputMode::ContainerSelect => StyleModifier::new().fg_color(Color::LightYellow),
+            InputMode::Normal => StyleModifier::new(),
+            InputMode::Focused => StyleModifier::new().fg_color(Color::Red),
+            InputMode::ContainerSelect => StyleModifier::new().fg_color(Color::LightYellow),
         }
     }
 }

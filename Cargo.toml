@@ -25,26 +25,11 @@ json = "0.11"
 rand = "0.3"
 unix_socket = "0.5"
 
-[dependencies.unsegen]
-#git = "https://github.com/ftilde/unsegen"
-#path = "../unsegen"
-version = "0.0.1"
-
-[dependencies.unsegen_signals]
-git = "https://github.com/ftilde/unsegen_signals"
-#path = "../unsegen_signals"
-
-[dependencies.unsegen_terminal]
-git = "https://github.com/ftilde/unsegen_terminal"
-#path = "../unsegen_terminal"
-
-[dependencies.unsegen_pager]
-git = "https://github.com/ftilde/unsegen_pager"
-#path = "../unsegen_pager"
-
-[dependencies.unsegen_jsonviewer]
-git = "https://github.com/ftilde/unsegen_jsonviewer"
-#path = "../unsegen_jsonviewer"
+unsegen = "0.1"
+unsegen_signals = "0.1"
+unsegen_terminal = "0.1"
+unsegen_jsonviewer = "0.1"
+unsegen_pager = "0.1.1"
 
 [dependencies.gdb-expression-parsing]
 path = "gdb-expression-parsing"
@@ -56,5 +41,3 @@ path = "gdbmi-rs/"
 git2 = "0.6"
 toml = "0.4"
 lalrpop = "0.14.0"
-
-[workspace]

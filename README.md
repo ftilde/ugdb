@@ -1,5 +1,4 @@
-ugdb
-====
+# ugdb
 
 ugdb is an [unsegen](https://github.com/ftilde/unsegen) based alternative TUI for [gdb](https://www.gnu.org/software/gdb/).
 
@@ -84,7 +83,6 @@ Interact using the standard gdb interface. Enter by pressing `i`.
 
 View and browse source code or assembly around the current program location. Enter by pressing `s`.
 
-
 * Scroll up/down using arrow keys or jk and jump using `Home`/`End`.
 * Navigate the stack using `PageUp`/`PageDown`.
 * Use `Space` to toggle breakpoints at the current location in the pager.
@@ -117,7 +115,13 @@ However, for most application the regular insert mode is sufficient and can be l
 
 The virtual terminal does not yet properly implement all ansi functions, but it quite usable for a number of terminal applications.
 
+## IPC Interface
+
+`ugdb` can be controlled remotely via a unix domain socket-based (undocumented, quite limited) IPC interface.
+In practice this means that you can install [vim-ugdb](https://github.com/ftilde/vim-ugdb) and set breakpoints in ugdb from vim using the `UGDBBreakpoint` command.
+
 ## Some notes on the status
+
 This project mostly scratches my own itch -- successfully. I use it as my primary debugger. I that sense I consider this project as "done", but additional sub-itches may be sub-scratched in the future.
 
 ## Licensing

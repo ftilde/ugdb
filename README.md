@@ -119,3 +119,7 @@ The virtual terminal does not yet properly implement all ansi functions, but it 
 
 ## Some notes on the status
 This project mostly scratches my own itch -- successfully. I use it as my primary debugger. I that sense I consider this project as "done", but additional sub-itches may be sub-scratched in the future.
+
+## Licensing
+
+`ugdb` is released under the MIT license.

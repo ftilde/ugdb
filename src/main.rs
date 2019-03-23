@@ -25,7 +25,6 @@ extern crate unsegen_terminal;
 
 mod gdb;
 mod ipc;
-mod logging;
 mod tui;
 
 use std::ffi::OsString;
@@ -38,7 +37,7 @@ use chan_signal::Signal;
 use gdb::GDB;
 use gdbmi::output::OutOfBandRecord;
 use gdbmi::{GDBBuilder, OutOfBandRecordSink};
-use logging::Logger;
+use log::debug;
 use nix::sys::termios;
 use std::path::PathBuf;
 use structopt::StructOpt;
@@ -200,11 +199,26 @@ impl ::unsegen_terminal::SlaveInputSink for MpscSlaveInputSink {
     }
 }
 
+pub struct MessageSink {
+    messages: Vec<String>,
+}
+
+impl MessageSink {
+    pub fn send<S: Into<String>>(&mut self, msg: S) {
+        self.messages.push(msg.into());
+    }
+    pub fn drain_messages(&mut self) -> Vec<String> {
+        let mut alt_buffer = Vec::new();
+        ::std::mem::swap(&mut self.messages, &mut alt_buffer);
+        alt_buffer
+    }
+}
+
 type UpdateParameters<'u> = &'u mut UpdateParametersStruct;
 
 pub struct UpdateParametersStruct {
     pub gdb: GDB,
-    pub logger: Logger,
+    pub message_sink: MessageSink,
 }
 
 // A timer that can be used to receive an event at any time,
@@ -358,7 +372,9 @@ fn run() -> i32 {
 
     let mut update_parameters = UpdateParametersStruct {
         gdb: gdb,
-        logger: Logger::new(),
+        message_sink: MessageSink {
+            messages: Vec::new(),
+        },
     };
 
     {
@@ -472,7 +488,7 @@ fn run() -> i32 {
                                 Signal::TERM => { update_parameters.gdb.kill() },
                                 _ => {}
                             }
-                            update_parameters.logger.log_debug(format!("received signal {:?}", sig));
+                            debug!("received signal {:?}", sig);
                         },
                     }
                 }
@@ -490,7 +506,8 @@ fn run() -> i32 {
             if esc_timer_needs_reset {
                 focus_esc_timer.reset();
             }
-            tui.console.display_log(&mut update_parameters.logger);
+            tui.console
+                .display_messages(&mut update_parameters.message_sink);
             app.draw(
                 terminal.create_root_window(),
                 &mut tui,

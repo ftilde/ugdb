@@ -5,6 +5,7 @@ use gdbmi::output::{AsyncClass, AsyncKind, JsonValue, Object, OutOfBandRecord, T
 use super::console::Console;
 use super::expression_table::ExpressionTable;
 use super::srcview::CodeWindow;
+use log::{debug, info};
 use unsegen::container::{Container, ContainerProvider};
 use unsegen_terminal::Terminal;
 
@@ -50,30 +51,27 @@ impl<'a> Tui<'a> {
         match (kind, class) {
             (AsyncKind::Exec, AsyncClass::Stopped)
             | (AsyncKind::Notify, AsyncClass::Thread(ThreadEvent::Selected)) => {
-                p.logger.log_debug(format!(
-                    "stopped: {}",
-                    JsonValue::Object(results.clone()).pretty(2)
-                ));
+                debug!("stopped: {}", JsonValue::Object(results.clone()).pretty(2));
                 if let JsonValue::Object(ref frame) = results["frame"] {
                     self.src_view.show_frame(frame, p);
                 }
                 self.expression_table.update_results(p);
             }
             (AsyncKind::Notify, AsyncClass::BreakPoint(event)) => {
-                p.logger.log_debug(format!(
+                debug!(
                     "bkpoint {:?}: {}",
                     event,
                     JsonValue::Object(results.clone()).pretty(2)
-                ));
+                );
                 p.gdb.handle_breakpoint_event(event, &results);
             }
             (kind, class) => {
-                p.logger.log_debug(format!(
+                info!(
                     "unhandled async_record: [{:?}, {:?}] {}",
                     kind,
                     class,
                     JsonValue::Object(results.clone()).pretty(2)
-                ));
+                );
             }
         }
     }

@@ -2,6 +2,8 @@ use gdbmi::commands::MiCommand;
 use gdbmi::output::{ResultClass, ResultRecord};
 use gdbmi::ExecuteError;
 
+use log::error;
+
 pub struct Command {
     cmd: Box<FnMut(::UpdateParameters) -> Result<(), ExecuteError>>,
 }
@@ -14,7 +16,7 @@ impl Command {
         Command::new(Box::new(move |p: ::UpdateParameters| {
             let res = p.gdb.mi.execute(cmd.clone()).map(|_| ());
             if res.is_ok() {
-                p.logger.log_message(success_msg);
+                p.message_sink.send(success_msg);
             }
             res
         }))
@@ -49,7 +51,7 @@ impl CommandState {
             }
             "n" | "N" | "no" => CommandState::Idle,
             _ => {
-                p.logger.log_message("Please type 'y' or 'n'.");
+                p.message_sink.send("Please type 'y' or 'n'.");
                 CommandState::WaitingForConfirmation(cmd)
             }
         }
@@ -57,8 +59,8 @@ impl CommandState {
 
     fn print_execute_error(e: ExecuteError, p: ::UpdateParameters) {
         match e {
-            ExecuteError::Quit => p.logger.log_message("quit"),
-            ExecuteError::Busy => p.logger.log_message("GDB is running!"),
+            ExecuteError::Quit => p.message_sink.send("quit"),
+            ExecuteError::Busy => p.message_sink.send("GDB is running!"),
         }
     }
 
@@ -76,7 +78,7 @@ impl CommandState {
     ) -> Self {
         match p.gdb.mi.is_session_active() {
             Ok(true) => {
-                p.logger.log_message(format!(
+                p.message_sink.send(format!(
                     "A debugging session is active. {} (y or n)",
                     confirmation_question
                 ));
@@ -119,8 +121,8 @@ impl CommandState {
                     p,
                 ),
                 Ok(None) => {
-                    p.logger
-                        .log_message("No target. Use the 'file' command to specify one.");
+                    p.message_sink
+                        .send("No target. Use the 'file' command to specify one.");
                     CommandState::Idle
                 }
                 Err(e) => {
@@ -141,8 +143,7 @@ impl CommandState {
                     }) => {
                         // Most of the time gdb seems to also write error messages to the console.
                         // We therefore (only) write the error message to debug log to avoid duplicates.
-                        p.logger
-                            .log_debug(results["msg"].as_str().unwrap_or(&results.pretty(2)));
+                        error!("{}", results["msg"].as_str().unwrap_or(&results.pretty(2)));
                     }
                     Ok(_) => {}
                     Err(e) => Self::print_execute_error(e, p),

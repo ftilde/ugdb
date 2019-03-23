@@ -2,6 +2,7 @@ use gdb::{Address, BreakPoint, BreakpointOperationError, SrcPosition};
 use gdbmi::commands::{BreakPointLocation, BreakPointNumber, DisassembleMode, MiCommand};
 use gdbmi::output::{JsonValue, Object, ResultClass};
 use gdbmi::ExecuteError;
+use log::{debug, warn};
 use std::collections::HashSet;
 use std::fs;
 use std::io;
@@ -387,7 +388,7 @@ impl<'a> AssemblyView<'a> {
                 Ok(())
             }
             Err(e) => {
-                p.logger.log_message(format!(
+                p.message_sink.send(format!(
                     "Disassembly failed for {:?}:{}: {:?}",
                     file.as_ref(),
                     line_u,
@@ -446,24 +447,24 @@ impl<'a> AssemblyView<'a> {
                 {
                     Ok(()) => {}
                     Err(BreakpointOperationError::Busy) => {
-                        p.logger
-                            .log_message("Cannot insert breakpoint: Gdb is busy.");
+                        p.message_sink
+                            .send("Cannot insert breakpoint: Gdb is busy.");
                     }
                     Err(BreakpointOperationError::ExecutionError(msg)) => {
-                        p.logger
-                            .log_message(format!("Cannot insert breakpoint: {}", msg));
+                        p.message_sink
+                            .send(format!("Cannot insert breakpoint: {}", msg));
                     }
                 }
             } else {
                 match p.gdb.delete_breakpoints(active_bps.into_iter()) {
                     Ok(()) => {}
                     Err(BreakpointOperationError::Busy) => {
-                        p.logger
-                            .log_message("Cannot remove breakpoint: Gdb is busy.");
+                        p.message_sink
+                            .send("Cannot remove breakpoint: Gdb is busy.");
                     }
                     Err(BreakpointOperationError::ExecutionError(msg)) => {
-                        p.logger
-                            .log_message(format!("Cannot remove breakpoint: {}", msg));
+                        p.message_sink
+                            .send(format!("Cannot remove breakpoint: {}", msg));
                     }
                 }
             }
@@ -772,13 +773,13 @@ impl<'a> SourceView<'a> {
                     .insert_breakpoint(BreakPointLocation::Line(path, line.into()))
                     .is_err()
                 {
-                    p.logger
-                        .log_message("Cannot insert breakpoint: Gdb is busy.");
+                    p.message_sink
+                        .send("Cannot insert breakpoint: Gdb is busy.");
                 }
             } else {
                 if p.gdb.delete_breakpoints(active_bps.into_iter()).is_err() {
-                    p.logger
-                        .log_message("Cannot remove breakpoint: Gdb is busy.");
+                    p.message_sink
+                        .send("Cannot remove breakpoint: Gdb is busy.");
                 }
             }
         }
@@ -979,12 +980,11 @@ impl<'a> CodeWindow<'a> {
                 self.asm_view.set_last_stop_position(address);
                 if self.asm_view.show_file(path, line, p).is_ok() {
                     if self.asm_view.go_to_last_stop_position().is_err() {
-                        p.logger
-                            .log_message(format!("Failed to go to address: {}", address));
+                        p.message_sink
+                            .send(format!("Failed to go to address: {}", address));
                     }
                 } else {
-                    p.logger
-                        .log_debug(format!("Disassembly failed, switching to source mode"));
+                    debug!("Disassembly failed, switching to source mode");
                     self.mode = CodeWindowMode::Source;
                 }
             }
@@ -1066,7 +1066,7 @@ impl<'a> CodeWindow<'a> {
 
         if self.asm_view.show_address(begin, end, p).is_ok() {
             if let Err(e) = self.asm_view.go_to_last_stop_position() {
-                p.logger.log_debug(format!("We just set a last stop pos {}, but it does not seem to be valid must be valid: {:?}", address, e));
+                warn!("We just set a last stop pos {}, but it does not seem to be valid must be valid: {:?}", address, e);
             }
             self.mode = CodeWindowMode::Assembly;
         } else {
@@ -1082,15 +1082,13 @@ impl<'a> CodeWindow<'a> {
                 // That's fine, just try disassemble instead
             }
             Err(other) => {
-                p.logger
-                    .log_debug(format!("Error showing file: {:?}", other));
+                warn!("Error showing file: {:?}", other);
             }
         }
         match self.show_from_address(frame, p) {
             Ok(_) => return, /*Done!*/
             Err(other) => {
-                p.logger
-                    .log_debug(format!("Error showing asm: {:?}", other));
+                warn!("Error showing asm: {:?}", other);
                 self.mode = CodeWindowMode::Message("Disassembly failed!".to_owned());
             }
         }
@@ -1178,8 +1176,7 @@ impl<'a> CodeWindow<'a> {
         match self.try_switch_stackframe(p, up) {
             Ok(_) => {}
             Err(e) => {
-                p.logger
-                    .log_debug(format!("Failed to switch stackframe: {:?}", e));
+                warn!("Failed to switch stackframe: {:?}", e);
             }
         }
     }

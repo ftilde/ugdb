@@ -1,4 +1,3 @@
-use logging::{LogMsgType, Logger};
 use tui::commands::CommandState;
 
 use unsegen::base::{GraphemeCluster, Window};
@@ -7,11 +6,6 @@ use unsegen::input::{EditBehavior, Input, Key, ScrollBehavior};
 use unsegen::widget::builtin::{LogViewer, PromptLine};
 use unsegen::widget::{Demand2D, RenderingHints, SeparatingStyle, VerticalLayout, Widget};
 
-enum ActiveLog {
-    Debug,
-    Gdb,
-}
-
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum GDBState {
     Running,
@@ -19,9 +13,7 @@ enum GDBState {
 }
 
 pub struct Console {
-    debug_log: LogViewer,
     gdb_log: LogViewer,
-    active_log: ActiveLog,
     prompt_line: PromptLine,
     layout: VerticalLayout,
     last_gdb_state: GDBState,
@@ -34,9 +26,7 @@ static RUNNING_PROMPT: &'static str = "(↻↻↻) ";
 impl Console {
     pub fn new() -> Self {
         Console {
-            debug_log: LogViewer::new(),
             gdb_log: LogViewer::new(),
-            active_log: ActiveLog::Gdb,
             prompt_line: PromptLine::with_prompt(STOPPED_PROMPT.into()),
             layout: VerticalLayout::new(SeparatingStyle::Draw(
                 GraphemeCluster::try_from('=').unwrap(),
@@ -46,44 +36,16 @@ impl Console {
         }
     }
 
-    pub fn display_log(&mut self, logger: &mut Logger) {
+    pub fn display_messages(&mut self, sink: &mut ::MessageSink) {
         use std::fmt::Write;
-        for (msg_type, msg) in logger.drain_messages() {
-            match msg_type {
-                LogMsgType::Debug => {
-                    writeln!(self.debug_log, " -=- {}", msg).expect("Write Debug Message");
-                }
-                LogMsgType::Message => {
-                    writeln!(self.gdb_log, "{}", msg).expect("Write Message");
-                }
-            }
+        for msg in sink.drain_messages() {
+            writeln!(self.gdb_log, "{}", msg).expect("Write Message");
         }
     }
 
     pub fn write_to_gdb_log<S: AsRef<str>>(&mut self, msg: S) {
         use std::fmt::Write;
         write!(self.gdb_log, "{}", msg.as_ref()).expect("Write Message");
-    }
-
-    fn toggle_active_log(&mut self) {
-        self.active_log = match self.active_log {
-            ActiveLog::Debug => ActiveLog::Gdb,
-            ActiveLog::Gdb => ActiveLog::Debug,
-        };
-    }
-
-    fn get_active_log_viewer_mut(&mut self) -> &mut LogViewer {
-        match self.active_log {
-            ActiveLog::Debug => &mut self.debug_log,
-            ActiveLog::Gdb => &mut self.gdb_log,
-        }
-    }
-
-    fn get_active_log_viewer(&self) -> &LogViewer {
-        match self.active_log {
-            ActiveLog::Debug => &self.debug_log,
-            ActiveLog::Gdb => &self.gdb_log,
-        }
     }
 
     fn handle_newline(&mut self, p: ::UpdateParameters) {
@@ -112,26 +74,19 @@ impl Console {
 
 impl Widget for Console {
     fn space_demand(&self) -> Demand2D {
-        let widgets: Vec<&Widget> = vec![self.get_active_log_viewer(), &self.prompt_line];
+        let widgets: Vec<&Widget> = vec![&self.gdb_log, &self.prompt_line];
         self.layout.space_demand(widgets.as_slice())
     }
     fn draw(&self, window: Window, hints: RenderingHints) {
-        // We cannot use self.get_active_log_viewer_mut(), because it apparently borrows
-        // self mutably in its entirety. TODO: Maybe there is another way?
-        let active_log_viewer = match self.active_log {
-            ActiveLog::Debug => &self.debug_log,
-            ActiveLog::Gdb => &self.gdb_log,
-        };
         self.layout.draw(
             window,
-            &[(active_log_viewer, hints), (&self.prompt_line, hints)],
+            &[(&self.gdb_log, hints), (&self.prompt_line, hints)],
         )
     }
 }
 impl Container<::UpdateParametersStruct> for Console {
     fn input(&mut self, input: Input, p: ::UpdateParameters) -> Option<Input> {
         input
-            .chain((Key::F(1), || self.toggle_active_log()))
             .chain((Key::Char('\n'), || self.handle_newline(p)))
             .chain(
                 EditBehavior::new(&mut self.prompt_line)
@@ -150,7 +105,7 @@ impl Container<::UpdateParametersStruct> for Console {
                 p.gdb.mi.interrupt_execution().expect("interrupted gdb")
             }))
             .chain(
-                ScrollBehavior::new(self.get_active_log_viewer_mut())
+                ScrollBehavior::new(&mut self.gdb_log)
                     .forwards_on(Key::PageDown)
                     .backwards_on(Key::PageUp)
                     .to_beginning_on(Key::Ctrl('b'))

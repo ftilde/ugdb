@@ -20,6 +20,13 @@ $ cargo build --release
 $ target/release/ugdb
 ```
 
+## Installation
+
+If you're an Arch Linux user, then you can install `ugdb` from the [arch user repository](https://aur.archlinux.org/packages/ugdb/):
+```
+yay -S ugdb
+```
+
 ## Usage
 
 The command line interface is aimed to be *mostly* compatible with gdb:

@@ -16,7 +16,7 @@ pub struct Tui<'a> {
     src_view: CodeWindow<'a>,
 }
 
-const WELCOME_MSG: &'static str = concat!(
+const WELCOME_MSG: &str = concat!(
     r#"
        Welcome to        
  _   _  __ _  __| | |__  
@@ -28,7 +28,7 @@ version             "#,
     env!("CRATE_VERSION"),
     r#"
 revision         "#,
-    env!("GIT_HASH")
+    env!("REVISION")
 );
 
 impl<'a> Tui<'a> {

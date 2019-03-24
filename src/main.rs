@@ -312,17 +312,13 @@ fn run() -> i32 {
 
         println!("Oh no! ugdb crashed!");
         println!(
-            "Consider filing an issue including the following information at {}:\n",
-            env!("CARGO_PKG_REPOSITORY")
+            "Consider filing an issue including the log file located in {} and the following backtrace at {}:\n",
+            log_dir.to_string_lossy(),
+            env!("CARGO_PKG_REPOSITORY"),
         );
 
         println!("{}", info);
         println!("{:?}", backtrace::Backtrace::new());
-        println!("");
-        println!(
-            "Possibly also include the contents of the log file located in {}",
-            log_dir.to_string_lossy()
-        );
     }));
 
     if let Err(e) = flexi_logger::Logger::with_env_or_str("info")

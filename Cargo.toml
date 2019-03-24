@@ -1,6 +1,6 @@
 [package]
 name = "ugdb"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["ftilde <ftilde@protonmail.com>"]
 description = "An unsegen-based GDB frontend."
 repository = "https://github.com/ftilde/ugdb"

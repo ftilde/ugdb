@@ -17,7 +17,6 @@ fn main() {
     } else {
         " release".to_owned()
     };
-    let revision_str = " release".to_owned();
     println!("cargo:rustc-env=REVISION={}", revision_str);
 
     // Find current release version (crate version specified in Cargo.toml)

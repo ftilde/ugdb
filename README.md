@@ -27,6 +27,11 @@ If you're an Arch Linux user, then you can install `ugdb` from the [arch user re
 yay -S ugdb
 ```
 
+`ugdb` can also be installed from [crates.io](https://crates.io/crates/ugdb) using [cargo](https://github.com/rust-lang/cargo/):
+```
+cargo install ugdb
+```
+
 ## Usage
 
 The command line interface is aimed to be *mostly* compatible with gdb:

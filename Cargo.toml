@@ -38,9 +38,9 @@ unsegen_pager = "0.1.1"
 nom = "2.1"
 
 # gdb-expression-parsing
-lalrpop-util = "0.14.0"
+lalrpop-util = "0.16.3"
 
 [build-dependencies]
 git2 = "0.6"
 toml = "0.4"
-lalrpop = "0.14.0"
+lalrpop = "0.16.3"

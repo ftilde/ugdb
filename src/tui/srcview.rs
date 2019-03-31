@@ -2,7 +2,7 @@ use gdb::{Address, BreakPoint, BreakpointOperationError, SrcPosition};
 use gdbmi::commands::{BreakPointLocation, BreakPointNumber, DisassembleMode, MiCommand};
 use gdbmi::output::{JsonValue, Object, ResultClass};
 use gdbmi::ExecuteError;
-use log::{debug, warn};
+use log::warn;
 use std::collections::HashSet;
 use std::fs;
 use std::io;
@@ -24,7 +24,6 @@ use unsegen_pager::{SyntaxSet, Theme};
 #[derive(Debug)]
 pub enum PagerShowError {
     CouldNotOpenFile(PathBuf, io::Error),
-    LineDoesNotExist(LineIndex),
 }
 
 #[derive(Clone)]
@@ -190,17 +189,11 @@ pub struct AssemblyView<'a> {
     last_stop_position: Option<Address>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, From)]
 enum GotoError {
     NoLastStopPosition,
     MismatchedPagerContent,
     PagerError(PagerError),
-}
-
-impl From<PagerError> for GotoError {
-    fn from(e: PagerError) -> Self {
-        GotoError::PagerError(e)
-    }
 }
 
 fn get_str<'a>(obj: &'a JsonValue, key: &'static str) -> Result<&'a str, GDBResponseError> {
@@ -359,44 +352,22 @@ impl<'a> AssemblyView<'a> {
         file: P,
         line: L,
         p: ::UpdateParameters,
-    ) -> Result<(), () /* Disassembly unsuccessful */> {
+    ) -> Result<(), DisassembleError> {
         let line_u: usize = line.into().into();
-        let disass_results = match {
-            p.gdb.mi.execute(MiCommand::data_disassemble_file(
+        let disass_results = p
+            .gdb
+            .mi
+            .execute(MiCommand::data_disassemble_file(
                 file.as_ref(),
                 line_u,
                 None,
                 DisassembleMode::MixedSourceAndDisassembly,
-            ))
-        } {
-            Ok(o) => o.results,
-            Err(ExecuteError::Busy) => {
-                // that's okay, we will try again next time. This may occur if the user is
-                // hammering "n", the disassembly has not yet finished, but gdb is already
-                // executing the next step.
-                return Err(());
-            }
-            Err(ExecuteError::Quit) => {
-                // If GDB has quit the ugdb will shut down soon as well
-                return Err(());
-            }
-        };
+            ))?
+            .results;
 
-        match Self::get_instructions(&disass_results) {
-            Ok(lines) => {
-                self.show_lines(lines, p);
-                Ok(())
-            }
-            Err(e) => {
-                p.message_sink.send(format!(
-                    "Disassembly failed for {:?}:{}: {:?}",
-                    file.as_ref(),
-                    line_u,
-                    e
-                ));
-                Err(())
-            }
-        }
+        let lines = Self::get_instructions(&disass_results)?;
+        self.show_lines(lines, p);
+        Ok(())
     }
 
     fn show_address(
@@ -683,10 +654,9 @@ impl<'a> SourceView<'a> {
         }
     }
 
-    fn show<'b, P: AsRef<Path>, L: Into<LineIndex>>(
+    fn show<'b, P: AsRef<Path>>(
         &mut self,
         path: P,
-        line: L,
         p: ::UpdateParameters,
     ) -> Result<(), PagerShowError> {
         if self.need_to_load_file(path.as_ref()) {
@@ -703,10 +673,7 @@ impl<'a> SourceView<'a> {
                 ));
             }
         }
-        let line = line.into();
-        self.pager
-            .go_to_line(line)
-            .map_err(|_| PagerShowError::LineDoesNotExist(line))
+        Ok(())
     }
 
     fn load<'b, P: AsRef<Path>, I: Iterator<Item = &'b BreakPoint>>(
@@ -830,18 +797,34 @@ impl<'a> Widget for SourceView<'a> {
 }
 
 #[derive(Clone, PartialEq)]
-enum CodeWindowMode {
+enum DisplayMode {
     Source,
     Assembly,
     SideBySide,
     Message(String),
+}
+#[derive(Clone, PartialEq)]
+enum SrcContentState {
+    Available,
+    Unavailable,
+    NotYetLoaded(PathBuf),
+}
+
+#[derive(Clone, PartialEq)]
+enum AsmContentState {
+    Available,
+    Unavailable,
+    NotYetLoadedFile(PathBuf, LineIndex),
+    NotYetLoadedAddr(Address, Address),
 }
 
 pub struct CodeWindow<'a> {
     src_view: SourceView<'a>,
     asm_view: AssemblyView<'a>,
     layout: HorizontalLayout,
-    mode: CodeWindowMode,
+    preferred_mode: DisplayMode,
+    src_state: SrcContentState,
+    asm_state: AsmContentState,
     last_bp_update: ::std::time::Instant,
 }
 
@@ -858,36 +841,11 @@ impl From<(::std::num::ParseIntError, String)> for GDBResponseError {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, From)]
 enum DisassembleError {
     Execution(ExecuteError),
     GDB(GDBResponseError),
     Other(String),
-}
-
-impl From<GDBResponseError> for DisassembleError {
-    fn from(error: GDBResponseError) -> Self {
-        DisassembleError::GDB(error)
-    }
-}
-
-impl From<(::std::num::ParseIntError, String)> for DisassembleError {
-    fn from((_, s): (::std::num::ParseIntError, String)) -> Self {
-        GDBResponseError::MalformedAddress(s).into()
-    }
-}
-
-#[derive(Debug)]
-enum ShowError {
-    GDB(GDBResponseError),
-    CouldNotOpenFile(PathBuf),
-    NoLineInfo,
-}
-
-impl From<GDBResponseError> for ShowError {
-    fn from(error: GDBResponseError) -> Self {
-        ShowError::GDB(error)
-    }
 }
 
 fn disassemble_address(
@@ -940,64 +898,102 @@ impl<'a> CodeWindow<'a> {
             layout: HorizontalLayout::new(SeparatingStyle::Draw(
                 GraphemeCluster::try_from('|').unwrap(),
             )),
-            mode: CodeWindowMode::Message(welcome_msg.to_owned()),
+            preferred_mode: DisplayMode::Message(welcome_msg.to_owned()),
+            src_state: SrcContentState::Unavailable,
+            asm_state: AsmContentState::Unavailable,
             last_bp_update: ::std::time::Instant::now(),
         }
     }
 
-    fn show_from_file(&mut self, frame: &Object, p: ::UpdateParameters) -> Result<(), ShowError> {
-        self.src_view.stack_level = match p.gdb.mi.execute(MiCommand::stack_info_frame(None)) {
-            Ok(o) => get_u64(&o.results["frame"], "level").ok(),
-            Err(_) => None,
-        };
-
-        let address = get_addr_obj(frame, "addr")?;
-
-        if let Some(path) = frame["fullname"].as_str() {
-            // File information may not be present
-            let line = LineNumber::new(
-                get_str_obj(frame, "line")?
-                    .parse::<usize>()
-                    .map_err(|_| GDBResponseError::Other(format!("Malformed line")))?,
-            );
-            self.src_view.set_last_stop_position(path, line);
-
-            match self.src_view.show(path, line, p) {
-                Ok(()) => {
-                    self.src_view
-                        .go_to_last_stop_position()
-                        .expect("We just set a last stop pos!");
-                }
-                Err(PagerShowError::CouldNotOpenFile(b, _)) => {
-                    return Err(ShowError::CouldNotOpenFile(b));
-                }
-                Err(PagerShowError::LineDoesNotExist(_)) => {
-                    //Ignore
-                }
+    fn available_display_mode(&self) -> DisplayMode {
+        match (&self.preferred_mode, &self.src_state, &self.asm_state) {
+            (DisplayMode::Message(msg), _, _) => DisplayMode::Message(msg.clone()),
+            (DisplayMode::Source, SrcContentState::Available, _) => DisplayMode::Source,
+            (DisplayMode::Source, _, AsmContentState::Available) => DisplayMode::Assembly,
+            (DisplayMode::Assembly, _, AsmContentState::Available) => DisplayMode::Assembly,
+            (DisplayMode::Assembly, SrcContentState::Available, _) => DisplayMode::Source,
+            (DisplayMode::SideBySide, SrcContentState::Available, AsmContentState::Available) => {
+                DisplayMode::SideBySide
             }
-
-            if self.mode == CodeWindowMode::Assembly || self.mode == CodeWindowMode::SideBySide {
-                self.asm_view.set_last_stop_position(address);
-                if self.asm_view.show_file(path, line, p).is_ok() {
-                    if self.asm_view.go_to_last_stop_position().is_err() {
-                        p.message_sink
-                            .send(format!("Failed to go to address: {}", address));
-                    }
-                } else {
-                    debug!("Disassembly failed, switching to source mode");
-                    self.mode = CodeWindowMode::Source;
-                }
-            }
-
-            self.mode = match &self.mode {
-                &CodeWindowMode::Message(_) | &CodeWindowMode::Assembly => CodeWindowMode::Source,
-                &ref other => other.clone(),
-            };
-            Ok(())
-        } else {
-            Err(ShowError::NoLineInfo)
+            (DisplayMode::SideBySide, SrcContentState::Available, _) => DisplayMode::Source,
+            (DisplayMode::SideBySide, _, AsmContentState::Available) => DisplayMode::Assembly,
+            (_, _, _) => DisplayMode::Message("Neither source nor assembly available!".to_owned()),
         }
     }
+
+    fn try_load_source_content(&mut self, p: ::UpdateParameters) -> Result<(), PagerShowError> {
+        match self.src_state.clone() {
+            SrcContentState::NotYetLoaded(path) => {
+                let ret = self.src_view.show(path, p);
+                if ret.is_ok() {
+                    self.src_state = SrcContentState::Available;
+                } else {
+                    self.src_state = SrcContentState::Unavailable;
+                }
+                ret
+            }
+            _ => Ok(()),
+        }
+    }
+
+    fn try_load_asm_content(&mut self, p: ::UpdateParameters) -> Result<(), DisassembleError> {
+        match self.asm_state.clone() {
+            AsmContentState::NotYetLoadedFile(path, line) => {
+                let ret = self.asm_view.show_file(path, line, p);
+                if ret.is_ok() {
+                    self.asm_state = AsmContentState::Available;
+                } else {
+                    self.asm_state = AsmContentState::Unavailable;
+                }
+                ret
+            }
+            AsmContentState::NotYetLoadedAddr(begin, end) => {
+                let ret = self.asm_view.show_address(begin, end, p);
+                if ret.is_ok() {
+                    self.asm_state = AsmContentState::Available;
+                } else {
+                    self.asm_state = AsmContentState::Unavailable;
+                }
+                ret
+            }
+            _ => Ok(()),
+        }
+    }
+
+    fn try_load_active_content(&mut self, p: ::UpdateParameters) {
+        match self.preferred_mode {
+            DisplayMode::SideBySide => {
+                if let Err(e) = self.try_load_source_content(p) {
+                    warn!("Failed to load file: {:?}", e);
+                }
+                if let Err(e) = self.try_load_asm_content(p) {
+                    warn!("Failed to load assembly: {:?}", e);
+                }
+            }
+            DisplayMode::Assembly => {
+                if let Err(e) = self.try_load_asm_content(p) {
+                    warn!("Failed to load assembly: {:?}", e);
+                }
+                if self.asm_state == AsmContentState::Unavailable {
+                    if let Err(e) = self.try_load_source_content(p) {
+                        warn!("Failed to load file: {:?}", e);
+                    }
+                }
+            }
+            DisplayMode::Source => {
+                if let Err(e) = self.try_load_source_content(p) {
+                    warn!("Failed to load file: {:?}", e);
+                }
+                if self.src_state == SrcContentState::Unavailable {
+                    if let Err(e) = self.try_load_asm_content(p) {
+                        warn!("Failed to load assembly: {:?}", e);
+                    }
+                }
+            }
+            DisplayMode::Message(_) => {}
+        }
+    }
+
     fn find_function_range(at: Address, p: ::UpdateParameters) -> Result<(Address, Address), ()> {
         let first_lines = disassemble_address(at, at + 16, p).map_err(|_| ())?;
         let current = first_lines.first().ok_or(())?;
@@ -1050,77 +1046,88 @@ impl<'a> CodeWindow<'a> {
         Ok((at, end_address))
     }
 
-    fn show_from_address(
-        &mut self,
-        frame: &Object,
-        p: ::UpdateParameters,
-    ) -> Result<(), DisassembleError> {
-        let address = get_addr_obj(frame, "addr")?;
+    pub fn show_frame(&mut self, frame: &Object, p: ::UpdateParameters) {
+        // Always try to switch away from (relatively unhelpful) message to srcview:
+        if let DisplayMode::Message(_) = self.preferred_mode {
+            self.preferred_mode = DisplayMode::Source;
+        }
 
-        let (begin, end) = {
-            Self::find_function_range(address, p)
-                .or_else(|_| Self::find_valid_address_range(address, 128, p))?
+        self.src_view.stack_level = match p.gdb.mi.execute(MiCommand::stack_info_frame(None)) {
+            Ok(o) => get_u64(&o.results["frame"], "level").ok(),
+            Err(_) => None,
+        };
+        self.src_state = SrcContentState::Unavailable;
+        self.asm_state = AsmContentState::Unavailable;
+
+        if let Some(path) = frame["fullname"].as_str() {
+            self.src_state = SrcContentState::NotYetLoaded(path.into());
+
+            match get_u64_obj(frame, "line") {
+                Ok(line) => {
+                    let line = LineNumber::new(line as usize);
+                    self.src_view.set_last_stop_position(path, line);
+                    self.asm_state = AsmContentState::NotYetLoadedFile(path.into(), line.into());
+                    match get_addr_obj(frame, "addr") {
+                        Ok(address) => self.asm_view.set_last_stop_position(address),
+                        Err(e) => warn!("Failed to go to address: {:?}", e),
+                    }
+                }
+                Err(e) => warn!("Failed to go to line: {:?}", e),
+            }
         };
 
-        self.asm_view.set_last_stop_position(address);
+        if self.asm_state == AsmContentState::Unavailable {
+            match get_addr_obj(frame, "addr") {
+                Ok(address) => {
+                    match Self::find_function_range(address, p)
+                        .or_else(|_| Self::find_valid_address_range(address, 128, p))
+                    {
+                        Ok((begin, end)) => {
+                            self.asm_state = AsmContentState::NotYetLoadedAddr(begin, end)
+                        }
+                        Err(e) => warn!("Failed to disassemble from address: {:?}", e),
+                    };
+                    self.asm_view.set_last_stop_position(address);
+                }
+                Err(e) => warn!("Failed to go to address: {:?}", e),
+            }
+        }
 
-        if self.asm_view.show_address(begin, end, p).is_ok() {
-            if let Err(e) = self.asm_view.go_to_last_stop_position() {
-                warn!("We just set a last stop pos {}, but it does not seem to be valid must be valid: {:?}", address, e);
-            }
-            self.mode = CodeWindowMode::Assembly;
-        } else {
-            self.mode = CodeWindowMode::Message("Disassembly failed!".to_owned());
-        }
-
-        Ok(())
-    }
-    pub fn show_frame(&mut self, frame: &Object, p: ::UpdateParameters) {
-        match self.show_from_file(frame, p) {
-            Ok(_) => return, /*Done!*/
-            Err(ShowError::NoLineInfo) => {
-                // That's fine, just try disassemble instead
-            }
-            Err(other) => {
-                warn!("Error showing file: {:?}", other);
-            }
-        }
-        match self.show_from_address(frame, p) {
-            Ok(_) => return, /*Done!*/
-            Err(other) => {
-                warn!("Error showing asm: {:?}", other);
-                self.mode = CodeWindowMode::Message("Disassembly failed!".to_owned());
-            }
-        }
+        self.try_load_active_content(p);
+        let _ = self.asm_view.go_to_last_stop_position();
+        let _ = self.src_view.go_to_last_stop_position();
     }
 
     fn toggle_mode(&mut self, p: ::UpdateParameters) {
-        self.mode = match self.mode {
-            CodeWindowMode::Assembly => {
-                if self.src_view.current_file().is_some() {
-                    CodeWindowMode::Source
-                } else {
-                    CodeWindowMode::Assembly
-                }
+        let mut sync_asm_to_src = false;
+        let prev_mode = self.preferred_mode.clone();
+        self.preferred_mode = match prev_mode {
+            DisplayMode::Assembly => DisplayMode::Source,
+            DisplayMode::SideBySide => DisplayMode::Assembly,
+            DisplayMode::Source => {
+                sync_asm_to_src = true;
+                DisplayMode::SideBySide
             }
-            CodeWindowMode::SideBySide => CodeWindowMode::Assembly,
-            CodeWindowMode::Source => {
-                if let Some(path) = self.src_view.current_file() {
-                    if self
+            DisplayMode::Message(ref m) => DisplayMode::Message(m.clone()),
+        };
+        self.try_load_active_content(p);
+        if self.available_display_mode() == prev_mode {
+            // Disallow "blindly" changing the preferred mode if source/asm is not available.
+            self.preferred_mode = prev_mode;
+        } else if sync_asm_to_src {
+            if let Some(path) = self.src_view.current_file() {
+                if self
+                    .asm_view
+                    .show_file(path, self.src_view.current_line_number(), p)
+                    .is_ok()
+                {
+                    // The current line may not have associated assembly!
+                    // TODO: Maybe we want to try the next line or something...
+                    let _ = self
                         .asm_view
-                        .show_file(path, self.src_view.current_line_number(), p)
-                        .is_ok()
-                    {
-                        // The current line may not have associated assembly!
-                        // TODO: Maybe we want to try the next line or something...
-                        let _ = self
-                            .asm_view
-                            .go_to_first_applicable_line(path, self.src_view.current_line_number());
-                    }
+                        .go_to_first_applicable_line(path, self.src_view.current_line_number());
                 }
-                CodeWindowMode::SideBySide
             }
-            CodeWindowMode::Message(ref m) => CodeWindowMode::Message(m.clone()),
         }
     }
 
@@ -1192,27 +1199,25 @@ impl<'a> CodeWindow<'a> {
 
 impl<'a> Widget for CodeWindow<'a> {
     fn space_demand(&self) -> Demand2D {
-        match &self.mode {
-            &CodeWindowMode::Assembly => self.asm_view.space_demand(),
-            &CodeWindowMode::SideBySide => {
-                self.layout.space_demand(&[&self.asm_view, &self.src_view])
-            }
-            &CodeWindowMode::Source => self.src_view.space_demand(),
-            &CodeWindowMode::Message(ref m) => MsgWindow::new(&m).space_demand(),
+        match self.available_display_mode() {
+            DisplayMode::Assembly => self.asm_view.space_demand(),
+            DisplayMode::SideBySide => self.layout.space_demand(&[&self.asm_view, &self.src_view]),
+            DisplayMode::Source => self.src_view.space_demand(),
+            DisplayMode::Message(m) => MsgWindow::new(&m).space_demand(),
         }
     }
     fn draw(&self, window: Window, hints: RenderingHints) {
-        match &self.mode {
-            &CodeWindowMode::Assembly => self.asm_view.draw(window, hints),
-            &CodeWindowMode::SideBySide => self.layout.draw(
+        match self.available_display_mode() {
+            DisplayMode::Assembly => self.asm_view.draw(window, hints),
+            DisplayMode::SideBySide => self.layout.draw(
                 window,
                 &[
                     (&self.asm_view, hints),
                     (&self.src_view, hints.active(false)),
                 ],
             ),
-            &CodeWindowMode::Source => self.src_view.draw(window, hints),
-            &CodeWindowMode::Message(ref m) => MsgWindow::new(&m).draw(window, hints),
+            DisplayMode::Source => self.src_view.draw(window, hints),
+            DisplayMode::Message(m) => MsgWindow::new(&m).draw(window, hints),
         }
     }
 }
@@ -1223,8 +1228,8 @@ impl<'a> Container<::UpdateParametersStruct> for CodeWindow<'a> {
             .chain((Key::Char('d'), || self.toggle_mode(p)))
             .chain((Key::PageUp, || self.switch_stackframe(p, true)))
             .chain((Key::PageDown, || self.switch_stackframe(p, false)))
-            .chain(|i: Input| match self.mode {
-                CodeWindowMode::Assembly | CodeWindowMode::SideBySide => {
+            .chain(|i: Input| match self.available_display_mode() {
+                DisplayMode::Assembly | DisplayMode::SideBySide => {
                     let ret = self.asm_view.event(i, p);
                     if let Some(src_pos) = self
                         .asm_view
@@ -1232,12 +1237,14 @@ impl<'a> Container<::UpdateParametersStruct> for CodeWindow<'a> {
                         .current_line()
                         .and_then(|ref line| line.src_position.clone())
                     {
-                        let _ = self.src_view.show(src_pos.file, src_pos.line, p);
+                        self.src_state = SrcContentState::NotYetLoaded(src_pos.file.to_path_buf());
+                        self.try_load_active_content(p);
+                        let _ = self.src_view.go_to_line(src_pos.line);
                     }
                     ret
                 }
-                CodeWindowMode::Source => self.src_view.event(i, p),
-                CodeWindowMode::Message(_) => Some(i),
+                DisplayMode::Source => self.src_view.event(i, p),
+                DisplayMode::Message(_) => Some(i),
             })
             .finish()
     }

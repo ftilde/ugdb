@@ -8,6 +8,8 @@ extern crate nix;
 extern crate structopt;
 extern crate termion;
 extern crate time;
+#[macro_use]
+extern crate derive_more;
 
 // For ipc
 #[macro_use]

@@ -3,7 +3,6 @@ extern crate chan;
 extern crate backtrace;
 extern crate chan_signal;
 extern crate flexi_logger;
-extern crate gdbmi;
 extern crate log;
 extern crate nix;
 extern crate structopt;
@@ -17,13 +16,18 @@ extern crate rand;
 extern crate unix_socket;
 extern crate unsegen;
 
-extern crate gdb_expression_parsing;
 extern crate unsegen_jsonviewer;
 extern crate unsegen_pager;
 extern crate unsegen_signals;
 extern crate unsegen_terminal;
 
+// expression parsing
+#[macro_use]
+extern crate nom;
+
 mod gdb;
+mod gdb_expression_parsing;
+mod gdbmi;
 mod ipc;
 mod tui;
 

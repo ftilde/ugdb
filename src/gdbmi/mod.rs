@@ -1,9 +1,3 @@
-extern crate json;
-extern crate nix;
-#[macro_use]
-extern crate nom;
-extern crate log;
-
 pub mod commands;
 pub mod output;
 
@@ -40,7 +34,6 @@ pub struct GDBBuilder {
     opt_nh: bool,
     opt_nx: bool,
     opt_quiet: bool,
-    opt_batch: bool,
     opt_cd: Option<PathBuf>,
     opt_bps: Option<u32>,
     opt_symbol_file: Option<PathBuf>,
@@ -52,11 +45,6 @@ pub struct GDBBuilder {
     opt_program: Option<PathBuf>,
     opt_tty: Option<PathBuf>,
 }
-#[derive(Debug)]
-pub enum SpawnError {
-    Io(::std::io::Error),
-    Execute(ExecuteError),
-}
 impl GDBBuilder {
     pub fn new(gdb: PathBuf) -> Self {
         GDBBuilder {
@@ -64,7 +52,6 @@ impl GDBBuilder {
             opt_nh: false,
             opt_nx: false,
             opt_quiet: false,
-            opt_batch: false,
             opt_cd: None,
             opt_bps: None,
             opt_symbol_file: None,
@@ -88,10 +75,6 @@ impl GDBBuilder {
     }
     pub fn quiet(mut self) -> Self {
         self.opt_quiet = true;
-        self
-    }
-    pub fn batch(mut self) -> Self {
-        self.opt_batch = true;
         self
     }
     pub fn working_dir(mut self, dir: PathBuf) -> Self {
@@ -134,7 +117,7 @@ impl GDBBuilder {
         self.opt_tty = Some(tty);
         self
     }
-    pub fn try_spawn<S>(self, oob_sink: S) -> Result<GDB, SpawnError>
+    pub fn try_spawn<S>(self, oob_sink: S) -> Result<GDB, ::std::io::Error>
     where
         S: OutOfBandRecordSink + 'static,
     {
@@ -147,9 +130,6 @@ impl GDBBuilder {
         }
         if self.opt_quiet {
             args.push("--quiet".into());
-        }
-        if self.opt_batch {
-            args.push("--batch".into());
         }
         if let Some(cd) = self.opt_cd {
             args.push("--cd=".into());
@@ -198,8 +178,7 @@ impl GDBBuilder {
             .args(args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .spawn()
-            .map_err(SpawnError::Io)?;
+            .spawn()?;
         let stdin = child.stdin.take().expect("take stdin");
         let stdout = child.stdout.take().expect("take stdout");
         let is_running = Arc::new(AtomicBool::new(false));
@@ -210,8 +189,7 @@ impl GDBBuilder {
             .name("gdbmi parser".to_owned())
             .spawn(move || {
                 output::process_output(stdout, result_input, oob_sink, is_running_for_thread);
-            })
-            .map_err(SpawnError::Io)?;
+            })?;
         let gdb = GDB {
             process: child,
             stdin: stdin,
@@ -227,7 +205,8 @@ impl GDBBuilder {
 impl GDB {
     pub fn interrupt_execution(&self) -> Result<(), ::nix::Error> {
         use nix::sys::signal;
-        signal::kill(self.process.id() as i32, signal::SIGINT)
+        use nix::unistd::Pid;
+        signal::kill(Pid::from_raw(self.process.id() as i32), signal::SIGINT)
     }
 
     pub fn is_running(&self) -> bool {

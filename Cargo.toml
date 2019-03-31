@@ -34,13 +34,11 @@ unsegen_terminal = "0.1"
 unsegen_jsonviewer = "0.1"
 unsegen_pager = "0.1.1"
 
-[dependencies.gdb-expression-parsing]
-path = "./gdb-expression-parsing/"
-version = "0.1"
+# gdbmi
+nom = "2.1"
 
-[dependencies.gdbmi]
-path = "./gdbmi-rs/"
-version = "0.1"
+# gdb-expression-parsing
+lalrpop-util = "0.14.0"
 
 [build-dependencies]
 git2 = "0.6"

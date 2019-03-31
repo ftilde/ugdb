@@ -291,25 +291,6 @@ version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
-name = "gdb-expression-parsing"
-version = "0.1.0"
-dependencies = [
- "json 0.11.13 (registry+https://github.com/rust-lang/crates.io-index)",
- "lalrpop 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "lalrpop-util 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "gdbmi"
-version = "0.1.0"
-dependencies = [
- "json 0.11.13 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "nix 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "nom 2.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
 name = "git2"
 version = "0.6.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1039,13 +1020,13 @@ dependencies = [
  "chan 0.1.23 (registry+https://github.com/rust-lang/crates.io-index)",
  "chan-signal 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "flexi_logger 0.11.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "gdb-expression-parsing 0.1.0",
- "gdbmi 0.1.0",
  "git2 0.6.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "json 0.11.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "lalrpop 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lalrpop-util 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "nix 0.13.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "nom 2.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.3.23 (registry+https://github.com/rust-lang/crates.io-index)",
  "structopt 0.2.15 (registry+https://github.com/rust-lang/crates.io-index)",
  "termion 1.5.1 (registry+https://github.com/rust-lang/crates.io-index)",

@@ -2,8 +2,11 @@
 name = "ugdb"
 version = "0.1.1"
 authors = ["ftilde <ftilde@protonmail.com>"]
-description = "An unsegen-based GDB frontend."
+description = "An alternative TUI for gdb"
 repository = "https://github.com/ftilde/ugdb"
+readme = "README.md"
+license = "MIT"
+keywords = ["tui", "gdb"]
 
 [[bin]]
 doc = false

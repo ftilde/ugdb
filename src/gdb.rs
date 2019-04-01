@@ -298,4 +298,76 @@ impl GDB {
             Ok(None)
         }
     }
+
+    pub fn get_stack_level(&mut self) -> Result<u64, response::GDBResponseError> {
+        let frame = self.mi.execute(MiCommand::stack_info_frame(None))?;
+        response::get_u64(&frame.results["frame"], "level")
+    }
+}
+
+// Various helper for getting stuff out of gdb response values
+pub mod response {
+    use super::*;
+
+    #[derive(Clone, Debug, PartialEq)]
+    pub enum GDBResponseError {
+        MissingField(&'static str, JsonValue),
+        MalformedAddress(String),
+        Other(String),
+        Execution(ExecuteError),
+    }
+
+    impl From<(::std::num::ParseIntError, String)> for GDBResponseError {
+        fn from((_, s): (::std::num::ParseIntError, String)) -> Self {
+            GDBResponseError::MalformedAddress(s)
+        }
+    }
+    impl From<ExecuteError> for GDBResponseError {
+        fn from(e: ExecuteError) -> Self {
+            GDBResponseError::Execution(e)
+        }
+    }
+
+    pub fn get_str<'a>(obj: &'a JsonValue, key: &'static str) -> Result<&'a str, GDBResponseError> {
+        Ok(obj[key]
+            .as_str()
+            .ok_or_else(|| GDBResponseError::MissingField(key, obj.clone()))?)
+    }
+
+    pub fn get_str_obj<'a>(
+        obj: &'a Object,
+        key: &'static str,
+    ) -> Result<&'a str, GDBResponseError> {
+        Ok(obj[key]
+            .as_str()
+            .ok_or_else(|| GDBResponseError::MissingField(key, JsonValue::Object(obj.clone())))?)
+    }
+
+    pub fn get_addr<'a>(
+        obj: &'a JsonValue,
+        key: &'static str,
+    ) -> Result<Address, GDBResponseError> {
+        let s = get_str(obj, key)?;
+        Ok(Address::parse(s)?)
+    }
+
+    pub fn get_addr_obj<'a>(
+        obj: &'a Object,
+        key: &'static str,
+    ) -> Result<Address, GDBResponseError> {
+        let s = get_str_obj(obj, key)?;
+        Ok(Address::parse(s)?)
+    }
+
+    pub fn get_u64<'a>(obj: &'a JsonValue, key: &'static str) -> Result<u64, GDBResponseError> {
+        let s = get_str(obj, key)?;
+        Ok(s.parse::<u64>()
+            .map_err(|_| GDBResponseError::Other(format!("Malformed frame description")))?)
+    }
+
+    pub fn get_u64_obj<'a>(obj: &'a Object, key: &'static str) -> Result<u64, GDBResponseError> {
+        let s = get_str_obj(obj, key)?;
+        Ok(s.parse::<u64>()
+            .map_err(|_| GDBResponseError::Other(format!("Malformed frame description")))?)
+    }
 }

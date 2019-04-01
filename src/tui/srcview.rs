@@ -1,4 +1,4 @@
-use gdb::{Address, BreakPoint, BreakpointOperationError, SrcPosition};
+use gdb::{response::*, Address, BreakPoint, BreakpointOperationError, SrcPosition};
 use gdbmi::commands::{BreakPointLocation, BreakPointNumber, DisassembleMode, MiCommand};
 use gdbmi::output::{JsonValue, Object, ResultClass};
 use gdbmi::ExecuteError;
@@ -194,40 +194,6 @@ enum GotoError {
     NoLastStopPosition,
     MismatchedPagerContent,
     PagerError(PagerError),
-}
-
-fn get_str<'a>(obj: &'a JsonValue, key: &'static str) -> Result<&'a str, GDBResponseError> {
-    Ok(obj[key]
-        .as_str()
-        .ok_or_else(|| GDBResponseError::MissingField(key, obj.clone()))?)
-}
-
-fn get_str_obj<'a>(obj: &'a Object, key: &'static str) -> Result<&'a str, GDBResponseError> {
-    Ok(obj[key]
-        .as_str()
-        .ok_or_else(|| GDBResponseError::MissingField(key, JsonValue::Object(obj.clone())))?)
-}
-
-fn get_addr<'a>(obj: &'a JsonValue, key: &'static str) -> Result<Address, GDBResponseError> {
-    let s = get_str(obj, key)?;
-    Ok(Address::parse(s)?)
-}
-
-fn get_addr_obj<'a>(obj: &'a Object, key: &'static str) -> Result<Address, GDBResponseError> {
-    let s = get_str_obj(obj, key)?;
-    Ok(Address::parse(s)?)
-}
-
-fn get_u64<'a>(obj: &'a JsonValue, key: &'static str) -> Result<u64, GDBResponseError> {
-    let s = get_str(obj, key)?;
-    Ok(s.parse::<u64>()
-        .map_err(|_| GDBResponseError::Other(format!("Malformed frame description")))?)
-}
-
-fn get_u64_obj<'a>(obj: &'a Object, key: &'static str) -> Result<u64, GDBResponseError> {
-    let s = get_str_obj(obj, key)?;
-    Ok(s.parse::<u64>()
-        .map_err(|_| GDBResponseError::Other(format!("Malformed frame description")))?)
 }
 
 impl<'a> AssemblyView<'a> {
@@ -828,24 +794,15 @@ pub struct CodeWindow<'a> {
     last_bp_update: ::std::time::Instant,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-enum GDBResponseError {
-    MissingField(&'static str, JsonValue),
-    MalformedAddress(String),
-    Other(String),
-}
-
-impl From<(::std::num::ParseIntError, String)> for GDBResponseError {
-    fn from((_, s): (::std::num::ParseIntError, String)) -> Self {
-        GDBResponseError::MalformedAddress(s)
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, From)]
 enum DisassembleError {
-    Execution(ExecuteError),
     GDB(GDBResponseError),
     Other(String),
+}
+impl From<ExecuteError> for DisassembleError {
+    fn from(e: ExecuteError) -> Self {
+        GDBResponseError::Execution(e).into()
+    }
 }
 
 fn disassemble_address(
@@ -867,7 +824,7 @@ fn disassemble_address(
             o.results
         }
         Err(e) => {
-            return Err(DisassembleError::Execution(e));
+            return Err(GDBResponseError::Execution(e).into());
         }
     };
     if let JsonValue::Array(line_objs) = disass_results["asm_insns"].take() {
@@ -1052,10 +1009,8 @@ impl<'a> CodeWindow<'a> {
             self.preferred_mode = DisplayMode::Source;
         }
 
-        self.src_view.stack_level = match p.gdb.mi.execute(MiCommand::stack_info_frame(None)) {
-            Ok(o) => get_u64(&o.results["frame"], "level").ok(),
-            Err(_) => None,
-        };
+        self.src_view.stack_level = p.gdb.get_stack_level().ok();
+
         self.src_state = SrcContentState::Unavailable;
         self.asm_state = AsmContentState::Unavailable;
 
@@ -1069,13 +1024,15 @@ impl<'a> CodeWindow<'a> {
                     self.asm_state = AsmContentState::NotYetLoadedFile(path.into(), line.into());
                     match get_addr_obj(frame, "addr") {
                         Ok(address) => self.asm_view.set_last_stop_position(address),
-                        Err(e) => warn!("Failed to go to address: {:?}", e),
+                        Err(e) => warn!("Failed get address from frame: {:?}", e),
                     }
                 }
-                Err(e) => warn!("Failed to go to line: {:?}", e),
+                Err(e) => warn!("Failed get line from frame: {:?}", e),
             }
         };
 
+        // If we were not able to load asm via file information, try loading from the address.
+        // This may be the case for jit compiled code or PLT entries or something like that.
         if self.asm_state == AsmContentState::Unavailable {
             match get_addr_obj(frame, "addr") {
                 Ok(address) => {
@@ -1085,11 +1042,11 @@ impl<'a> CodeWindow<'a> {
                         Ok((begin, end)) => {
                             self.asm_state = AsmContentState::NotYetLoadedAddr(begin, end)
                         }
-                        Err(e) => warn!("Failed to disassemble from address: {:?}", e),
+                        Err(e) => warn!("Failed to disassemble from address {}: {:?}", address, e),
                     };
                     self.asm_view.set_last_stop_position(address);
                 }
-                Err(e) => warn!("Failed to go to address: {:?}", e),
+                Err(e) => warn!("Failed get address from frame: {:?}", e),
             }
         }
 
@@ -1136,11 +1093,7 @@ impl<'a> CodeWindow<'a> {
         p: ::UpdateParameters,
         up: bool,
     ) -> Result<(), GDBResponseError> {
-        let stack_result = match p.gdb.mi.execute(MiCommand::stack_info_frame(None)) {
-            Ok(o) => o.results,
-            Err(_) => return Ok(()), //Ignore
-        };
-        let level = get_u64(&stack_result["frame"], "level")?;
+        let level = p.gdb.get_stack_level()?;
 
         let new_level = if up {
             let depth_result = match p.gdb.mi.execute(MiCommand::stack_info_depth()) {

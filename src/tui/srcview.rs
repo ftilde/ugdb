@@ -525,7 +525,6 @@ pub struct SourceView<'a> {
     pager: Pager<String, SourceDecorator>,
     file_info: Option<FileInfo>,
     last_stop_position: Option<SrcPosition>,
-    stack_level: Option<u64>,
 }
 
 macro_rules! current_file_and_content_mut {
@@ -547,7 +546,6 @@ impl<'a> SourceView<'a> {
             pager: Pager::new(),
             file_info: None,
             last_stop_position: None,
-            stack_level: None,
         }
     }
     fn set_last_stop_position<P: AsRef<Path>>(&mut self, file: P, pos: LineNumber) {
@@ -739,26 +737,7 @@ impl<'a> Widget for SourceView<'a> {
         self.pager.space_demand()
     }
     fn draw(&self, window: Window, hints: RenderingHints) {
-        if let Some(file) = self.current_file() {
-            match window.split(RowIndex::new(1)) {
-                Ok((mut up, down)) => {
-                    let mut cursor = Cursor::new(&mut up);
-                    cursor.set_style_modifier(StyleModifier::new().bold(true));
-                    if let Some(level) = self.stack_level {
-                        cursor.write(&format!("[{}]", level));
-                    } else {
-                        cursor.write("[?]");
-                    }
-                    cursor.write(&format!(" ▶ {}", file.display()));
-                    self.pager.draw(down, hints);
-                }
-                Err(window) => {
-                    self.pager.draw(window, hints);
-                }
-            }
-        } else {
-            self.pager.draw(window, hints);
-        }
+        self.pager.draw(window, hints);
     }
 }
 
@@ -784,14 +763,64 @@ enum AsmContentState {
     NotYetLoadedAddr(Address, Address),
 }
 
-pub struct CodeWindow<'a> {
-    src_view: SourceView<'a>,
-    asm_view: AssemblyView<'a>,
-    layout: HorizontalLayout,
-    preferred_mode: DisplayMode,
-    src_state: SrcContentState,
-    asm_state: AsmContentState,
-    last_bp_update: ::std::time::Instant,
+#[derive(Default)]
+struct StackInfo {
+    stack_level: Option<u64>,
+    stack_depth: Option<u64>,
+    file_path: Option<String>, // Intentionally string, as this is only used for display purposes
+    function: Option<String>,
+}
+
+impl Widget for StackInfo {
+    fn space_demand(&self) -> Demand2D {
+        Demand2D {
+            width: Demand::at_least(
+                Width::new(
+                    (self.file_path.as_ref().map(|p| p.len()).unwrap_or(0)
+                        + self.function.as_ref().map(|p| p.len()).unwrap_or(0))
+                        as i32,
+                )
+                .unwrap(),
+            ),
+            height: Demand::exact(Height::new(1).unwrap()),
+        }
+    }
+    fn draw(&self, mut window: Window, _hints: RenderingHints) {
+        use std::fmt::Write;
+        let width = window.get_width();
+        let mut cursor = Cursor::new(&mut window);
+        cursor.set_style_modifier(StyleModifier::new().bold(true));
+        let _ = write!(cursor, "[");
+        if let Some(l) = self.stack_level {
+            let _ = write!(cursor, "{}", l);
+        } else {
+            let _ = write!(cursor, "?");
+        }
+        let _ = write!(cursor, "/");
+        if let Some(l) = self.stack_depth {
+            let _ = write!(cursor, "{}", l);
+        } else {
+            let _ = write!(cursor, "?");
+        }
+        let _ = write!(cursor, "] ▶ ");
+
+        if let Some(f) = &self.function {
+            let _ = write!(cursor, "{}", f);
+        } else {
+            let _ = write!(cursor, "?");
+        }
+        let _ = write!(cursor, " @ ");
+
+        if let Some(f) = &self.file_path {
+            let remaining_space = (width.raw_value() as usize)
+                .checked_sub(cursor.get_col().raw_value() as _)
+                .unwrap_or(0);
+            let start = f.len().checked_sub(remaining_space).unwrap_or(0);
+            let _ = write!(cursor, "{}", &f[start..]);
+        } else {
+            let _ = write!(cursor, "?");
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, From)]
@@ -847,6 +876,17 @@ fn disassemble_address(
     }
 }
 
+pub struct CodeWindow<'a> {
+    src_view: SourceView<'a>,
+    asm_view: AssemblyView<'a>,
+    layout: HorizontalLayout,
+    preferred_mode: DisplayMode,
+    src_state: SrcContentState,
+    asm_state: AsmContentState,
+    last_bp_update: ::std::time::Instant,
+    stack_info: StackInfo,
+}
+
 impl<'a> CodeWindow<'a> {
     pub fn new(highlighting_theme: &'a Theme, welcome_msg: &'static str) -> Self {
         CodeWindow {
@@ -859,6 +899,7 @@ impl<'a> CodeWindow<'a> {
             src_state: SrcContentState::Unavailable,
             asm_state: AsmContentState::Unavailable,
             last_bp_update: ::std::time::Instant::now(),
+            stack_info: Default::default(),
         }
     }
 
@@ -995,10 +1036,10 @@ impl<'a> CodeWindow<'a> {
         let penultimate_index = block_lines
             .len()
             .checked_sub(2)
-            .ok_or(DisassembleError::Other("Not enough lines".to_owned()))?;
+            .ok_or_else(|| DisassembleError::Other("Not enough lines".to_owned()))?;
         let penultimate = block_lines
             .get(penultimate_index)
-            .ok_or(DisassembleError::Other("Not enough lines".to_owned()))?;
+            .ok_or_else(|| DisassembleError::Other("Not enough lines".to_owned()))?;
         let end_address = get_addr(penultimate, "address")?;
         Ok((at, end_address))
     }
@@ -1009,10 +1050,13 @@ impl<'a> CodeWindow<'a> {
             self.preferred_mode = DisplayMode::Source;
         }
 
-        self.src_view.stack_level = p.gdb.get_stack_level().ok();
-
         self.src_state = SrcContentState::Unavailable;
         self.asm_state = AsmContentState::Unavailable;
+
+        self.stack_info.stack_level = p.gdb.get_stack_level().ok();
+        self.stack_info.stack_depth = p.gdb.get_stack_depth().ok();
+        self.stack_info.file_path = frame["fullname"].as_str().map(|s| s.to_owned());
+        self.stack_info.function = frame["func"].as_str().map(|s| s.to_owned());
 
         if let Some(path) = frame["fullname"].as_str() {
             self.src_state = SrcContentState::NotYetLoaded(path.into());
@@ -1096,11 +1140,7 @@ impl<'a> CodeWindow<'a> {
         let level = p.gdb.get_stack_level()?;
 
         let new_level = if up {
-            let depth_result = match p.gdb.mi.execute(MiCommand::stack_info_depth()) {
-                Ok(o) => o.results,
-                Err(_) => return Ok(()), //Ignore
-            };
-            let depth = get_u64_obj(&depth_result, "depth")?;
+            let depth = p.gdb.get_stack_depth()?;
             (level + 1).min(depth.checked_sub(1).unwrap_or(0))
         } else {
             level.checked_sub(1).unwrap_or(0)
@@ -1160,7 +1200,20 @@ impl<'a> Widget for CodeWindow<'a> {
         }
     }
     fn draw(&self, window: Window, hints: RenderingHints) {
-        match self.available_display_mode() {
+        let mode = self.available_display_mode();
+        let window =
+            if let DisplayMode::Assembly | DisplayMode::SideBySide | DisplayMode::Source = mode {
+                match window.split(RowIndex::new(1)) {
+                    Ok((top, window)) => {
+                        self.stack_info.draw(top, hints);
+                        window
+                    }
+                    Err(window) => window,
+                }
+            } else {
+                window
+            };
+        match mode {
             DisplayMode::Assembly => self.asm_view.draw(window, hints),
             DisplayMode::SideBySide => self.layout.draw(
                 window,

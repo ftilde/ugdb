@@ -241,7 +241,7 @@ impl GDB {
                     .get("msg")
                     .and_then(|msg_obj| msg_obj.as_str())
                     .map(|s| s.to_owned())
-                    .unwrap_or(bp_result.results.dump()),
+                    .unwrap_or_else(|| bp_result.results.dump()),
             )),
             _ => {
                 panic!("Unexpected resultclass: {:?}", bp_result.class);
@@ -253,14 +253,14 @@ impl GDB {
         match bp_type {
             BreakPointEvent::Created | BreakPointEvent::Modified => {
                 match &info["bkpt"] {
-                    &JsonValue::Object(ref bkpt) => {
+                    JsonValue::Object(ref bkpt) => {
                         let bp = BreakPoint::from_json(&bkpt);
                         self.breakpoints.update_breakpoint(bp);
                         //debug_assert!(bp_type != BreakPointEvent::Modified || res.is_some(), "Modified non-existent id");
                     }
-                    &JsonValue::Array(ref bkpts) => {
+                    JsonValue::Array(ref bkpts) => {
                         for bkpt in bkpts {
-                            if let &JsonValue::Object(ref bkpt) = bkpt {
+                            if let JsonValue::Object(ref bkpt) = bkpt {
                                 let bp = BreakPoint::from_json(&bkpt);
                                 self.breakpoints.update_breakpoint(bp);
                             } else {
@@ -303,6 +303,11 @@ impl GDB {
         let frame = self.mi.execute(MiCommand::stack_info_frame(None))?;
         response::get_u64(&frame.results["frame"], "level")
     }
+
+    pub fn get_stack_depth(&mut self) -> Result<u64, response::GDBResponseError> {
+        let frame = self.mi.execute(MiCommand::stack_info_depth())?;
+        response::get_u64_obj(&frame.results, "depth")
+    }
 }
 
 // Various helper for getting stuff out of gdb response values
@@ -343,31 +348,27 @@ pub mod response {
             .ok_or_else(|| GDBResponseError::MissingField(key, JsonValue::Object(obj.clone())))?)
     }
 
-    pub fn get_addr<'a>(
-        obj: &'a JsonValue,
-        key: &'static str,
-    ) -> Result<Address, GDBResponseError> {
+    pub fn get_addr(obj: &JsonValue, key: &'static str) -> Result<Address, GDBResponseError> {
         let s = get_str(obj, key)?;
         Ok(Address::parse(s)?)
     }
 
-    pub fn get_addr_obj<'a>(
-        obj: &'a Object,
-        key: &'static str,
-    ) -> Result<Address, GDBResponseError> {
+    pub fn get_addr_obj(obj: &Object, key: &'static str) -> Result<Address, GDBResponseError> {
         let s = get_str_obj(obj, key)?;
         Ok(Address::parse(s)?)
     }
 
-    pub fn get_u64<'a>(obj: &'a JsonValue, key: &'static str) -> Result<u64, GDBResponseError> {
+    pub fn get_u64(obj: &JsonValue, key: &'static str) -> Result<u64, GDBResponseError> {
         let s = get_str(obj, key)?;
-        Ok(s.parse::<u64>()
-            .map_err(|_| GDBResponseError::Other(format!("Malformed frame description")))?)
+        Ok(s.parse::<u64>().map_err(|e| {
+            GDBResponseError::Other(format!("Malformed frame description: {:?}", e))
+        })?)
     }
 
-    pub fn get_u64_obj<'a>(obj: &'a Object, key: &'static str) -> Result<u64, GDBResponseError> {
+    pub fn get_u64_obj(obj: &Object, key: &'static str) -> Result<u64, GDBResponseError> {
         let s = get_str_obj(obj, key)?;
-        Ok(s.parse::<u64>()
-            .map_err(|_| GDBResponseError::Other(format!("Malformed frame description")))?)
+        Ok(s.parse::<u64>().map_err(|e| {
+            GDBResponseError::Other(format!("Malformed frame description: {:?}", e))
+        })?)
     }
 }

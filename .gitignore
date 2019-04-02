@@ -1,4 +1,1 @@
 target
-Makefile
-output.log
-gdb-expression-parsing/src/parser.rs

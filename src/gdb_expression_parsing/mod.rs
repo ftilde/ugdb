@@ -1,8 +1,6 @@
-extern crate lalrpop_util;
-
 mod ast;
 mod lexer;
-mod parser;
+lalrpop_mod!(parser, "/gdb_expression_parsing/parser.rs");
 
 use json::JsonValue;
 
@@ -10,7 +8,7 @@ pub type ParseError = lalrpop_util::ParseError<lexer::Location, lexer::Token, le
 
 pub fn parse_gdb_value(result_string: &str) -> Result<JsonValue, ParseError> {
     let lexer = lexer::Lexer::new(result_string);
-    let ast = parser::parse_Value(lexer)?;
+    let ast = parser::ValueParser::new().parse(lexer)?;
     Ok(ast.to_json(result_string))
 }
 

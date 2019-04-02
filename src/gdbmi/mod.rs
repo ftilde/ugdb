@@ -1,6 +1,7 @@
 pub mod commands;
 pub mod output;
 
+use log::info;
 use std::ffi::OsString;
 use std::path::PathBuf;
 use std::process::{Child, ChildStdin, Command, Stdio};
@@ -230,18 +231,17 @@ impl GDB {
             .borrow()
             .write_interpreter_string(&mut self.stdin, command_token)
             .expect("write interpreter command");
-        match self.result_output.recv() {
-            Ok(record) => {
-                let token = record.token;
-                if token.is_none() || token.unwrap() != command_token {
-                    panic!(
-                        "Input token ({}) does not match output token ({:?})",
-                        command_token, token
-                    );
-                }
-                Ok(record)
+        loop {
+            match self.result_output.recv() {
+                Ok(record) => match record.token {
+                    Some(token) if token == command_token => return Ok(record),
+                    _ => info!(
+                        "Record does not match expected token ({}) and will be dropped: {:?}",
+                        command_token, record
+                    ),
+                },
+                Err(_) => return Err(ExecuteError::Quit),
             }
-            Err(_) => Err(ExecuteError::Quit),
         }
     }
 

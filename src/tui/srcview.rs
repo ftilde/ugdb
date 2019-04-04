@@ -1135,14 +1135,20 @@ impl<'a> CodeWindow<'a> {
             if let Some(path) = self.src_view.current_file() {
                 if self
                     .asm_view
-                    .show_file(path, self.src_view.current_line_number(), p)
-                    .is_ok()
+                    .go_to_first_applicable_line(path, self.src_view.current_line_number())
+                    .is_err()
                 {
-                    // The current line may not have associated assembly!
-                    // TODO: Maybe we want to try the next line or something...
-                    let _ = self
+                    if self
                         .asm_view
-                        .go_to_first_applicable_line(path, self.src_view.current_line_number());
+                        .show_file(path, self.src_view.current_line_number(), p)
+                        .is_ok()
+                    {
+                        // The current line may not have associated assembly!
+                        // TODO: Maybe we want to try the next line or something...
+                        let _ = self
+                            .asm_view
+                            .go_to_first_applicable_line(path, self.src_view.current_line_number());
+                    }
                 }
             }
         }

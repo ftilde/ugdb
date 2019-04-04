@@ -767,7 +767,7 @@ enum AsmContentState {
 struct StackInfo {
     stack_level: Option<u64>,
     stack_depth: Option<u64>,
-    file_path: Option<String>, // Intentionally string, as this is only used for display purposes
+    file_path: Option<PathBuf>,
     function: Option<String>,
 }
 
@@ -776,7 +776,11 @@ impl Widget for StackInfo {
         Demand2D {
             width: Demand::at_least(
                 Width::new(
-                    (self.file_path.as_ref().map(|p| p.len()).unwrap_or(0)
+                    (self
+                        .file_path
+                        .as_ref()
+                        .map(|p| p.to_string_lossy().len())
+                        .unwrap_or(0)
                         + self.function.as_ref().map(|p| p.len()).unwrap_or(0))
                         as i32,
                 )
@@ -788,8 +792,7 @@ impl Widget for StackInfo {
     fn draw(&self, mut window: Window, _hints: RenderingHints) {
         use std::fmt::Write;
         let width = window.get_width();
-        let mut cursor = Cursor::new(&mut window);
-        cursor.set_style_modifier(StyleModifier::new().bold(true));
+        let mut cursor = Cursor::new(&mut window).style_modifier(StyleModifier::new().bold(true));
         let _ = write!(cursor, "[");
         if let Some(l) = self.stack_level {
             let _ = write!(cursor, "{}", l);
@@ -802,21 +805,34 @@ impl Widget for StackInfo {
         } else {
             let _ = write!(cursor, "?");
         }
-        let _ = write!(cursor, "] ▶ ");
+        let _ = write!(cursor, "] ");
 
         if let Some(f) = &self.function {
             let _ = write!(cursor, "{}", f);
         } else {
             let _ = write!(cursor, "?");
         }
-        let _ = write!(cursor, " @ ");
+        {
+            let mut cursor = cursor.save().style_modifier();
+            cursor.set_style_modifier(StyleModifier::new().bold(false));
+            let _ = write!(cursor, " @ ");
+        }
 
         if let Some(f) = &self.file_path {
+            let path_str = f.to_string_lossy();
             let remaining_space = (width.raw_value() as usize)
                 .checked_sub(cursor.get_col().raw_value() as _)
                 .unwrap_or(0);
-            let start = f.len().checked_sub(remaining_space).unwrap_or(0);
-            let _ = write!(cursor, "{}", &f[start..]);
+            if remaining_space >= text_width(path_str.as_ref()).raw_value() as _ {
+                let _ = write!(cursor, "{}", path_str);
+            } else {
+                // Not enough space, only show file itself
+                if let Some(n) = f.file_name() {
+                    let _ = write!(cursor, "{}", n.to_string_lossy());
+                } else {
+                    let _ = write!(cursor, "?");
+                }
+            }
         } else {
             let _ = write!(cursor, "?");
         }
@@ -1055,7 +1071,7 @@ impl<'a> CodeWindow<'a> {
 
         self.stack_info.stack_level = p.gdb.get_stack_level().ok();
         self.stack_info.stack_depth = p.gdb.get_stack_depth().ok();
-        self.stack_info.file_path = frame["fullname"].as_str().map(|s| s.to_owned());
+        self.stack_info.file_path = frame["fullname"].as_str().map(|s| PathBuf::from(s));
         self.stack_info.function = frame["func"].as_str().map(|s| s.to_owned());
 
         if let Some(path) = frame["fullname"].as_str() {

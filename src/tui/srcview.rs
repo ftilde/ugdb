@@ -1075,13 +1075,28 @@ impl<'a> CodeWindow<'a> {
         self.stack_info.function = frame["func"].as_str().map(|s| s.to_owned());
 
         if let Some(path) = frame["fullname"].as_str() {
-            self.src_state = SrcContentState::NotYetLoaded(path.into());
+            let path = PathBuf::from(path);
+
+            self.src_state = match self.src_view.current_file() {
+                Some(f) if f == path => SrcContentState::Available,
+                _ => SrcContentState::NotYetLoaded(path.clone()),
+            };
 
             match get_u64_obj(frame, "line") {
                 Ok(line) => {
                     let line = LineNumber::new(line as usize);
-                    self.src_view.set_last_stop_position(path, line);
-                    self.asm_state = AsmContentState::NotYetLoadedFile(path.into(), line.into());
+
+                    self.src_view.set_last_stop_position(path.clone(), line);
+
+                    self.asm_state = if self
+                        .asm_view
+                        .go_to_first_applicable_line(&path, line)
+                        .is_ok()
+                    {
+                        AsmContentState::Available
+                    } else {
+                        AsmContentState::NotYetLoadedFile(path, line.into())
+                    };
                     match get_addr_obj(frame, "addr") {
                         Ok(address) => self.asm_view.set_last_stop_position(address),
                         Err(e) => warn!("Failed get address from frame: {:?}", e),
@@ -1096,14 +1111,20 @@ impl<'a> CodeWindow<'a> {
         if self.asm_state == AsmContentState::Unavailable {
             match get_addr_obj(frame, "addr") {
                 Ok(address) => {
-                    match Self::find_function_range(address, p)
-                        .or_else(|_| Self::find_valid_address_range(address, 128, p))
-                    {
-                        Ok((begin, end)) => {
-                            self.asm_state = AsmContentState::NotYetLoadedAddr(begin, end)
-                        }
-                        Err(e) => warn!("Failed to disassemble from address {}: {:?}", address, e),
-                    };
+                    if self.asm_view.go_to_address(address).is_ok() {
+                        self.asm_state = AsmContentState::Available;
+                    } else {
+                        match Self::find_function_range(address, p)
+                            .or_else(|_| Self::find_valid_address_range(address, 128, p))
+                        {
+                            Ok((begin, end)) => {
+                                self.asm_state = AsmContentState::NotYetLoadedAddr(begin, end)
+                            }
+                            Err(e) => {
+                                warn!("Failed to disassemble from address {}: {:?}", address, e)
+                            }
+                        };
+                    }
                     self.asm_view.set_last_stop_position(address);
                 }
                 Err(e) => warn!("Failed get address from frame: {:?}", e),
@@ -1113,6 +1134,8 @@ impl<'a> CodeWindow<'a> {
         self.try_load_active_content(p);
         let _ = self.asm_view.go_to_last_stop_position();
         let _ = self.src_view.go_to_last_stop_position();
+        self.asm_view.update_decoration(p);
+        self.src_view.update_decoration(p);
     }
 
     fn toggle_mode(&mut self, p: ::UpdateParameters) {
@@ -1144,7 +1167,6 @@ impl<'a> CodeWindow<'a> {
                         .is_ok()
                     {
                         // The current line may not have associated assembly!
-                        // TODO: Maybe we want to try the next line or something...
                         let _ = self
                             .asm_view
                             .go_to_first_applicable_line(path, self.src_view.current_line_number());

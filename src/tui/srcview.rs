@@ -1236,11 +1236,17 @@ impl<'a> CodeWindow<'a> {
 
 impl<'a> Widget for CodeWindow<'a> {
     fn space_demand(&self) -> Demand2D {
-        match self.available_display_mode() {
+        let mode = self.available_display_mode();
+        let main_demand = match &mode {
             DisplayMode::Assembly => self.asm_view.space_demand(),
             DisplayMode::SideBySide => self.layout.space_demand(&[&self.asm_view, &self.src_view]),
             DisplayMode::Source => self.src_view.space_demand(),
-            DisplayMode::Message(m) => MsgWindow::new(&m).space_demand(),
+            DisplayMode::Message(ref m) => MsgWindow::new(&m).space_demand(),
+        };
+        if let DisplayMode::Assembly | DisplayMode::Source | DisplayMode::SideBySide = mode {
+            main_demand.add_vertical(self.stack_info.space_demand())
+        } else {
+            main_demand
         }
     }
     fn draw(&self, window: Window, hints: RenderingHints) {

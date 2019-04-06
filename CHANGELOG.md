@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+### Fixed
+- Incorrect background color selection (#4).
 
 ## [0.1.3] - 2019-04-04
 ### Changed

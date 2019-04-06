@@ -46,7 +46,7 @@ use chan_signal::Signal;
 use gdb::GDB;
 use gdbmi::output::OutOfBandRecord;
 use gdbmi::{GDBBuilder, OutOfBandRecordSink};
-use log::debug;
+use log::{debug, warn};
 use nix::sys::termios;
 use std::path::PathBuf;
 use structopt::StructOpt;
@@ -383,7 +383,13 @@ fn run() -> i32 {
     };
 
     {
-        let mut terminal = Terminal::new(stdout.lock());
+        let mut terminal = match Terminal::new(stdout.lock()) {
+            Ok(t) => t,
+            Err(e) => {
+                eprintln!("Unable to setup Terminal: {}", e);
+                return 0xfd;
+            }
+        };
         let mut tui = Tui::new(tui_terminal, &theme_set.themes["base16-ocean.dark"]);
 
         // Start stdin thread _after_ building terminal (and setting the actual terminal to raw
@@ -489,7 +495,9 @@ fn run() -> i32 {
                             let sig = signal_event.expect("get signal event");
                             match sig {
                                 Signal::WINCH => { /* Ignore, we just want to redraw */ },
-                                Signal::TSTP => { terminal.handle_sigtstp() },
+                                Signal::TSTP => { if let Err(e) = terminal.handle_sigtstp() {
+                                    warn!("Unable to handle SIGTSTP: {}", e);
+                                }},
                                 Signal::TERM => { update_parameters.gdb.kill() },
                                 _ => {}
                             }

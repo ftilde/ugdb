@@ -12,6 +12,9 @@ keywords = ["tui", "gdb"]
 doc = false
 name = "ugdb"
 
+[patch.crates-io]
+unsegen = { git = "https://github.com/ftilde/unsegen" }
+
 [dependencies]
 chan = "0.1"
 chan-signal = "0.3"

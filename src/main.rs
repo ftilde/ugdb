@@ -10,6 +10,7 @@ extern crate termion;
 extern crate time;
 #[macro_use]
 extern crate derive_more;
+extern crate unicode_segmentation;
 
 // For ipc
 #[macro_use]
@@ -30,6 +31,7 @@ extern crate nom;
 #[macro_use]
 extern crate lalrpop_util;
 
+mod completion;
 mod gdb;
 mod gdb_expression_parsing;
 mod gdbmi;

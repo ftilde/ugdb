@@ -1243,6 +1243,7 @@ dependencies = [
  "termion 1.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "time 0.1.42 (registry+https://github.com/rust-lang/crates.io-index)",
  "toml 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
+ "unicode-segmentation 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "unix_socket 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "unsegen 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "unsegen_jsonviewer 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",

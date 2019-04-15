@@ -28,6 +28,7 @@ derive_more = "0.14"
 json = "0.11"
 rand = "0.3"
 unix_socket = "0.5"
+unicode-segmentation = "1.2"
 
 unsegen = "0.2.0"
 unsegen_signals = "0.2"

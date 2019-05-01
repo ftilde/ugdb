@@ -1,3 +1,4 @@
+use std::ops::Range;
 use unicode_segmentation::UnicodeSegmentation;
 
 struct CompletionState {
@@ -61,6 +62,113 @@ impl Completer for CommandCompleter {
         let candidates = find_candidates(&original[..cursor_pos], GDB_COMMANDS);
         CompletionState::new(original.to_owned(), cursor_pos, candidates)
     }
+}
+
+#[derive(Copy, Clone, PartialEq, Debug)]
+enum ExpressionTokenType {
+    Atom,
+    Arrow,
+    Dot,
+    LParen,
+    RParen,
+    Asterisk,
+    Sep,
+    String,
+}
+
+#[derive(Clone, PartialEq, Debug)]
+struct ExpressionToken {
+    ttype: ExpressionTokenType,
+    pos: Range<usize>,
+}
+
+#[derive(Debug, PartialEq)]
+enum TokenizeError {
+    UnfinishedString,
+}
+
+fn tokenize_espression(s: &str) -> Result<Vec<ExpressionToken>, TokenizeError> {
+    let mut chars = s.chars().enumerate().peekable();
+    let mut output = Vec::new();
+    let is_atom_char = |c: char| c.is_alphanumeric() || c == '_' || c == '-';
+    'outer: while let Some((i, c)) = chars.next() {
+        let tok = |o: &mut Vec<ExpressionToken>, t: ExpressionTokenType| {
+            o.push(ExpressionToken {
+                ttype: t,
+                pos: i..i + 1,
+            });
+        };
+        match c {
+            ' ' | '\t' | '\n' => {}
+            '(' | '[' => tok(&mut output, ExpressionTokenType::LParen),
+            ')' | ']' => tok(&mut output, ExpressionTokenType::RParen),
+            '*' => tok(&mut output, ExpressionTokenType::Asterisk),
+            '.' => tok(&mut output, ExpressionTokenType::Dot),
+            '-' => match chars.peek().map(|(_, c)| *c) {
+                Some('>') => {
+                    let _ = chars.next();
+                    output.push(ExpressionToken {
+                        ttype: ExpressionTokenType::Arrow,
+                        pos: i..i + 2,
+                    });
+                }
+                Some('-') => {
+                    let _ = chars.next();
+                    output.push(ExpressionToken {
+                        ttype: ExpressionTokenType::Sep,
+                        pos: i..i + 1,
+                    });
+                    output.push(ExpressionToken {
+                        ttype: ExpressionTokenType::Sep,
+                        pos: i + 1..i + 2,
+                    });
+                }
+                Some(_) | None => {
+                    tok(&mut output, ExpressionTokenType::Sep);
+                }
+            },
+            '"' => {
+                let mut escaped = false;
+                let start = i;
+                while let Some((i, c)) = chars.next() {
+                    match (c, escaped) {
+                        ('"', false) => {
+                            output.push(ExpressionToken {
+                                ttype: ExpressionTokenType::String,
+                                pos: start..i + 1,
+                            });
+                            continue 'outer;
+                        }
+                        (_, true) => escaped = false,
+                        ('\\', false) => escaped = true,
+                        (_, false) => {}
+                    }
+                }
+                return Err(TokenizeError::UnfinishedString);
+            }
+            c if is_atom_char(c) => {
+                let start = i;
+                let mut prev_i = i;
+                loop {
+                    match chars.peek().cloned() {
+                        Some((i, c)) if is_atom_char(c) => {
+                            let _ = chars.next();
+                            prev_i = i;
+                        }
+                        Some(_) | None => {
+                            output.push(ExpressionToken {
+                                ttype: ExpressionTokenType::Atom,
+                                pos: start..prev_i + 1,
+                            });
+                            break;
+                        }
+                    }
+                }
+            }
+            _ => tok(&mut output, ExpressionTokenType::Sep),
+        }
+    }
+    Ok(output)
 }
 
 //struct IdentifierCompleter;
@@ -226,6 +334,72 @@ mod test {
                 &["foo".to_owned(), "bar".to_owned(), "baz".to_owned()]
             ),
             Vec::<&str>::new()
+        );
+    }
+
+    fn assert_eq_tokenize(s: &str, v: Vec<(ExpressionTokenType, Range<usize>)>) {
+        let expected = v
+            .into_iter()
+            .map(|(t, r)| ExpressionToken { ttype: t, pos: r })
+            .collect::<Vec<_>>();
+        let got = tokenize_espression(s).unwrap();
+        assert_eq!(got, expected);
+    }
+    #[test]
+    fn test_tokenize_expression() {
+        assert_eq_tokenize("", Vec::new());
+        assert_eq_tokenize(
+            "123 asdf",
+            vec![
+                (ExpressionTokenType::Atom, 0..3),
+                (ExpressionTokenType::Atom, 4..8),
+            ],
+        );
+        assert_eq_tokenize(
+            " * * ,, .  ",
+            vec![
+                (ExpressionTokenType::Asterisk, 1..2),
+                (ExpressionTokenType::Asterisk, 3..4),
+                (ExpressionTokenType::Sep, 5..6),
+                (ExpressionTokenType::Sep, 6..7),
+                (ExpressionTokenType::Dot, 8..9),
+            ],
+        );
+        assert_eq_tokenize(
+            "(  (][)",
+            vec![
+                (ExpressionTokenType::LParen, 0..1),
+                (ExpressionTokenType::LParen, 3..4),
+                (ExpressionTokenType::RParen, 4..5),
+                (ExpressionTokenType::LParen, 5..6),
+                (ExpressionTokenType::RParen, 6..7),
+            ],
+        );
+        assert_eq_tokenize(
+            "< \"foo\"",
+            vec![
+                (ExpressionTokenType::Sep, 0..1),
+                (ExpressionTokenType::String, 2..7),
+            ],
+        );
+        assert_eq_tokenize(
+            "-->",
+            vec![
+                (ExpressionTokenType::Sep, 0..1),
+                (ExpressionTokenType::Sep, 1..2),
+                (ExpressionTokenType::Sep, 2..3),
+            ],
+        );
+        assert_eq_tokenize(
+            "->-",
+            vec![
+                (ExpressionTokenType::Arrow, 0..2),
+                (ExpressionTokenType::Sep, 2..3),
+            ],
+        );
+        assert_eq!(
+            tokenize_espression(" asdf \" kldsj"),
+            Err(TokenizeError::UnfinishedString)
         );
     }
 }

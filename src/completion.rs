@@ -1,5 +1,4 @@
 use std::ops::Range;
-use unicode_segmentation::UnicodeSegmentation;
 
 struct CompletionState {
     original: String,
@@ -182,12 +181,6 @@ pub struct CompletableExpression {
 }
 
 impl CompletableExpression {
-    fn empty() -> Self {
-        CompletableExpression {
-            parent: "".to_owned(),
-            prefix: "".to_owned(),
-        }
-    }
     fn from_str(s: &str) -> Result<Self, TokenizeError> {
         let mut tokens = tokenize_expression(s)?.into_iter().rev().peekable();
         let prefix;
@@ -285,45 +278,6 @@ impl CompletableExpression {
 
 //struct IdentifierCompleter;
 
-#[derive(Debug, PartialEq)]
-pub struct CompleterPath<'s> {
-    path: Vec<&'s str>,
-    incomplete: &'s str,
-}
-
-impl<'a> CompleterPath<'a> {
-    pub fn from_str(s: &'a str) -> Self {
-        let mut v = completable_path(s).into_iter();
-        let incomplete = v.next().expect("complete_path yields at least one element");
-        let path = v.rev().collect();
-
-        CompleterPath { incomplete, path }
-    }
-}
-fn completable_path(p: &str) -> Vec<&str> {
-    let mut result = Vec::new();
-    let mut end = p.len();
-    let mut begin = p.len();
-    for (i, g) in p.grapheme_indices(true).rev() {
-        let mut chars = g.chars();
-        if let (Some(c), None) = (chars.next(), chars.next()) {
-            if c.is_alphabetic() {
-                begin = i;
-            } else if c == '.' {
-                result.push(&p[begin..end]);
-                begin = i;
-                end = i;
-            } else {
-                break;
-            }
-        } else {
-            break;
-        }
-    }
-    result.push(&p[begin..end]);
-    result
-}
-
 fn find_candidates<'a, S: AsRef<str>>(prefix: &str, candidates: &'a [S]) -> Vec<String> {
     candidates
         .iter()
@@ -373,57 +327,6 @@ mod test {
         let state = CommandCompleter.complete("he", 2);
         assert_eq!(state.current_line(), "help");
         assert_eq!(state.completion_options, vec!["lp"]);
-    }
-    #[test]
-    fn test_completable_path() {
-        assert_eq!(completable_path(""), vec![""]);
-        assert_eq!(completable_path("foo.bar.baz"), vec!["baz", "bar", "foo"]);
-        assert_eq!(
-            completable_path("(fdf(foo.bar.baz"),
-            vec!["baz", "bar", "foo"]
-        );
-        assert_eq!(
-            completable_path("(fdf(foo.bar.baz"),
-            vec!["baz", "bar", "foo"]
-        );
-        assert_eq!(
-            completable_path("(fdf(foo.bar.baz."),
-            vec!["", "baz", "bar", "foo"]
-        );
-        assert_eq!(completable_path("aäöüß"), vec!["aäöüß"]);
-        assert_eq!(completable_path("f🦀aäöüßz"), vec!["aäöüßz"]);
-        assert_eq!(completable_path("f aäöüßz"), vec!["aäöüßz"]);
-    }
-    #[test]
-    fn test_completerpath() {
-        assert_eq!(
-            CompleterPath::from_str(""),
-            CompleterPath {
-                path: vec![],
-                incomplete: ""
-            }
-        );
-        assert_eq!(
-            CompleterPath::from_str("foo.bar.baz"),
-            CompleterPath {
-                path: vec!["foo", "bar"],
-                incomplete: "baz"
-            }
-        );
-        assert_eq!(
-            CompleterPath::from_str("(fdf(foo.bar.baz"),
-            CompleterPath {
-                path: vec!["foo", "bar"],
-                incomplete: "baz"
-            }
-        );
-        assert_eq!(
-            CompleterPath::from_str("(fdf(foo.bar.baz."),
-            CompleterPath {
-                path: vec!["foo", "bar", "baz"],
-                incomplete: ""
-            }
-        );
     }
     #[test]
     fn test_find_candidates() {

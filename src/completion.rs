@@ -71,6 +71,8 @@ enum ExpressionTokenType {
     Dot,
     LParen,
     RParen,
+    LBracket,
+    RBracket,
     Asterisk,
     Sep,
     String,
@@ -87,10 +89,10 @@ enum TokenizeError {
     UnfinishedString,
 }
 
-fn tokenize_espression(s: &str) -> Result<Vec<ExpressionToken>, TokenizeError> {
+fn tokenize_expression(s: &str) -> Result<Vec<ExpressionToken>, TokenizeError> {
     let mut chars = s.chars().enumerate().peekable();
     let mut output = Vec::new();
-    let is_atom_char = |c: char| c.is_alphanumeric() || c == '_' || c == '-';
+    let is_atom_char = |c: char| c.is_alphanumeric() || c == '_';
     'outer: while let Some((i, c)) = chars.next() {
         let tok = |o: &mut Vec<ExpressionToken>, t: ExpressionTokenType| {
             o.push(ExpressionToken {
@@ -100,8 +102,10 @@ fn tokenize_espression(s: &str) -> Result<Vec<ExpressionToken>, TokenizeError> {
         };
         match c {
             ' ' | '\t' | '\n' => {}
-            '(' | '[' => tok(&mut output, ExpressionTokenType::LParen),
-            ')' | ']' => tok(&mut output, ExpressionTokenType::RParen),
+            '(' => tok(&mut output, ExpressionTokenType::LParen),
+            '[' => tok(&mut output, ExpressionTokenType::LBracket),
+            ')' => tok(&mut output, ExpressionTokenType::RParen),
+            ']' => tok(&mut output, ExpressionTokenType::RBracket),
             '*' => tok(&mut output, ExpressionTokenType::Asterisk),
             '.' => tok(&mut output, ExpressionTokenType::Dot),
             '-' => match chars.peek().map(|(_, c)| *c) {
@@ -169,6 +173,114 @@ fn tokenize_espression(s: &str) -> Result<Vec<ExpressionToken>, TokenizeError> {
         }
     }
     Ok(output)
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct CompletableExpression {
+    parent: String,
+    prefix: String,
+}
+
+impl CompletableExpression {
+    fn empty() -> Self {
+        CompletableExpression {
+            parent: "".to_owned(),
+            prefix: "".to_owned(),
+        }
+    }
+    fn from_str(s: &str) -> Result<Self, TokenizeError> {
+        let mut tokens = tokenize_expression(s)?.into_iter().rev().peekable();
+        let prefix;
+        let mut needs_deref = false;
+        if let Some(ExpressionToken {
+            ttype: ExpressionTokenType::Atom,
+            pos,
+        }) = tokens.peek().cloned()
+        {
+            prefix = &s[pos];
+            let _ = tokens.next();
+        } else {
+            prefix = "";
+        }
+        let parent_end;
+        match tokens.next() {
+            Some(ExpressionToken {
+                ttype: ExpressionTokenType::Dot,
+                pos,
+            }) => parent_end = pos.start,
+            Some(ExpressionToken {
+                ttype: ExpressionTokenType::Arrow,
+                pos,
+            }) => {
+                parent_end = pos.start;
+                needs_deref = true;
+            }
+            _ => {
+                return Ok(CompletableExpression {
+                    parent: "".to_owned(),
+                    prefix: prefix.to_owned(),
+                });
+            }
+        }
+
+        // Now we need to find the beginning of parent!
+        let mut paren_level = 0i32;
+        let mut bracket_level = 0i32;
+        let mut parent_begin = None;
+        let mut active_atom = false;
+        for token in tokens {
+            match token.ttype {
+                ExpressionTokenType::RParen => {
+                    paren_level += 1;
+                    active_atom = false;
+                }
+                ExpressionTokenType::RBracket => {
+                    bracket_level += 1;
+                    active_atom = false;
+                }
+                ExpressionTokenType::LParen => {
+                    paren_level -= 1;
+                    active_atom = false;
+                    if paren_level < 0 {
+                        parent_begin = Some(token.pos.end);
+                        break;
+                    }
+                }
+                ExpressionTokenType::LBracket => {
+                    bracket_level -= 1;
+                    active_atom = false;
+                    if bracket_level < 0 {
+                        parent_begin = Some(token.pos.end);
+                        break;
+                    }
+                }
+                ExpressionTokenType::Dot | ExpressionTokenType::Arrow => {
+                    active_atom = false;
+                }
+                t if paren_level == 0 && bracket_level == 0 => {
+                    if t != ExpressionTokenType::Atom || active_atom {
+                        parent_begin = Some(token.pos.end);
+                        break;
+                    } else {
+                        active_atom = true;
+                    }
+                }
+                _ => {}
+            }
+        }
+        let parent_begin = parent_begin.unwrap_or(0);
+        let parent = &s[parent_begin..parent_end];
+        let parent = if needs_deref {
+            format!("*({})", parent)
+        } else {
+            parent.to_owned()
+        };
+
+        Ok(CompletableExpression {
+            parent,
+            prefix: prefix.to_owned(),
+        })
+    }
 }
 
 //struct IdentifierCompleter;
@@ -342,7 +454,7 @@ mod test {
             .into_iter()
             .map(|(t, r)| ExpressionToken { ttype: t, pos: r })
             .collect::<Vec<_>>();
-        let got = tokenize_espression(s).unwrap();
+        let got = tokenize_expression(s).unwrap();
         assert_eq!(got, expected);
     }
     #[test]
@@ -370,8 +482,8 @@ mod test {
             vec![
                 (ExpressionTokenType::LParen, 0..1),
                 (ExpressionTokenType::LParen, 3..4),
-                (ExpressionTokenType::RParen, 4..5),
-                (ExpressionTokenType::LParen, 5..6),
+                (ExpressionTokenType::RBracket, 4..5),
+                (ExpressionTokenType::LBracket, 5..6),
                 (ExpressionTokenType::RParen, 6..7),
             ],
         );
@@ -397,9 +509,37 @@ mod test {
                 (ExpressionTokenType::Sep, 2..3),
             ],
         );
+        assert_eq_tokenize(
+            "foo->bar",
+            vec![
+                (ExpressionTokenType::Atom, 0..3),
+                (ExpressionTokenType::Arrow, 3..5),
+                (ExpressionTokenType::Atom, 5..8),
+            ],
+        );
         assert_eq!(
-            tokenize_espression(" asdf \" kldsj"),
+            tokenize_expression(" asdf \" kldsj"),
             Err(TokenizeError::UnfinishedString)
         );
+    }
+    fn assert_eq_completable_expression(s: &str, parent: &str, prefix: &str) {
+        let got = CompletableExpression::from_str(s).unwrap();
+        let expected = CompletableExpression {
+            parent: parent.to_owned(),
+            prefix: prefix.to_owned(),
+        };
+        assert_eq!(got, expected);
+    }
+    #[test]
+    fn test_completable_expression() {
+        assert_eq_completable_expression("", "", "");
+        assert_eq_completable_expression("foo.bar", "foo", "bar");
+        assert_eq_completable_expression("foo->bar", "*(foo)", "bar");
+        assert_eq_completable_expression("(foo[2]->bar", "*(foo[2])", "bar");
+        assert_eq_completable_expression("][foo(1,23).", "foo(1,23)", "");
+        assert_eq_completable_expression("][foo(1,23)", "", "");
+        assert_eq_completable_expression("foo + b", "", "b");
+        assert_eq_completable_expression("\"ldkf\" f", "", "f");
+        assert_eq_completable_expression("  foo", "", "foo");
     }
 }

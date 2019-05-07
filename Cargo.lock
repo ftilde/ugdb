@@ -1334,7 +1334,7 @@ dependencies = [
 [[package]]
 name = "unsegen"
 version = "0.1.2"
-source = "git+https://github.com/ftilde/unsegen#8bf12cfc35a2b0769e04d2acbf2a4a0c8295764b"
+source = "git+https://github.com/ftilde/unsegen#69c81216031b8077dcb68b4302aa2e5cfb711457"
 dependencies = [
  "ndarray 0.8.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "nix 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",

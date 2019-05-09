@@ -774,6 +774,8 @@ struct StackInfo {
 impl Widget for StackInfo {
     fn space_demand(&self) -> Demand2D {
         Demand2D {
+            // TODO: reenable this once configurable layouts are a thing.
+            /*
             width: Demand::at_least(
                 Width::new(
                     (self
@@ -786,6 +788,8 @@ impl Widget for StackInfo {
                 )
                 .unwrap(),
             ),
+            */
+            width: Demand::at_least(Width::new(1).unwrap()),
             height: Demand::exact(Height::new(1).unwrap()),
         }
     }

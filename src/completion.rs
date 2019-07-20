@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-struct CompletionState {
+pub struct CompletionState {
     original: String,
     cursor_pos: usize, //invariant: at grapheme cluster boundary
     completion_options: Vec<String>,
@@ -16,7 +16,10 @@ impl CompletionState {
             current_option: 0,
         }
     }
-    fn current_line(&self) -> String {
+    fn empty(original: String, cursor_pos: usize) -> Self {
+        Self::new(original, cursor_pos, Vec::new())
+    }
+    pub fn current_line(&self) -> String {
         format!(
             "{}{}{}",
             &self.original[..self.cursor_pos],
@@ -25,7 +28,7 @@ impl CompletionState {
         )
     }
 
-    fn current_option(&self) -> &str {
+    pub fn current_option(&self) -> &str {
         self.completion_options
             .get(self.current_option)
             .map(|s| s.as_str())
@@ -36,10 +39,10 @@ impl CompletionState {
         self.completion_options.len() + 1
     }
 
-    fn select_next_option(&mut self) {
+    pub fn select_next_option(&mut self) {
         self.current_option = (self.current_option + 1) % self.num_options()
     }
-    fn select_prev_option(&mut self) {
+    pub fn select_prev_option(&mut self) {
         self.current_option = if self.current_option == 0 {
             self.num_options() - 1
         } else {
@@ -48,7 +51,7 @@ impl CompletionState {
     }
 }
 
-trait Completer {
+pub trait Completer {
     fn complete(&self, original: &str, cursor_pos: usize) -> CompletionState;
 }
 
@@ -60,6 +63,36 @@ impl Completer for CommandCompleter {
     fn complete(&self, original: &str, cursor_pos: usize) -> CompletionState {
         let candidates = find_candidates(&original[..cursor_pos], GDB_COMMANDS);
         CompletionState::new(original.to_owned(), cursor_pos, candidates)
+    }
+}
+
+pub struct IdentifierCompleter;
+
+impl Completer for IdentifierCompleter {
+    fn complete(&self, original: &str, cursor_pos: usize) -> CompletionState {
+        let expr = if let Ok(e) = CompletableExpression::from_str(&original[..cursor_pos]) {
+            e
+        } else {
+            return CompletionState::empty(original.to_owned(), cursor_pos);
+        };
+        let children: Vec<String> = unimplemented!("Do something with {:?}", expr);
+        let candidates = find_candidates(&expr.prefix, children.as_slice());
+        CompletionState::new(original.to_owned(), cursor_pos, candidates)
+    }
+}
+
+pub struct CmdlineCompleter;
+impl Completer for CmdlineCompleter {
+    fn complete(&self, original: &str, cursor_pos: usize) -> CompletionState {
+        if original[..cursor_pos].find(' ').is_some() {
+            // gdb command already typed, try to complete identifier in expression
+            IdentifierCompleter.complete(original, cursor_pos)
+        } else {
+            // First "word" in command line, complete gdb command
+            CommandCompleter.complete(original, cursor_pos)
+        }
+        //TODO: path completer? not sure how to distinguish between IdentifierCompleter and path
+        //completer. Maybe based on gdb command...
     }
 }
 
@@ -275,8 +308,6 @@ impl CompletableExpression {
         })
     }
 }
-
-//struct IdentifierCompleter;
 
 fn find_candidates<'a, S: AsRef<str>>(prefix: &str, candidates: &'a [S]) -> Vec<String> {
     candidates

@@ -135,7 +135,7 @@ In practice this means that you can install [vim-ugdb](https://github.com/ftilde
 
 ## Some notes on the status
 
-This project mostly scratches my own itch -- successfully. I use it as my primary debugger. I that sense I consider this project as "done", but additional sub-itches may be sub-scratched in the future.
+This project mostly scratches my own itch -- successfully. I use it as my primary debugger. In that sense I consider this project as "done", but additional sub-itches may be sub-scratched in the future.
 
 ## Licensing
 

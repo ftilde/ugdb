@@ -3,6 +3,8 @@
 ## [Unreleased]
 ### Fixed
 - Incorrect background color selection (#4).
+- Crash due to out-of-bounds write to terminal.
+- Avoid pager consuming all screen space on long file or function names (#8).
 
 ## [0.1.3] - 2019-04-04
 ### Changed

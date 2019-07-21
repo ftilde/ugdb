@@ -12,9 +12,6 @@ keywords = ["tui", "gdb"]
 doc = false
 name = "ugdb"
 
-[patch.crates-io]
-unsegen = { git = "https://github.com/ftilde/unsegen" }
-
 [dependencies]
 chan = "0.1"
 chan-signal = "0.3"
@@ -32,11 +29,11 @@ json = "0.11"
 rand = "0.3"
 unix_socket = "0.5"
 
-unsegen = "0.1.2"
-unsegen_signals = "0.1"
-unsegen_terminal = "0.1"
-unsegen_jsonviewer = "0.1"
-unsegen_pager = "0.1.1"
+unsegen = "0.2.0"
+unsegen_signals = "0.2"
+unsegen_terminal = "0.2"
+unsegen_jsonviewer = "0.2"
+unsegen_pager = "0.2"
 
 # gdbmi
 nom = "2.1"

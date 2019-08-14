@@ -90,7 +90,7 @@ impl BreakPoint {
         }
     }
 
-    pub fn all_from_json(bkpt_obj: &JsonValue) -> Box<Iterator<Item = BreakPoint>> {
+    pub fn all_from_json(bkpt_obj: &JsonValue) -> Box<dyn Iterator<Item = BreakPoint>> {
         match bkpt_obj {
             &JsonValue::Object(ref bp) => Box::new(Some(Self::from_json(&bp)).into_iter()),
             &JsonValue::Array(ref bp_array) => Box::new(

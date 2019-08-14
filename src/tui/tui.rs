@@ -113,7 +113,7 @@ pub enum TuiContainerType {
 impl<'t> ContainerProvider for Tui<'t> {
     type Parameters = ::UpdateParametersStruct;
     type Index = TuiContainerType;
-    fn get<'a, 'b: 'a>(&'b self, index: &'a Self::Index) -> &'b Container<Self::Parameters> {
+    fn get<'a, 'b: 'a>(&'b self, index: &'a Self::Index) -> &'b dyn Container<Self::Parameters> {
         match index {
             &TuiContainerType::SrcView => &self.src_view,
             &TuiContainerType::Console => &self.console,
@@ -124,7 +124,7 @@ impl<'t> ContainerProvider for Tui<'t> {
     fn get_mut<'a, 'b: 'a>(
         &'b mut self,
         index: &'a Self::Index,
-    ) -> &'b mut Container<Self::Parameters> {
+    ) -> &'b mut dyn Container<Self::Parameters> {
         match index {
             &TuiContainerType::SrcView => &mut self.src_view,
             &TuiContainerType::Console => &mut self.console,

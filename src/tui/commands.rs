@@ -5,11 +5,11 @@ use gdbmi::ExecuteError;
 use log::error;
 
 pub struct Command {
-    cmd: Box<FnMut(::UpdateParameters) -> Result<(), ExecuteError>>,
+    cmd: Box<dyn FnMut(::UpdateParameters) -> Result<(), ExecuteError>>,
 }
 
 impl Command {
-    fn new(cmd: Box<FnMut(::UpdateParameters) -> Result<(), ExecuteError>>) -> Command {
+    fn new(cmd: Box<dyn FnMut(::UpdateParameters) -> Result<(), ExecuteError>>) -> Command {
         Command { cmd: cmd }
     }
     fn from_mi_with_msg(cmd: MiCommand, success_msg: &'static str) -> Command {

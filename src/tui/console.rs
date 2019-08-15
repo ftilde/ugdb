@@ -74,7 +74,7 @@ impl Console {
 
 impl Widget for Console {
     fn space_demand(&self) -> Demand2D {
-        let widgets: Vec<&Widget> = vec![&self.gdb_log, &self.prompt_line];
+        let widgets: Vec<&dyn Widget> = vec![&self.gdb_log, &self.prompt_line];
         self.layout.space_demand(widgets.as_slice())
     }
     fn draw(&self, window: Window, hints: RenderingHints) {

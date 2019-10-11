@@ -194,11 +194,11 @@ named!(
 
 named!(
     string<String>,
-    chain!(
-    tag!("\"") ~
-    s: many0!(escaped_character) ~
-    tag!("\""),
-    || String::from_utf8_lossy(s.as_slice()).into_owned()
+    do_parse!(
+        tag!("\"")
+            >> s: many0!(escaped_character)
+            >> tag!("\"")
+            >> (String::from_utf8_lossy(s.as_slice()).into_owned())
     )
 );
 
@@ -222,9 +222,24 @@ named!(
     value<JsonValue>,
     alt!(
         map!(string, |s| JsonValue::String(s))
-            | chain!(tag!("{") ~ results: separated_list!(tag!(","), result) ~ tag!("}"), || JsonValue::Object(to_map(results)))
-            | chain!(tag!("[") ~ values: separated_list!(tag!(","), value) ~ tag!("]"), || JsonValue::Array(values))
-            | chain!(tag!("[") ~ results: separated_list!(tag!(","), result) ~ tag!("]"), || JsonValue::Array(to_list(results)))
+            | do_parse!(
+                tag!("{")
+                    >> results: separated_list!(tag!(","), result)
+                    >> tag!("}")
+                    >> (JsonValue::Object(to_map(results)))
+            )
+            | do_parse!(
+                tag!("[")
+                    >> values: separated_list!(tag!(","), value)
+                    >> tag!("]")
+                    >> (JsonValue::Array(values))
+            )
+            | do_parse!(
+                tag!("[")
+                    >> results: separated_list!(tag!(","), result)
+                    >> tag!("]")
+                    >> (JsonValue::Array(to_list(results)))
+            )
     )
 );
 
@@ -248,11 +263,12 @@ named!(
 
 named!(
     result<(String, JsonValue)>,
-    chain!(
-        var: is_not!("={}" /* Do not allow =, {, nor } */) ~
-        tag!("=") ~
-        val: buggy_gdb_list_in_result,
-        || (String::from_utf8_lossy(var).into_owned(), val))
+    do_parse!(
+        var: is_not!("={}" /* Do not allow =, {, nor } */)
+            >> tag!("=")
+            >> val: buggy_gdb_list_in_result
+            >> (String::from_utf8_lossy(var).into_owned(), val)
+    )
 );
 
 named!(
@@ -265,24 +281,16 @@ named!(
 
 named!(
     result_record<Output>,
-    chain!(
-    t: opt!(token) ~
-    tag!("^") ~
-    c: result_class ~
-    res: many0!(
-        chain!(
-            tag!(",") ~
-            r: result,
-            || r
-            )
-        ),
-    || {
-        Output::Result(ResultRecord {
-            token: t,
-            class: c,
-            results: to_map(res),
-        })
-    }
+    do_parse!(
+        t: opt!(token)
+            >> tag!("^")
+            >> c: result_class
+            >> res: many0!(do_parse!(tag!(",") >> r: result >> (r)))
+            >> (Output::Result(ResultRecord {
+                token: t,
+                class: c,
+                results: to_map(res),
+            }))
     )
 );
 
@@ -341,23 +349,17 @@ named!(
 
 named!(
     async_record<OutOfBandRecord>,
-    chain!(
-    t: opt!(token) ~
-    kind: async_kind ~
-    class: async_class ~
-    results: many0!(
-        chain!(
-            tag!(",") ~
-            r: result,
-            || r
-            )
-        ),
-        || OutOfBandRecord::AsyncRecord {
-            token: t,
-            kind: kind,
-            class: class,
-            results: to_map(results),
-        }
+    do_parse!(
+        t: opt!(token)
+            >> kind: async_kind
+            >> class: async_class
+            >> results: many0!(do_parse!(tag!(",") >> r: result >> (r)))
+            >> (OutOfBandRecord::AsyncRecord {
+                token: t,
+                kind: kind,
+                class: class,
+                results: to_map(results),
+            })
     )
 );
 
@@ -372,13 +374,14 @@ named!(
 
 named!(
     stream_record<OutOfBandRecord>,
-    chain!(
-    kind: stream_kind ~
-    msg: string,
-    || OutOfBandRecord::StreamRecord {
-        kind: kind,
-        data: msg
-    })
+    do_parse!(
+        kind: stream_kind
+            >> msg: string
+            >> (OutOfBandRecord::StreamRecord {
+                kind: kind,
+                data: msg
+            })
+    )
 );
 
 named!(
@@ -405,15 +408,8 @@ named!(nl, alt!(tag!("\n") | tag!("\r\n")));
 
 named!(
     output<Output>,
-    chain!(
-    output: alt!(
-        result_record |
-        out_of_band_record |
-        gdb_line |
-        debug_line
-        ) ~
-    nl,
-    || output
+    do_parse!(
+        output: alt!(result_record | out_of_band_record | gdb_line | debug_line) >> nl >> (output)
     )
 );
 

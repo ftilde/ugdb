@@ -90,24 +90,37 @@ impl Widget for Console {
 }
 impl Container<::UpdateParametersStruct> for Console {
     fn input(&mut self, input: Input, p: ::UpdateParameters) -> Option<Input> {
-        let after_edit = input
-            .chain((Key::Char('\n'), || self.handle_newline(p)))
-            .chain(
-                EditBehavior::new(&mut self.prompt_line)
-                    .left_on(Key::Left)
-                    .right_on(Key::Right)
-                    .up_on(Key::Up)
-                    .down_on(Key::Down)
-                    .delete_forwards_on(Key::Delete)
-                    .delete_backwards_on(Key::Backspace)
-                    .go_to_beginning_of_line_on(Key::Home)
-                    .go_to_end_of_line_on(Key::End)
-                    .clear_on(Key::Ctrl('c')),
-            )
+        let after_completion = input
+            .chain((Key::Char('\t'), || {
+                if let Some(s) = &mut self.completion_state {
+                    s.select_next_option();
+                } else {
+                    self.completion_state = Some(CmdlineCompleter.complete(
+                        self.prompt_line.active_line(),
+                        self.prompt_line.cursor_pos(),
+                    ));
+                }
+                self.prompt_line
+                    .set(&self.completion_state.as_ref().unwrap().current_line());
+            }))
             .finish();
-
-        if let Some(e) = after_edit {
-            e.chain(ScrollBehavior::new(&mut self.prompt_line).to_end_on(Key::Ctrl('r')))
+        if let Some(input) = after_completion {
+            self.completion_state = None;
+            input
+                .chain((Key::Char('\n'), || self.handle_newline(p)))
+                .chain(
+                    EditBehavior::new(&mut self.prompt_line)
+                        .left_on(Key::Left)
+                        .right_on(Key::Right)
+                        .up_on(Key::Up)
+                        .down_on(Key::Down)
+                        .delete_forwards_on(Key::Delete)
+                        .delete_backwards_on(Key::Backspace)
+                        .go_to_beginning_of_line_on(Key::Home)
+                        .go_to_end_of_line_on(Key::End)
+                        .clear_on(Key::Ctrl('c')),
+                )
+                .chain(ScrollBehavior::new(&mut self.prompt_line).to_end_on(Key::Ctrl('r')))
                 .chain((Key::Ctrl('c'), || {
                     p.gdb.mi.interrupt_execution().expect("interrupted gdb")
                 }))
@@ -118,19 +131,8 @@ impl Container<::UpdateParametersStruct> for Console {
                         .to_beginning_on(Key::Ctrl('b'))
                         .to_end_on(Key::Ctrl('e')),
                 )
-                .chain((Key::Char('\t'), || {
-                    if let Some(s) = self.completion_state {
-                        s.select_next_option();
-                    } else {
-                        self.completion_state = Some(CmdlineCompleter.complete(
-                            self.prompt_line.active_line(),
-                            self.prompt_line.cursor_pos(),
-                        ));
-                    }
-                }))
                 .finish()
         } else {
-            self.completion_state = None;
             None
         }
     }

@@ -46,3 +46,7 @@ lalrpop-util = "0.16.3"
 git2 = { version = "0.6", default_features = false }
 toml = "0.4"
 lalrpop = "0.16.3"
+
+
+[patch.crates-io]
+unsegen = { path = "../unsegen" }

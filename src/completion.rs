@@ -75,7 +75,7 @@ impl Completer for IdentifierCompleter {
         } else {
             return CompletionState::empty(original.to_owned(), cursor_pos);
         };
-        let children: Vec<String> = unimplemented!("Do something with {:?}", expr);
+        let children: Vec<String> = vec!["yeah".to_string(), "ney".to_string()]; //TODO derive from expr using gdb
         let candidates = find_candidates(&expr.prefix, children.as_slice());
         CompletionState::new(original.to_owned(), cursor_pos, candidates)
     }

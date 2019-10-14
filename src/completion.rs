@@ -1,3 +1,5 @@
+use gdbmi::commands::MiCommand;
+use gdbmi::output::{JsonValue, ResultClass};
 use std::ops::Range;
 
 pub struct CompletionState {
@@ -52,7 +54,7 @@ impl CompletionState {
 }
 
 pub trait Completer {
-    fn complete(&self, original: &str, cursor_pos: usize) -> CompletionState;
+    fn complete(&mut self, original: &str, cursor_pos: usize) -> CompletionState;
 }
 
 struct CommandCompleter;
@@ -60,33 +62,134 @@ struct CommandCompleter;
 const GDB_COMMANDS: &[&str] = &["help", "break", "print"];
 
 impl Completer for CommandCompleter {
-    fn complete(&self, original: &str, cursor_pos: usize) -> CompletionState {
+    fn complete(&mut self, original: &str, cursor_pos: usize) -> CompletionState {
         let candidates = find_candidates(&original[..cursor_pos], GDB_COMMANDS);
         CompletionState::new(original.to_owned(), cursor_pos, candidates)
     }
 }
 
-pub struct IdentifierCompleter;
+pub struct IdentifierCompleter<'a>(&'a mut ::UpdateParametersStruct);
 
-impl Completer for IdentifierCompleter {
-    fn complete(&self, original: &str, cursor_pos: usize) -> CompletionState {
+struct VarObject {
+    name: String,
+    expr: Option<String>,
+    typ: Option<String>,
+}
+
+impl VarObject {
+    fn from_val(o: &JsonValue) -> Result<Self, String> {
+        let name = if let Some(name) = o["name"].as_str() {
+            name.to_string()
+        } else {
+            return Err(format!("Missing field 'name'"));
+        };
+        let expr = o["exp"].as_str().map(|s| s.to_owned());
+        let typ = o["type"].as_str().map(|s| s.to_owned());
+        Ok(VarObject { name, expr, typ })
+    }
+    fn create(p: &mut ::UpdateParametersStruct, expr: &str) -> Result<Self, String> {
+        let res = p
+            .gdb
+            .mi
+            .execute(MiCommand::var_create(None, expr, None))
+            .map_err(|e| format!("{:?}", e))?;
+        //p.message_sink.send(format!("var-create: {:?}", res));
+
+        match res.class {
+            ResultClass::Done => {}
+            ResultClass::Error => return Err(format!("{}", res.results["msg"])),
+            o => return Err(format!("Unexpected result class: {:?}", o)),
+        }
+
+        VarObject::from_val(&JsonValue::Object(res.results))
+    }
+
+    fn children(&self, p: &mut ::UpdateParametersStruct) -> Result<Vec<Self>, String> {
+        let res = p
+            .gdb
+            .mi
+            .execute(MiCommand::var_list_children(&self.name, true, None))
+            .map_err(|e| format!("{:?}", e))?;
+
+        //p.message_sink.send(format!("var-list-children: {:?}", res));
+
+        match res.class {
+            ResultClass::Done => {}
+            ResultClass::Error => return Err(format!("{}", res.results["msg"])),
+            o => return Err(format!("Unexpected result class: {:?}", o)),
+        }
+
+        Ok(res.results["children"]
+            .members()
+            .map(|c| VarObject::from_val(c))
+            .collect::<Result<Vec<_>, String>>()?)
+    }
+
+    fn collect_children_exprs(
+        &self,
+        p: &mut ::UpdateParametersStruct,
+        output: &mut Vec<String>,
+    ) -> Result<(), String> {
+        // try to flatten public/private etc. fields ONCE
+        let flatten_exprs = ["<anonymous union>", "<anonymous struct>"];
+
+        for child in self.children(p)? {
+            if child.typ.is_none()
+                || child.expr.is_none()
+                || flatten_exprs
+                    .iter()
+                    .any(|n| *n == child.expr.as_ref().unwrap())
+            {
+                // This is the case for pseudo children (like public, ...)
+                child.collect_children_exprs(p, output)?;
+            } else {
+                if let Some(expr) = child.expr {
+                    output.push(expr);
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+fn get_children(p: &mut ::UpdateParametersStruct, expr: &str) -> Result<Vec<String>, String> {
+    let root = VarObject::create(p, expr)?;
+
+    let mut children = Vec::new();
+
+    root.collect_children_exprs(p, &mut children)?;
+
+    Ok(children)
+}
+
+impl Completer for IdentifierCompleter<'_> {
+    fn complete(&mut self, original: &str, cursor_pos: usize) -> CompletionState {
         let expr = if let Ok(e) = CompletableExpression::from_str(&original[..cursor_pos]) {
             e
         } else {
             return CompletionState::empty(original.to_owned(), cursor_pos);
         };
-        let children: Vec<String> = vec!["yeah".to_string(), "ney".to_string()]; //TODO derive from expr using gdb
+        //let children: Vec<String> = vec!["yeah".to_string(), "ney".to_string()]; //TODO derive from expr using gdb
+        let children = match get_children(self.0, &expr.parent) {
+            Ok(c) => c,
+            Err(e) => {
+                self.0
+                    .message_sink
+                    .send(format!("Could not complete: {:?}", e));
+                vec![]
+            }
+        };
         let candidates = find_candidates(&expr.prefix, children.as_slice());
         CompletionState::new(original.to_owned(), cursor_pos, candidates)
     }
 }
 
-pub struct CmdlineCompleter;
-impl Completer for CmdlineCompleter {
-    fn complete(&self, original: &str, cursor_pos: usize) -> CompletionState {
+pub struct CmdlineCompleter<'a>(pub &'a mut ::UpdateParametersStruct);
+impl Completer for CmdlineCompleter<'_> {
+    fn complete(&mut self, original: &str, cursor_pos: usize) -> CompletionState {
         if original[..cursor_pos].find(' ').is_some() {
             // gdb command already typed, try to complete identifier in expression
-            IdentifierCompleter.complete(original, cursor_pos)
+            IdentifierCompleter(self.0).complete(original, cursor_pos)
         } else {
             // First "word" in command line, complete gdb command
             CommandCompleter.complete(original, cursor_pos)

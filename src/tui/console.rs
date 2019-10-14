@@ -95,7 +95,7 @@ impl Container<::UpdateParametersStruct> for Console {
                 if let Some(s) = &mut self.completion_state {
                     s.select_next_option();
                 } else {
-                    self.completion_state = Some(CmdlineCompleter.complete(
+                    self.completion_state = Some(CmdlineCompleter(p).complete(
                         self.prompt_line.active_line(),
                         self.prompt_line.cursor_pos(),
                     ));
@@ -107,7 +107,7 @@ impl Container<::UpdateParametersStruct> for Console {
                 if let Some(s) = &mut self.completion_state {
                     s.select_prev_option();
                 } else {
-                    self.completion_state = Some(CmdlineCompleter.complete(
+                    self.completion_state = Some(CmdlineCompleter(p).complete(
                         self.prompt_line.active_line(),
                         self.prompt_line.cursor_pos(),
                     ));

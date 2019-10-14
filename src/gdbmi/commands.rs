@@ -93,12 +93,12 @@ impl MiCommand {
             write!(sink, " ")?;
             sink.write_all(option.as_bytes())?;
         }
-        if !self.parameters.is_empty() {
+        if !self.parameters.is_empty() && !self.options.is_empty() {
             write!(sink, " --")?;
-            for parameter in &self.parameters {
-                write!(sink, " ")?;
-                sink.write_all(parameter.as_bytes())?;
-            }
+        }
+        for parameter in &self.parameters {
+            write!(sink, " ")?;
+            sink.write_all(parameter.as_bytes())?;
         }
         write!(sink, "\n")?;
         Ok(())
@@ -316,5 +316,61 @@ impl MiCommand {
                 .map(|id| id.to_string().into())
                 .collect(),
         }
+    }
+
+    pub fn var_create(
+        name: Option<OsString>, /*none: generate name*/
+        expression: impl Into<OsString>,
+        frame_addr: Option<u64>, /*none: current frame*/
+    ) -> MiCommand {
+        MiCommand {
+            operation: "var-create",
+            options: vec![],
+            parameters: vec![
+                name.map(|v| v.into()).unwrap_or(OsString::from("\"-\"")),
+                OsString::from(
+                    frame_addr
+                        .map(|s| s.to_string())
+                        .unwrap_or("\"*\"".to_string()),
+                ),
+                expression.into(),
+            ],
+        }
+    }
+    pub fn var_delete(name: impl Into<OsString>, delete_children: bool) -> MiCommand {
+        MiCommand {
+            operation: "var-delete",
+            options: if delete_children {
+                vec!["-c".into()]
+            } else {
+                vec![]
+            },
+            parameters: vec![name.into()],
+        }
+    }
+    pub fn var_list_children(
+        name: impl Into<OsString>,
+        print_values: bool,
+        from_to: Option<std::ops::Range<u64>>,
+    ) -> MiCommand {
+        let mut com = MiCommand {
+            operation: "var-list-children",
+            options: vec![],
+            parameters: vec![
+                if print_values {
+                    "--all-values"
+                } else {
+                    "--no-values"
+                }
+                .into(),
+                name.into(),
+            ],
+        };
+        if let Some(from_to) = from_to {
+            com.parameters
+                .push(OsString::from(from_to.start.to_string()));
+            com.parameters.push(OsString::from(from_to.end.to_string()));
+        }
+        com
     }
 }

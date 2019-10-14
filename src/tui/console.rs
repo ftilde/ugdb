@@ -91,9 +91,21 @@ impl Widget for Console {
 impl Container<::UpdateParametersStruct> for Console {
     fn input(&mut self, input: Input, p: ::UpdateParameters) -> Option<Input> {
         let after_completion = input
-            .chain((Key::Char('\t'), || {
+            .chain((Key::Ctrl('n'), || {
                 if let Some(s) = &mut self.completion_state {
                     s.select_next_option();
+                } else {
+                    self.completion_state = Some(CmdlineCompleter.complete(
+                        self.prompt_line.active_line(),
+                        self.prompt_line.cursor_pos(),
+                    ));
+                }
+                self.prompt_line
+                    .set(&self.completion_state.as_ref().unwrap().current_line());
+            }))
+            .chain((Key::Ctrl('p'), || {
+                if let Some(s) = &mut self.completion_state {
+                    s.select_prev_option();
                 } else {
                     self.completion_state = Some(CmdlineCompleter.complete(
                         self.prompt_line.active_line(),

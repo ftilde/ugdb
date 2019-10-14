@@ -49,4 +49,5 @@ lalrpop = "0.16.3"
 
 
 [patch.crates-io]
-unsegen = { path = "../unsegen" }
+unsegen = { git = 'https://github.com/ftilde/unsegen' }
+#unsegen = { path = "../unsegen" }

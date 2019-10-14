@@ -150,6 +150,21 @@ impl VarObject {
         }
         Ok(())
     }
+
+    fn delete(self, p: &mut ::UpdateParametersStruct) -> Result<(), String> {
+        let res = p
+            .gdb
+            .mi
+            .execute(MiCommand::var_delete(self.name, true))
+            .map_err(|e| format!("{:?}", e))?;
+
+        match res.class {
+            ResultClass::Done => {}
+            ResultClass::Error => return Err(format!("{}", res.results["msg"])),
+            o => return Err(format!("Unexpected result class: {:?}", o)),
+        }
+        Ok(())
+    }
 }
 
 fn get_children(p: &mut ::UpdateParametersStruct, expr: &str) -> Result<Vec<String>, String> {
@@ -159,7 +174,28 @@ fn get_children(p: &mut ::UpdateParametersStruct, expr: &str) -> Result<Vec<Stri
 
     root.collect_children_exprs(p, &mut children)?;
 
+    root.delete(p)?;
+
     Ok(children)
+}
+
+fn get_variables(p: &mut ::UpdateParametersStruct) -> Result<Vec<String>, String> {
+    let res = p
+        .gdb
+        .mi
+        .execute(MiCommand::stack_list_variables(None, None))
+        .map_err(|e| format!("{:?}", e))?;
+
+    match res.class {
+        ResultClass::Done => {}
+        ResultClass::Error => return Err(format!("{}", res.results["msg"])),
+        o => return Err(format!("Unexpected result class: {:?}", o)),
+    }
+
+    Ok(res.results["variables"]
+        .members()
+        .map(|o| o["name"].as_str().unwrap().to_string())
+        .collect::<Vec<_>>())
 }
 
 impl Completer for IdentifierCompleter<'_> {
@@ -169,8 +205,12 @@ impl Completer for IdentifierCompleter<'_> {
         } else {
             return CompletionState::empty(original.to_owned(), cursor_pos);
         };
-        //let children: Vec<String> = vec!["yeah".to_string(), "ney".to_string()]; //TODO derive from expr using gdb
-        let children = match get_children(self.0, &expr.parent) {
+        let res = if expr.parent.is_empty() {
+            get_variables(self.0)
+        } else {
+            get_children(self.0, &expr.parent)
+        };
+        let children = match res {
             Ok(c) => c,
             Err(e) => {
                 self.0
@@ -326,8 +366,12 @@ impl CompletableExpression {
             pos,
         }) = tokens.peek().cloned()
         {
-            prefix = &s[pos];
-            let _ = tokens.next();
+            if pos.end == s.len() {
+                prefix = &s[pos];
+                let _ = tokens.next();
+            } else {
+                prefix = "";
+            }
         } else {
             prefix = "";
         }
@@ -578,5 +622,6 @@ mod test {
         assert_eq_completable_expression("foo + b", "", "b");
         assert_eq_completable_expression("\"ldkf\" f", "", "f");
         assert_eq_completable_expression("  foo", "", "foo");
+        assert_eq_completable_expression("foo ", "", "");
     }
 }

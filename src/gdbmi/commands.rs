@@ -271,6 +271,27 @@ impl MiCommand {
         }
     }
 
+    pub fn stack_list_variables(
+        thread_number: Option<u64>,
+        frame_number: Option<u64>,
+    ) -> MiCommand {
+        let mut parameters = vec![];
+        if let Some(thread_number) = thread_number {
+            parameters.push("--thread".into());
+            parameters.push(thread_number.to_string().into());
+        }
+        if let Some(frame_number) = frame_number {
+            parameters.push("--frame".into());
+            parameters.push(frame_number.to_string().into());
+        }
+        parameters.push("--simple-values".into()); //TODO: make configurable if required.
+        MiCommand {
+            operation: "stack-list-variables",
+            options: Vec::new(),
+            parameters,
+        }
+    }
+
     pub fn thread_info(thread_id: Option<u64>) -> MiCommand {
         MiCommand {
             operation: "thread-info",
@@ -338,14 +359,15 @@ impl MiCommand {
         }
     }
     pub fn var_delete(name: impl Into<OsString>, delete_children: bool) -> MiCommand {
+        let mut parameters = vec![];
+        if delete_children {
+            parameters.push("-c".into());
+        }
+        parameters.push(name.into());
         MiCommand {
             operation: "var-delete",
-            options: if delete_children {
-                vec!["-c".into()]
-            } else {
-                vec![]
-            },
-            parameters: vec![name.into()],
+            options: Vec::new(),
+            parameters,
         }
     }
     pub fn var_list_children(

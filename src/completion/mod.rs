@@ -57,13 +57,13 @@ pub trait Completer {
     fn complete(&mut self, original: &str, cursor_pos: usize) -> CompletionState;
 }
 
-struct CommandCompleter;
+mod gdb_commands;
 
-const GDB_COMMANDS: &[&str] = &["help", "break", "print"];
+struct CommandCompleter;
 
 impl Completer for CommandCompleter {
     fn complete(&mut self, original: &str, cursor_pos: usize) -> CompletionState {
-        let candidates = find_candidates(&original[..cursor_pos], GDB_COMMANDS);
+        let candidates = find_candidates(&original[..cursor_pos], &gdb_commands::GDB_COMMANDS);
         CompletionState::new(original.to_owned(), cursor_pos, candidates)
     }
 }

@@ -90,6 +90,15 @@ impl Widget for Console {
 }
 impl Container<::UpdateParametersStruct> for Console {
     fn input(&mut self, input: Input, p: ::UpdateParameters) -> Option<Input> {
+        let set_completion = |completion_state: &Option<CompletionState>,
+                              prompt_line: &mut PromptLine| {
+            let completion = completion_state.as_ref().unwrap();
+            let (begin, option, after) = completion.current_line_parts();
+            prompt_line.set(&format!("{}{}{}", begin, option, after));
+            prompt_line
+                .set_cursor_pos(begin.len() + option.len())
+                .unwrap();
+        };
         let after_completion = input
             .chain((Key::Ctrl('n'), || {
                 if let Some(s) = &mut self.completion_state {
@@ -100,8 +109,7 @@ impl Container<::UpdateParametersStruct> for Console {
                         self.prompt_line.cursor_pos(),
                     ));
                 }
-                self.prompt_line
-                    .set(&self.completion_state.as_ref().unwrap().current_line());
+                set_completion(&self.completion_state, &mut self.prompt_line);
             }))
             .chain((Key::Ctrl('p'), || {
                 if let Some(s) = &mut self.completion_state {
@@ -112,8 +120,7 @@ impl Container<::UpdateParametersStruct> for Console {
                         self.prompt_line.cursor_pos(),
                     ));
                 }
-                self.prompt_line
-                    .set(&self.completion_state.as_ref().unwrap().current_line());
+                set_completion(&self.completion_state, &mut self.prompt_line);
             }))
             .finish();
         if let Some(input) = after_completion {

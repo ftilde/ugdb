@@ -21,9 +21,8 @@ impl CompletionState {
     fn empty(original: String, cursor_pos: usize) -> Self {
         Self::new(original, cursor_pos, Vec::new())
     }
-    pub fn current_line(&self) -> String {
-        format!(
-            "{}{}{}",
+    pub fn current_line_parts(&self) -> (&str, &str, &str) {
+        (
             &self.original[..self.cursor_pos],
             self.current_option(),
             &self.original[self.cursor_pos..],

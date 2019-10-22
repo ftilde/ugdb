@@ -5,19 +5,23 @@ use gdbmi::output::ResultClass;
 use gdbmi::ExecuteError;
 use unsegen::base::{Color, GraphemeCluster, StyleModifier, Window};
 use unsegen::container::Container;
-use unsegen::input::{EditBehavior, Input, Key, NavigateBehavior, ScrollBehavior};
+use unsegen::input::{EditBehavior, Input, InputChain, Key, NavigateBehavior, ScrollBehavior};
 use unsegen::widget::builtin::{Column, LineEdit, Table, TableRow};
 use unsegen::widget::{Demand2D, RenderingHints, SeparatingStyle, Widget};
 use unsegen_jsonviewer::{json_ext, JsonViewer};
 
+use completion::{Completer, CompletionState, IdentifierCompleter};
+
 pub struct ExpressionRow {
     expression: LineEdit,
+    completion_state: Option<CompletionState>,
     result: JsonViewer,
 }
 impl ExpressionRow {
     fn new() -> Self {
         ExpressionRow {
             expression: LineEdit::new(),
+            completion_state: None,
             result: JsonViewer::new(&JsonValue::Null),
         }
     }
@@ -152,10 +156,50 @@ impl Widget for ExpressionTable {
 
 impl Container<::UpdateParametersStruct> for ExpressionTable {
     fn input(&mut self, input: Input, p: ::UpdateParameters) -> Option<Input> {
-        let res = input
-            .chain(|i: Input| match i.event {
-                _ => Some(i),
-            })
+        let after_completion: InputChain = if let Some(r) = self.table.current_row_mut() {
+            let set_completion = |completion_state: &Option<CompletionState>,
+                                  expression: &mut LineEdit| {
+                let completion = completion_state.as_ref().unwrap();
+                let (begin, option, after) = completion.current_line_parts();
+                expression.set(&format!("{}{}{}", begin, option, after));
+                expression
+                    .set_cursor_pos(begin.len() + option.len())
+                    .unwrap();
+            };
+            let res = input
+                .chain((&[Key::Ctrl('n'), Key::Char('\t')][..], || {
+                    if let Some(s) = &mut r.completion_state {
+                        s.select_next_option();
+                    } else {
+                        r.completion_state = Some(
+                            IdentifierCompleter(p)
+                                .complete(r.expression.get(), r.expression.cursor_pos()),
+                        );
+                    }
+                    set_completion(&r.completion_state, &mut r.expression);
+                }))
+                .chain((Key::Ctrl('p'), || {
+                    if let Some(s) = &mut r.completion_state {
+                        s.select_prev_option();
+                    } else {
+                        r.completion_state = Some(
+                            IdentifierCompleter(p)
+                                .complete(r.expression.get(), r.expression.cursor_pos()),
+                        );
+                    }
+                    set_completion(&r.completion_state, &mut r.expression);
+                }))
+                .finish();
+
+            if res.is_some() {
+                r.completion_state = None;
+            }
+            res.into()
+        } else {
+            input.into()
+        };
+
+        let res = after_completion
             .chain(
                 NavigateBehavior::new(&mut self.table) //TODO: Fix this properly in lineedit
                     .down_on(Key::Char('\n')),

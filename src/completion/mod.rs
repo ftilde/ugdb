@@ -67,7 +67,7 @@ impl Completer for CommandCompleter {
     }
 }
 
-pub struct IdentifierCompleter<'a>(&'a mut ::UpdateParametersStruct);
+pub struct IdentifierCompleter<'a>(pub &'a mut ::UpdateParametersStruct);
 
 struct VarObject {
     name: String,

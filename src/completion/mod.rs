@@ -468,37 +468,41 @@ fn find_candidates<'a, S: AsRef<str>>(prefix: &str, candidates: &'a [S]) -> Vec<
 mod test {
     use super::*;
 
+    fn current_line(state: &CompletionState) -> String {
+        let parts = state.current_line_parts();
+        format!("{}{}{}", parts.0, parts.1, parts.2)
+    }
     #[test]
     fn test_completion_state() {
         let mut state =
             CompletionState::new("ba)".to_owned(), 2, vec!["r".to_owned(), "z".to_owned()]);
-        assert_eq!(state.current_line(), "bar)");
+        assert_eq!(current_line(&state), "bar)");
         state.select_next_option();
-        assert_eq!(state.current_line(), "baz)");
+        assert_eq!(current_line(&state), "baz)");
         state.select_next_option();
-        assert_eq!(state.current_line(), "ba)");
+        assert_eq!(current_line(&state), "ba)");
         state.select_next_option();
-        assert_eq!(state.current_line(), "bar)");
+        assert_eq!(current_line(&state), "bar)");
         state.select_prev_option();
-        assert_eq!(state.current_line(), "ba)");
+        assert_eq!(current_line(&state), "ba)");
     }
     #[test]
     fn test_completion_state_empty() {
         let mut state = CompletionState::new("ba)".to_owned(), 2, vec![]);
-        assert_eq!(state.current_line(), "ba)");
+        assert_eq!(current_line(&state), "ba)");
         state.select_next_option();
-        assert_eq!(state.current_line(), "ba)");
+        assert_eq!(current_line(&state), "ba)");
         state.select_next_option();
-        assert_eq!(state.current_line(), "ba)");
+        assert_eq!(current_line(&state), "ba)");
         state.select_next_option();
-        assert_eq!(state.current_line(), "ba)");
+        assert_eq!(current_line(&state), "ba)");
         state.select_prev_option();
-        assert_eq!(state.current_line(), "ba)");
+        assert_eq!(current_line(&state), "ba)");
     }
     #[test]
-    fn test_identifier_completer() {
+    fn test_command_completer() {
         let state = CommandCompleter.complete("he", 2);
-        assert_eq!(state.current_line(), "help");
+        assert_eq!(current_line(&state), "help");
         assert_eq!(state.completion_options, vec!["lp"]);
     }
     #[test]

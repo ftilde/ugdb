@@ -88,9 +88,10 @@ Alternatively press the shortcut key for the specific container to directly ente
 Interact using the standard gdb interface. Enter by pressing `i`.
 
 * `PageUp`/`PageDown` scroll the output of the console.
-* `Ctrl-B`/`Ctrl-E` jump to the beginning/end of the buffer.
+* `Ctrl-b`/`Ctrl-e` jump to the beginning/end of the buffer.
 * Use arrow keys/Backspace/`Home`/`End` to move the cursor.
 * Characters are inserted at the cursor position.
+* Use `Tab`/`Ctrl-n`/`Ctrl-p` for identifier and gdb command completion.
 
 ### Pager
 
@@ -111,6 +112,7 @@ Enter by pressing `e`.
 * Press `Enter` to advance to the next row to enter another expression.
 * Navigate using arrow keys.
 * Use `Space` in the right column to interact with the structure viewer.
+* Use `Tab`/`Ctrl-n`/`Ctrl-p` for identifier completion.
 
 Note: The viewer is somewhat broken for displaying structures with custom pretty-printers.
 A workaround would be to use [variable objects](https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI-Variable-Objects.html), but that would not allow for evaluation of arbitrary expressions.

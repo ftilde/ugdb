@@ -1,5 +1,6 @@
 use gdbmi::commands::MiCommand;
 use gdbmi::output::{JsonValue, ResultClass};
+use log::info;
 use std::ops::Range;
 
 pub struct CompletionState {
@@ -92,7 +93,6 @@ impl VarObject {
             .mi
             .execute(MiCommand::var_create(None, expr, None))
             .map_err(|e| format!("{:?}", e))?;
-        //p.message_sink.send(format!("var-create: {:?}", res));
 
         match res.class {
             ResultClass::Done => {}
@@ -109,8 +109,6 @@ impl VarObject {
             .mi
             .execute(MiCommand::var_list_children(&self.name, true, None))
             .map_err(|e| format!("{:?}", e))?;
-
-        //p.message_sink.send(format!("var-list-children: {:?}", res));
 
         match res.class {
             ResultClass::Done => {}
@@ -129,7 +127,7 @@ impl VarObject {
         p: &mut ::UpdateParametersStruct,
         output: &mut Vec<String>,
     ) -> Result<(), String> {
-        // try to flatten public/private etc. fields ONCE
+        // try to flatten public/private fields etc.
         let flatten_exprs = ["<anonymous union>", "<anonymous struct>"];
 
         for child in self.children(p)? {
@@ -212,9 +210,7 @@ impl Completer for IdentifierCompleter<'_> {
         let children = match res {
             Ok(c) => c,
             Err(e) => {
-                self.0
-                    .message_sink
-                    .send(format!("Could not complete: {:?}", e));
+                info!("Could not complete identifier: {:?}", e);
                 vec![]
             }
         };

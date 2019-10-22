@@ -111,7 +111,7 @@ impl Container<::UpdateParametersStruct> for Console {
                 }
                 set_completion(&self.completion_state, &mut self.prompt_line);
             }))
-            .chain((Key::Ctrl('p'), || {
+            .chain((&[Key::Ctrl('p'), Key::Char('\t')][..], || {
                 if let Some(s) = &mut self.completion_state {
                     s.select_prev_option();
                 } else {

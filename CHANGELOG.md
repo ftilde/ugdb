@@ -1,5 +1,9 @@
 # Changelog
 
+## UNRELEASED
+### Added
+- Tab completion support in console and expression table.
+
 ## [0.1.4] - 2019-07-21
 ### Fixed
 - Incorrect background color selection (#4).

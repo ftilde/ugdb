@@ -165,7 +165,7 @@ impl VarObject {
 }
 
 fn get_children(p: &mut ::UpdateParametersStruct, expr: &str) -> Result<Vec<String>, String> {
-    let root = VarObject::create(p, expr)?;
+    let root = VarObject::create(p, &expr)?;
 
     let mut children = Vec::new();
 
@@ -245,7 +245,6 @@ enum ExpressionTokenType {
     RBracket,
     Asterisk,
     Sep,
-    String,
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -308,7 +307,7 @@ fn tokenize_expression(s: &str) -> Result<Vec<ExpressionToken>, TokenizeError> {
                     match (c, escaped) {
                         ('"', false) => {
                             output.push(ExpressionToken {
-                                ttype: ExpressionTokenType::String,
+                                ttype: ExpressionTokenType::Atom,
                                 pos: start..i + 1,
                             });
                             continue 'outer;
@@ -396,6 +395,7 @@ impl CompletableExpression {
         let mut bracket_level = 0i32;
         let mut parent_begin = None;
         let mut active_atom = false;
+        let mut prev_token_begin = s.len();
         for token in tokens {
             match token.ttype {
                 ExpressionTokenType::RParen => {
@@ -410,7 +410,7 @@ impl CompletableExpression {
                     paren_level -= 1;
                     active_atom = false;
                     if paren_level < 0 {
-                        parent_begin = Some(token.pos.end);
+                        parent_begin = Some(prev_token_begin);
                         break;
                     }
                 }
@@ -418,7 +418,7 @@ impl CompletableExpression {
                     bracket_level -= 1;
                     active_atom = false;
                     if bracket_level < 0 {
-                        parent_begin = Some(token.pos.end);
+                        parent_begin = Some(prev_token_begin);
                         break;
                     }
                 }
@@ -427,7 +427,7 @@ impl CompletableExpression {
                 }
                 t if paren_level == 0 && bracket_level == 0 => {
                     if t != ExpressionTokenType::Atom || active_atom {
-                        parent_begin = Some(token.pos.end);
+                        parent_begin = Some(prev_token_begin);
                         break;
                     } else {
                         active_atom = true;
@@ -435,6 +435,7 @@ impl CompletableExpression {
                 }
                 _ => {}
             }
+            prev_token_begin = token.pos.start;
         }
         let parent_begin = parent_begin.unwrap_or(0);
         let parent = &s[parent_begin..parent_end];
@@ -571,7 +572,7 @@ mod test {
             "< \"foo\"",
             vec![
                 (ExpressionTokenType::Sep, 0..1),
-                (ExpressionTokenType::String, 2..7),
+                (ExpressionTokenType::Atom, 2..7),
             ],
         );
         assert_eq_tokenize(
@@ -622,5 +623,7 @@ mod test {
         assert_eq_completable_expression("\"ldkf\" f", "", "f");
         assert_eq_completable_expression("  foo", "", "foo");
         assert_eq_completable_expression("foo ", "", "");
+        assert_eq_completable_expression("f foo[2].f", "foo[2]", "f");
+        assert_eq_completable_expression("f \"foo\"[2].f", "\"foo\"[2]", "f");
     }
 }

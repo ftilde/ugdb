@@ -341,7 +341,7 @@ impl MiCommand {
 
     pub fn var_create(
         name: Option<OsString>, /*none: generate name*/
-        expression: impl Into<OsString>,
+        expression: &str,
         frame_addr: Option<u64>, /*none: current frame*/
     ) -> MiCommand {
         MiCommand {
@@ -354,7 +354,7 @@ impl MiCommand {
                         .map(|s| s.to_string())
                         .unwrap_or("\"*\"".to_string()),
                 ),
-                expression.into(),
+                escape_command(expression).into(),
             ],
         }
     }

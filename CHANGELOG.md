@@ -1,6 +1,6 @@
 # Changelog
 
-## UNRELEASED
+## [0.1.5] - 2019-10-24
 ### Added
 - Tab completion support in console and expression table.
 

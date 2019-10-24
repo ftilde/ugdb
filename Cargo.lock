@@ -1186,7 +1186,7 @@ dependencies = [
  "toml 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "unicode-segmentation 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "unix_socket 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "unsegen 0.2.1 (git+https://github.com/ftilde/unsegen)",
+ "unsegen 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "unsegen_jsonviewer 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "unsegen_pager 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "unsegen_signals 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1240,8 +1240,8 @@ dependencies = [
 
 [[package]]
 name = "unsegen"
-version = "0.2.1"
-source = "git+https://github.com/ftilde/unsegen#ae3869d9f1536966169ed0eab1869baaf802fcfe"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "ndarray 0.8.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "nix 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1258,7 +1258,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "json 0.11.15 (registry+https://github.com/rust-lang/crates.io-index)",
- "unsegen 0.2.1 (git+https://github.com/ftilde/unsegen)",
+ "unsegen 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -1267,7 +1267,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "syntect 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "unsegen 0.2.1 (git+https://github.com/ftilde/unsegen)",
+ "unsegen 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -1276,7 +1276,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "libc 0.2.65 (registry+https://github.com/rust-lang/crates.io-index)",
- "unsegen 0.2.1 (git+https://github.com/ftilde/unsegen)",
+ "unsegen 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -1287,7 +1287,7 @@ dependencies = [
  "libc 0.2.65 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "nix 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "unsegen 0.2.1 (git+https://github.com/ftilde/unsegen)",
+ "unsegen 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "vte 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -1545,7 +1545,7 @@ dependencies = [
 "checksum unicode-xid 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "fc72304796d0818e357ead4e000d19c9c174ab23dc11093ac919054d20a6a7fc"
 "checksum unicode-xid 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "826e7639553986605ec5979c7dd957c7895e93eabed50ab2ffa7f6128a75097c"
 "checksum unix_socket 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "6aa2700417c405c38f5e6902d699345241c28c0b7ade4abaad71e35a87eb1564"
-"checksum unsegen 0.2.1 (git+https://github.com/ftilde/unsegen)" = "<none>"
+"checksum unsegen 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "a57d880e17668aaf3f6a211f6dd44cb20c72bcc06a78eb557e7c93614bf2d334"
 "checksum unsegen_jsonviewer 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "f477418ccbbccd4004848be2bec3eb19f8dd093b0409333301efb00957ee89af"
 "checksum unsegen_pager 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "0c7d0baff3e4e2e111726d5d2fd40ad46799a7c682ddc47c7d6f2b5e54f2be24"
 "checksum unsegen_signals 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "827bd08ba1f13ef53306929df5cd6f94b7ad079437977c057ce122216bfd301c"

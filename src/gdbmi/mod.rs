@@ -227,6 +227,13 @@ impl GDB {
         }
         let command_token = self.get_usable_token();
 
+        let mut bytes = Vec::new();
+        command
+            .borrow()
+            .write_interpreter_string(&mut bytes, command_token)
+            .expect("write interpreter command");
+
+        info!("Writing msg {}", String::from_utf8_lossy(&bytes),);
         command
             .borrow()
             .write_interpreter_string(&mut self.stdin, command_token)

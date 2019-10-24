@@ -93,12 +93,12 @@ impl MiCommand {
             write!(sink, " ")?;
             sink.write_all(option.as_bytes())?;
         }
-        if !self.parameters.is_empty() {
+        if !self.parameters.is_empty() && !self.options.is_empty() {
             write!(sink, " --")?;
-            for parameter in &self.parameters {
-                write!(sink, " ")?;
-                sink.write_all(parameter.as_bytes())?;
-            }
+        }
+        for parameter in &self.parameters {
+            write!(sink, " ")?;
+            sink.write_all(parameter.as_bytes())?;
         }
         write!(sink, "\n")?;
         Ok(())
@@ -271,6 +271,27 @@ impl MiCommand {
         }
     }
 
+    pub fn stack_list_variables(
+        thread_number: Option<u64>,
+        frame_number: Option<u64>,
+    ) -> MiCommand {
+        let mut parameters = vec![];
+        if let Some(thread_number) = thread_number {
+            parameters.push("--thread".into());
+            parameters.push(thread_number.to_string().into());
+        }
+        if let Some(frame_number) = frame_number {
+            parameters.push("--frame".into());
+            parameters.push(frame_number.to_string().into());
+        }
+        parameters.push("--simple-values".into()); //TODO: make configurable if required.
+        MiCommand {
+            operation: "stack-list-variables",
+            options: Vec::new(),
+            parameters,
+        }
+    }
+
     pub fn thread_info(thread_id: Option<u64>) -> MiCommand {
         MiCommand {
             operation: "thread-info",
@@ -316,5 +337,62 @@ impl MiCommand {
                 .map(|id| id.to_string().into())
                 .collect(),
         }
+    }
+
+    pub fn var_create(
+        name: Option<OsString>, /*none: generate name*/
+        expression: impl Into<OsString>,
+        frame_addr: Option<u64>, /*none: current frame*/
+    ) -> MiCommand {
+        MiCommand {
+            operation: "var-create",
+            options: vec![],
+            parameters: vec![
+                name.map(|v| v.into()).unwrap_or(OsString::from("\"-\"")),
+                OsString::from(
+                    frame_addr
+                        .map(|s| s.to_string())
+                        .unwrap_or("\"*\"".to_string()),
+                ),
+                expression.into(),
+            ],
+        }
+    }
+    pub fn var_delete(name: impl Into<OsString>, delete_children: bool) -> MiCommand {
+        let mut parameters = vec![];
+        if delete_children {
+            parameters.push("-c".into());
+        }
+        parameters.push(name.into());
+        MiCommand {
+            operation: "var-delete",
+            options: Vec::new(),
+            parameters,
+        }
+    }
+    pub fn var_list_children(
+        name: impl Into<OsString>,
+        print_values: bool,
+        from_to: Option<std::ops::Range<u64>>,
+    ) -> MiCommand {
+        let mut com = MiCommand {
+            operation: "var-list-children",
+            options: vec![],
+            parameters: vec![
+                if print_values {
+                    "--all-values"
+                } else {
+                    "--no-values"
+                }
+                .into(),
+                name.into(),
+            ],
+        };
+        if let Some(from_to) = from_to {
+            com.parameters
+                .push(OsString::from(from_to.start.to_string()));
+            com.parameters.push(OsString::from(from_to.end.to_string()));
+        }
+        com
     }
 }

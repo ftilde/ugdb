@@ -6,6 +6,8 @@ use unsegen::input::{EditBehavior, Input, Key, ScrollBehavior};
 use unsegen::widget::builtin::{LogViewer, PromptLine};
 use unsegen::widget::{Demand2D, RenderingHints, SeparatingStyle, VerticalLayout, Widget};
 
+use completion::{CmdlineCompleter, Completer, CompletionState};
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum GDBState {
     Running,
@@ -18,6 +20,7 @@ pub struct Console {
     layout: VerticalLayout,
     last_gdb_state: GDBState,
     command_state: CommandState,
+    completion_state: Option<CompletionState>,
 }
 
 static STOPPED_PROMPT: &'static str = "(gdb) ";
@@ -33,6 +36,7 @@ impl Console {
             )),
             last_gdb_state: GDBState::Stopped,
             command_state: CommandState::Idle,
+            completion_state: None,
         }
     }
 
@@ -86,31 +90,69 @@ impl Widget for Console {
 }
 impl Container<::UpdateParametersStruct> for Console {
     fn input(&mut self, input: Input, p: ::UpdateParameters) -> Option<Input> {
-        input
-            .chain((Key::Char('\n'), || self.handle_newline(p)))
-            .chain(
-                EditBehavior::new(&mut self.prompt_line)
-                    .left_on(Key::Left)
-                    .right_on(Key::Right)
-                    .up_on(Key::Up)
-                    .down_on(Key::Down)
-                    .delete_forwards_on(Key::Delete)
-                    .delete_backwards_on(Key::Backspace)
-                    .go_to_beginning_of_line_on(Key::Home)
-                    .go_to_end_of_line_on(Key::End)
-                    .clear_on(Key::Ctrl('c')),
-            )
-            .chain(ScrollBehavior::new(&mut self.prompt_line).to_end_on(Key::Ctrl('r')))
-            .chain((Key::Ctrl('c'), || {
-                p.gdb.mi.interrupt_execution().expect("interrupted gdb")
+        let set_completion = |completion_state: &Option<CompletionState>,
+                              prompt_line: &mut PromptLine| {
+            let completion = completion_state.as_ref().unwrap();
+            let (begin, option, after) = completion.current_line_parts();
+            prompt_line.set(&format!("{}{}{}", begin, option, after));
+            prompt_line
+                .set_cursor_pos(begin.len() + option.len())
+                .unwrap();
+        };
+        let after_completion = input
+            .chain((&[Key::Ctrl('p'), Key::Char('\t')][..], || {
+                if let Some(s) = &mut self.completion_state {
+                    s.select_next_option();
+                } else {
+                    self.completion_state = Some(CmdlineCompleter(p).complete(
+                        self.prompt_line.active_line(),
+                        self.prompt_line.cursor_pos(),
+                    ));
+                }
+                set_completion(&self.completion_state, &mut self.prompt_line);
             }))
-            .chain(
-                ScrollBehavior::new(&mut self.gdb_log)
-                    .forwards_on(Key::PageDown)
-                    .backwards_on(Key::PageUp)
-                    .to_beginning_on(Key::Ctrl('b'))
-                    .to_end_on(Key::Ctrl('e')),
-            )
-            .finish()
+            .chain((Key::Ctrl('n'), || {
+                if let Some(s) = &mut self.completion_state {
+                    s.select_prev_option();
+                } else {
+                    self.completion_state = Some(CmdlineCompleter(p).complete(
+                        self.prompt_line.active_line(),
+                        self.prompt_line.cursor_pos(),
+                    ));
+                }
+                set_completion(&self.completion_state, &mut self.prompt_line);
+            }))
+            .finish();
+        if let Some(input) = after_completion {
+            self.completion_state = None;
+            input
+                .chain((Key::Char('\n'), || self.handle_newline(p)))
+                .chain(
+                    EditBehavior::new(&mut self.prompt_line)
+                        .left_on(Key::Left)
+                        .right_on(Key::Right)
+                        .up_on(Key::Up)
+                        .down_on(Key::Down)
+                        .delete_forwards_on(Key::Delete)
+                        .delete_backwards_on(Key::Backspace)
+                        .go_to_beginning_of_line_on(Key::Home)
+                        .go_to_end_of_line_on(Key::End)
+                        .clear_on(Key::Ctrl('c')),
+                )
+                .chain(ScrollBehavior::new(&mut self.prompt_line).to_end_on(Key::Ctrl('r')))
+                .chain((Key::Ctrl('c'), || {
+                    p.gdb.mi.interrupt_execution().expect("interrupted gdb")
+                }))
+                .chain(
+                    ScrollBehavior::new(&mut self.gdb_log)
+                        .forwards_on(Key::PageDown)
+                        .backwards_on(Key::PageUp)
+                        .to_beginning_on(Key::Ctrl('b'))
+                        .to_end_on(Key::Ctrl('e')),
+                )
+                .finish()
+        } else {
+            None
+        }
     }
 }

@@ -28,8 +28,9 @@ derive_more = "0.14"
 json = "0.11"
 rand = "0.3"
 unix_socket = "0.5"
+unicode-segmentation = "1.2"
 
-unsegen = "0.2.0"
+unsegen = "0.2.2"
 unsegen_signals = "0.2"
 unsegen_terminal = "0.2"
 unsegen_jsonviewer = "0.2"
@@ -45,3 +46,9 @@ lalrpop-util = "0.16.3"
 git2 = { version = "0.6", default_features = false }
 toml = "0.4"
 lalrpop = "0.16.3"
+
+
+# Use one of these for development of new features of unsegen
+#[patch.crates-io]
+#unsegen = { git = 'https://github.com/ftilde/unsegen' }
+#unsegen = { path = "../unsegen" }

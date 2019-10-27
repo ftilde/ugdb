@@ -111,7 +111,7 @@ pub fn process_output<T: Read, S: OutOfBandRecordSink>(
                     Ok(r) => r,
                     Err(e) => {
                         error!("PARSING ERROR: {}", e);
-                        continue;
+                        Output::SomethingElse(buffer)
                     }
                 };
                 match parse_result {

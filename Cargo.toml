@@ -32,7 +32,8 @@ unicode-segmentation = "1.2"
 
 unsegen = "0.2.2"
 unsegen_signals = "0.2"
-unsegen_terminal = "0.2"
+#unsegen_terminal = "0.2"
+unsegen_terminal = { path = "../unsegen_terminal" }
 unsegen_jsonviewer = "0.2"
 unsegen_pager = "0.2"
 
@@ -52,3 +53,4 @@ lalrpop = "0.16.3"
 #[patch.crates-io]
 #unsegen = { git = 'https://github.com/ftilde/unsegen' }
 #unsegen = { path = "../unsegen" }
+

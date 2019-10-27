@@ -1190,7 +1190,7 @@ dependencies = [
  "unsegen_jsonviewer 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "unsegen_pager 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "unsegen_signals 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "unsegen_terminal 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "unsegen_terminal 0.2.0",
 ]
 
 [[package]]
@@ -1282,7 +1282,6 @@ dependencies = [
 [[package]]
 name = "unsegen_terminal"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "libc 0.2.65 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1549,7 +1548,6 @@ dependencies = [
 "checksum unsegen_jsonviewer 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "f477418ccbbccd4004848be2bec3eb19f8dd093b0409333301efb00957ee89af"
 "checksum unsegen_pager 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "0c7d0baff3e4e2e111726d5d2fd40ad46799a7c682ddc47c7d6f2b5e54f2be24"
 "checksum unsegen_signals 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "827bd08ba1f13ef53306929df5cd6f94b7ad079437977c057ce122216bfd301c"
-"checksum unsegen_terminal 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "65af5244e5b08f9d45e0b7432095dceb55e138cb397f3564a690b9c5989126e3"
 "checksum url 1.7.2 (registry+https://github.com/rust-lang/crates.io-index)" = "dd4e7c0d531266369519a4aa4f399d748bd37043b00bde1e4ff1f60a120b355a"
 "checksum utf8parse 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "8772a4ccbb4e89959023bc5b7cb8623a795caa7092d99f3aa9501b9484d4557d"
 "checksum vcpkg 0.2.7 (registry+https://github.com/rust-lang/crates.io-index)" = "33dd455d0f96e90a75803cfeb7f948768c08d70a6de9a8d2362461935698bf95"

@@ -3,8 +3,9 @@ use tui::commands::CommandState;
 use unsegen::base::{GraphemeCluster, Window};
 use unsegen::container::Container;
 use unsegen::input::{EditBehavior, Input, Key, ScrollBehavior};
-use unsegen::widget::builtin::{LogViewer, PromptLine};
+use unsegen::widget::builtin::PromptLine;
 use unsegen::widget::{Demand2D, RenderingHints, SeparatingStyle, VerticalLayout, Widget};
+use unsegen_terminal::Terminal;
 
 use completion::{CmdlineCompleter, Completer, CompletionState};
 
@@ -15,7 +16,7 @@ enum GDBState {
 }
 
 pub struct Console {
-    gdb_log: LogViewer,
+    gdb_log: Terminal,
     prompt_line: PromptLine,
     layout: VerticalLayout,
     last_gdb_state: GDBState,
@@ -28,8 +29,10 @@ static RUNNING_PROMPT: &'static str = "(↻↻↻) ";
 
 impl Console {
     pub fn new() -> Self {
+        let mut gdb_log = Terminal::unconnected().unwrap();
+        gdb_log.set_show_cursor(false);
         Console {
-            gdb_log: LogViewer::new(),
+            gdb_log,
             prompt_line: PromptLine::with_prompt(STOPPED_PROMPT.into()),
             layout: VerticalLayout::new(SeparatingStyle::Draw(
                 GraphemeCluster::try_from('=').unwrap(),
@@ -41,15 +44,13 @@ impl Console {
     }
 
     pub fn display_messages(&mut self, sink: &mut ::MessageSink) {
-        use std::fmt::Write;
         for msg in sink.drain_messages() {
-            writeln!(self.gdb_log, "{}", msg).expect("Write Message");
+            self.gdb_log.add_byte_input(msg.as_bytes());
         }
     }
 
     pub fn write_to_gdb_log<S: AsRef<str>>(&mut self, msg: S) {
-        use std::fmt::Write;
-        write!(self.gdb_log, "{}", msg.as_ref()).expect("Write Message");
+        self.gdb_log.add_byte_input(msg.as_ref().as_bytes());
     }
 
     fn handle_newline(&mut self, p: ::UpdateParameters) {

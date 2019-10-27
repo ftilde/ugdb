@@ -141,10 +141,7 @@ impl LineDecorator for AssemblyDecorator {
 
         let (right_border, style_modifier) = match (at_stop_position, at_breakpoint_position) {
             (true, true) => ('▶', StyleModifier::new().fg_color(Color::Red).bold(true)),
-            (true, false) => (
-                '▶',
-                StyleModifier::new().fg_color(Color::Green).bold(true),
-            ),
+            (true, false) => ('▶', StyleModifier::new().fg_color(Color::Green).bold(true)),
             (false, true) => ('●', StyleModifier::new().fg_color(Color::Red)),
             (false, false) => (' ', StyleModifier::new()),
         };
@@ -492,10 +489,7 @@ impl LineDecorator for SourceDecorator {
 
         let (right_border, style_modifier) = match (at_stop_position, at_breakpoint_position) {
             (true, true) => ('▶', StyleModifier::new().fg_color(Color::Red).bold(true)),
-            (true, false) => (
-                '▶',
-                StyleModifier::new().fg_color(Color::Green).bold(true),
-            ),
+            (true, false) => ('▶', StyleModifier::new().fg_color(Color::Green).bold(true)),
             (false, true) => ('●', StyleModifier::new().fg_color(Color::Red)),
             (false, false) => (' ', StyleModifier::new()),
         };
@@ -514,6 +508,7 @@ impl LineDecorator for SourceDecorator {
     }
 }
 
+#[derive(Clone)]
 struct FileInfo {
     path: PathBuf,
     modified: ::std::time::SystemTime,
@@ -638,6 +633,21 @@ impl<'a> SourceView<'a> {
             }
         }
         Ok(())
+    }
+
+    fn reload(&mut self, p: ::UpdateParameters) -> Result<(), PagerShowError> {
+        if let Some(i) = self.file_info.clone() {
+            self.show(i.path, p)?;
+        }
+        Ok(())
+    }
+
+    fn content_is_stale(&self) -> bool {
+        if let Some(i) = &self.file_info {
+            self.need_to_load_file(&i.path)
+        } else {
+            true
+        }
     }
 
     fn load<'b, P: AsRef<Path>, I: Iterator<Item = &'b BreakPoint>>(
@@ -950,7 +960,12 @@ impl<'a> CodeWindow<'a> {
                 }
                 ret
             }
-            _ => Ok(()),
+            _ => {
+                if self.src_view.content_is_stale() {
+                    self.src_view.reload(p)?;
+                }
+                Ok(())
+            }
         }
     }
 

@@ -15,6 +15,7 @@ pub struct GDB {
     pub process: Child,
     stdin: ChildStdin,
     is_running: Arc<AtomicBool>,
+    is_executing_command: Arc<AtomicBool>,
     result_output: mpsc::Receiver<output::ResultRecord>,
     current_command_token: Token,
     //outputThread: thread::Thread,
@@ -183,19 +184,28 @@ impl GDBBuilder {
         let stdin = child.stdin.take().expect("take stdin");
         let stdout = child.stdout.take().expect("take stdout");
         let is_running = Arc::new(AtomicBool::new(false));
+        let is_executing_command = Arc::new(AtomicBool::new(false));
         let is_running_for_thread = is_running.clone();
+        let is_executing_command_for_thread = is_executing_command.clone();
         let (result_input, result_output) = mpsc::channel();
         /*let outputThread = */
         thread::Builder::new()
             .name("gdbmi parser".to_owned())
             .spawn(move || {
-                output::process_output(stdout, result_input, oob_sink, is_running_for_thread);
+                output::process_output(
+                    stdout,
+                    result_input,
+                    oob_sink,
+                    is_running_for_thread,
+                    is_executing_command_for_thread,
+                );
             })?;
         let gdb = GDB {
             process: child,
-            stdin: stdin,
-            is_running: is_running,
-            result_output: result_output,
+            stdin,
+            is_running,
+            is_executing_command,
+            result_output,
             current_command_token: 0,
             //outputThread: outputThread,
         };
@@ -210,8 +220,8 @@ impl GDB {
         signal::kill(Pid::from_raw(self.process.id() as i32), signal::SIGINT)
     }
 
-    pub fn is_running(&self) -> bool {
-        self.is_running.load(Ordering::SeqCst)
+    pub fn is_busy(&self) -> bool {
+        self.is_running.load(Ordering::SeqCst) || self.is_executing_command.load(Ordering::SeqCst)
     }
     pub fn get_usable_token(&mut self) -> Token {
         self.current_command_token = self.current_command_token.wrapping_add(1);
@@ -222,7 +232,7 @@ impl GDB {
         &mut self,
         command: C,
     ) -> Result<output::ResultRecord, ExecuteError> {
-        if self.is_running() {
+        if self.is_busy() {
             return Err(ExecuteError::Busy);
         }
         let command_token = self.get_usable_token();
@@ -251,8 +261,27 @@ impl GDB {
             }
         }
     }
+    pub fn execute_async<C: std::borrow::Borrow<commands::MiCommand>>(
+        &mut self,
+        command: C,
+    ) -> Result<(), ExecuteError> {
+        if self.is_busy() {
+            return Err(ExecuteError::Busy);
+        }
+        let command_token = self.get_usable_token();
+        command
+            .borrow()
+            .write_interpreter_string(&mut self.stdin, command_token)
+            .expect("write interpreter command");
+        self.is_executing_command.store(true, Ordering::SeqCst);
+        Ok(())
+    }
 
     pub fn execute_later<C: std::borrow::Borrow<commands::MiCommand>>(&mut self, command: C) {
+        if self.is_busy() {
+            //return Err(ExecuteError::Busy);
+            return;
+        }
         let command_token = self.get_usable_token();
         command
             .borrow()

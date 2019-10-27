@@ -94,6 +94,7 @@ pub fn process_output<T: Read, S: OutOfBandRecordSink>(
     result_pipe: Sender<ResultRecord>,
     out_of_band_pipe: S,
     is_running: Arc<AtomicBool>,
+    is_executing_command: Arc<AtomicBool>,
 ) {
     let mut reader = BufReader::new(output);
 
@@ -121,6 +122,7 @@ pub fn process_output<T: Read, S: OutOfBandRecordSink>(
                             ResultClass::Error => is_running.store(false, Ordering::SeqCst),
                             _ => {}
                         }
+                        is_executing_command.store(false, Ordering::SeqCst);
                         result_pipe.send(record).expect("send result to pipe");
                     }
                     Output::OutOfBand(record) => {

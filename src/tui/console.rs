@@ -62,7 +62,7 @@ impl Console {
         self.command_state.handle_input_line(&line, p);
     }
     pub fn update_after_event(&mut self, p: ::UpdateParameters) {
-        if p.gdb.mi.is_running() {
+        if p.gdb.mi.is_busy() {
             if self.last_gdb_state != GDBState::Running {
                 self.last_gdb_state = GDBState::Running;
                 self.prompt_line.set_prompt(RUNNING_PROMPT.to_owned());

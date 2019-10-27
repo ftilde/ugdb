@@ -1,8 +1,5 @@
 use gdbmi::commands::MiCommand;
-use gdbmi::output::{ResultClass, ResultRecord};
 use gdbmi::ExecuteError;
-
-use log::error;
 
 pub struct Command {
     cmd: Box<dyn FnMut(::UpdateParameters) -> Result<(), ExecuteError>>,
@@ -59,8 +56,8 @@ impl CommandState {
 
     fn print_execute_error(e: ExecuteError, p: ::UpdateParameters) {
         match e {
-            ExecuteError::Quit => p.message_sink.send("quit"),
-            ExecuteError::Busy => p.message_sink.send("GDB is running!"),
+            ExecuteError::Quit => p.message_sink.send("quit\n"),
+            ExecuteError::Busy => p.message_sink.send("GDB is running!\n"),
         }
     }
 
@@ -135,18 +132,8 @@ impl CommandState {
             }
             // Gdb commands
             _ => {
-                match p.gdb.mi.execute(MiCommand::cli_exec(line)) {
-                    Ok(ResultRecord {
-                        class: ResultClass::Error,
-                        results,
-                        ..
-                    }) => {
-                        // Most of the time gdb seems to also write error messages to the console.
-                        // We therefore (only) write the error message to debug log to avoid duplicates.
-                        error!("{}", results["msg"].as_str().unwrap_or(&results.pretty(2)));
-                    }
-                    Ok(_) => {}
-                    Err(e) => Self::print_execute_error(e, p),
+                if let Err(e) = p.gdb.mi.execute_async(MiCommand::cli_exec(line)) {
+                    Self::print_execute_error(e, p);
                 }
                 CommandState::Idle
             }

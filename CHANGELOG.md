@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.6] - 2020-02-03
+### Fixed
+- Source view would sometimes still show an outdated version of the displayed file.
+- Crash when failing to spawn gdb process (#13).
+
 ## [0.1.5] - 2019-10-24
 ### Added
 - Tab completion support in console and expression table.

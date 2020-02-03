@@ -352,13 +352,16 @@ fn run() -> i32 {
     // Start gdb and setup output event piping
     let (oob_sink, oob_source) = chan::async();
 
+    let gdb_path = options.gdb_path.to_string_lossy().to_string();
     let mut gdb_builder = options.create_gdb_builder();
     gdb_builder = gdb_builder.tty(tui_terminal.slave_name().into());
-    let gdb = GDB::new(
-        gdb_builder
-            .try_spawn(MpscOobRecordSink(oob_sink))
-            .expect("spawn gdb"),
-    );
+    let gdb = GDB::new(match gdb_builder.try_spawn(MpscOobRecordSink(oob_sink)) {
+        Ok(gdb) => gdb,
+        Err(e) => {
+            eprintln!("Failed to spawn gdb process (\"{}\"): {}", gdb_path, e);
+            return 0xfc;
+        }
+    });
 
     // Setup input piping
     let (keyboard_sink, keyboard_source) = chan::async();

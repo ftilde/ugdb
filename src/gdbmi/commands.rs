@@ -35,10 +35,12 @@ impl ::std::str::FromStr for BreakPointNumber {
         use std::error::Error;
 
         if let Some(dot_pos) = s.find(".") {
-            let major =
-                try! {s[.. dot_pos].parse::<usize>().map_err(|e| e.description().to_string())};
-            let minor =
-                try! {s[dot_pos+1 ..].parse::<usize>().map_err(|e| e.description().to_string())};
+            let major = s[..dot_pos]
+                .parse::<usize>()
+                .map_err(|e| e.description().to_string())?;
+            let minor = s[dot_pos + 1..]
+                .parse::<usize>()
+                .map_err(|e| e.description().to_string())?;
             Ok(BreakPointNumber {
                 major: major,
                 minor: Some(minor),

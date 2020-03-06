@@ -994,33 +994,33 @@ impl<'a> CodeWindow<'a> {
     }
 
     fn try_load_active_content(&mut self, p: ::UpdateParameters) {
+        let try_load_src = |s: &mut Self, p: ::UpdateParameters| {
+            if let Err(e) = s.try_load_source_content(p) {
+                warn!("Failed to load file: {:?}", e);
+            }
+        };
+        let try_load_asm = |s: &mut Self, p: ::UpdateParameters| match s.try_load_asm_content(p) {
+            Err(DisassembleError::GDB(GDBResponseError::Execution(ExecuteError::Busy))) => {
+                p.message_sink.send("Cannot disassemble: Gdb is busy.");
+            }
+            Err(e) => warn!("Failed to load assembly: {:?}", e),
+            Ok(_) => {}
+        };
         match self.preferred_mode {
             DisplayMode::SideBySide => {
-                if let Err(e) = self.try_load_source_content(p) {
-                    warn!("Failed to load file: {:?}", e);
-                }
-                if let Err(e) = self.try_load_asm_content(p) {
-                    warn!("Failed to load assembly: {:?}", e);
-                }
+                try_load_src(self, p);
+                try_load_asm(self, p);
             }
             DisplayMode::Assembly => {
-                if let Err(e) = self.try_load_asm_content(p) {
-                    warn!("Failed to load assembly: {:?}", e);
-                }
+                try_load_asm(self, p);
                 if self.asm_state == AsmContentState::Unavailable {
-                    if let Err(e) = self.try_load_source_content(p) {
-                        warn!("Failed to load file: {:?}", e);
-                    }
+                    try_load_src(self, p);
                 }
             }
             DisplayMode::Source => {
-                if let Err(e) = self.try_load_source_content(p) {
-                    warn!("Failed to load file: {:?}", e);
-                }
+                try_load_src(self, p);
                 if self.src_state == SrcContentState::Unavailable {
-                    if let Err(e) = self.try_load_asm_content(p) {
-                        warn!("Failed to load assembly: {:?}", e);
-                    }
+                    try_load_asm(self, p);
                 }
             }
             DisplayMode::Message(_) => {}

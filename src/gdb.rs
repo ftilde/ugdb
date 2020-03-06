@@ -89,26 +89,6 @@ impl BreakPoint {
             src_pos: src_pos,
         }
     }
-
-    pub fn all_from_json(bkpt_obj: &JsonValue) -> Box<dyn Iterator<Item = BreakPoint>> {
-        match bkpt_obj {
-            &JsonValue::Object(ref bp) => Box::new(Some(Self::from_json(&bp)).into_iter()),
-            &JsonValue::Array(ref bp_array) => Box::new(
-                bp_array
-                    .iter()
-                    .map(|bp| {
-                        if let &JsonValue::Object(ref bp) = bp {
-                            Self::from_json(&bp)
-                        } else {
-                            panic!("Invalid breakpoint object in array");
-                        }
-                    })
-                    .collect::<Vec<BreakPoint>>()
-                    .into_iter(),
-            ),
-            _ => panic!("Invalid breakpoint object"),
-        }
-    }
 }
 
 pub struct BreakPointSet {
@@ -256,9 +236,25 @@ impl GDB {
                     JsonValue::Object(ref bkpt) => {
                         let bp = BreakPoint::from_json(&bkpt);
                         self.breakpoints.update_breakpoint(bp);
-                        //debug_assert!(bp_type != BreakPointEvent::Modified || res.is_some(), "Modified non-existent id");
+
+                        // If there are multiple locations (recent versions of) gdb return the
+                        // sub-breakpoints in the array "locations".
+                        if let Some(JsonValue::Array(ref bkpts)) = bkpt.get("locations") {
+                            for bkpt in bkpts {
+                                if let JsonValue::Object(ref bkpt) = bkpt {
+                                    let bp = BreakPoint::from_json(&bkpt);
+                                    self.breakpoints.update_breakpoint(bp);
+                                } else {
+                                    panic!("Malformed breakpoint list");
+                                }
+                            }
+                        }
                     }
                     JsonValue::Array(ref bkpts) => {
+                        // In previous versions, gdb returned multiple sub-breakpoints as a series
+                        // of objects under the "bkpt" key (thus breaking the spec). This appears
+                        // to be fixed now, but we keep the current case (for now) for users of old
+                        // gdb versions.
                         for bkpt in bkpts {
                             if let JsonValue::Object(ref bkpt) = bkpt {
                                 let bp = BreakPoint::from_json(&bkpt);

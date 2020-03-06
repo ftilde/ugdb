@@ -135,6 +135,14 @@ The virtual terminal does not yet properly implement all ansi functions, but it 
 `ugdb` can be controlled remotely via a unix domain socket-based (undocumented, quite limited) IPC interface.
 In practice this means that you can install [vim-ugdb](https://github.com/ftilde/vim-ugdb) and set breakpoints in ugdb from vim using the `UGDBBreakpoint` command.
 
+## FAQ
+
+### I get the error message "Cannot <something> because gdb is busy"
+
+Because we communicate with gdb in synchronous mode, some tasks that require cooperation of gdb (such as setting breakpoints and disassembling source files) cannot be done when gdb is busy, i.e., when the currently debugged program is running.
+In this case you have to interrupt execution by pressing Ctrl-C in the console first.
+It may be possible to lift this limitation in the future using the [non-stop-mode](https://sourceware.org/gdb/current/onlinedocs/gdb/Asynchronous-and-non_002dstop-modes.html#Asynchronous-and-non_002dstop-modes), but there are no immediate plans for implementation.
+
 ## Some notes on the status
 
 This project mostly scratches my own itch -- successfully. I use it as my primary debugger. In that sense I consider this project as "done", but additional sub-itches may be sub-scratched in the future.

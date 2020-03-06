@@ -1,5 +1,11 @@
 # Changelog
 
+## UNRELEASED
+### Fixed
+- Breakpoint message parsing for newer versions of gdb.
+### Added
+- Warning when trying to disassemble source files when gdb is busy.
+
 ## [0.1.6] - 2020-02-03
 ### Fixed
 - Source view would sometimes still show an outdated version of the displayed file.

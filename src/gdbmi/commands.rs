@@ -12,9 +12,9 @@ pub struct MiCommand {
 
 pub enum DisassembleMode {
     DisassemblyOnly = 0,
-    DisassemblyWithRawOpcodes = 1,
-    MixedSourceAndDisassembly = 4,
-    MixedSourceAndDisassemblyWithRawOpcodes = 5,
+    DisassemblyWithRawOpcodes = 2,
+    MixedSourceAndDisassembly = 1, // deprecated and 4 would be preferred, but might not be available in older gdb(mi) versions
+    MixedSourceAndDisassemblyWithRawOpcodes = 3, // deprecated and 5 would be preferred, same as above
 }
 
 pub enum BreakPointLocation<'a> {
@@ -169,23 +169,35 @@ impl MiCommand {
         MiCommand {
             operation: "break-insert",
             options: match location {
-                BreakPointLocation::Address(addr) => {
-                    vec![OsString::from(format!("*0x{:x}", addr))] //TODO: is this correct?
-                }
+                BreakPointLocation::Address(addr) => vec![OsString::from(format!("*0x{:x}", addr))],
                 BreakPointLocation::Function(path, func_name) => {
-                    vec![
-                        OsString::from("--source"),
-                        OsString::from(path),
-                        OsString::from("--function"),
-                        OsString::from(func_name),
-                    ] //TODO: is this correct?
+                    let mut ret = OsString::from(path);
+                    ret.push(":");
+                    ret.push(func_name);
+                    vec![ret]
+
+                    // Not available in old gdb(mi) versions
+                    //vec![
+                    //    OsString::from("--source"),
+                    //    OsString::from(path),
+                    //    OsString::from("--function"),
+                    //    OsString::from(func_name),
+                    //]
                 }
-                BreakPointLocation::Line(path, line_number) => vec![
-                    OsString::from("--source"),
-                    OsString::from(path),
-                    OsString::from("--line"),
-                    OsString::from(format!("{}", line_number)),
-                ],
+                BreakPointLocation::Line(path, line_number) => {
+                    let mut ret = OsString::from(path);
+                    ret.push(":");
+                    ret.push(line_number.to_string());
+                    vec![ret]
+
+                    // Not available in old gdb(mi) versions
+                    //vec![
+                    //OsString::from("--source"),
+                    //OsString::from(path),
+                    //OsString::from("--line"),
+                    //OsString::from(format!("{}", line_number)),
+                    //],
+                }
             },
             parameters: Vec::new(),
         }

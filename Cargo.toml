@@ -40,12 +40,12 @@ unsegen_pager = "0.2"
 nom = "2.1"
 
 # gdb-expression-parsing
-lalrpop-util = "0.16.3"
+lalrpop-util = "0.18.1"
 
 [build-dependencies]
 git2 = { version = "0.6", default_features = false }
 toml = "0.4"
-lalrpop = "0.16.3"
+lalrpop = "0.18.1"
 
 
 # Use one of these for development of new features of unsegen

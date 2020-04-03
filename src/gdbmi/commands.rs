@@ -32,15 +32,11 @@ pub struct BreakPointNumber {
 impl ::std::str::FromStr for BreakPointNumber {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        use std::error::Error;
-
         if let Some(dot_pos) = s.find(".") {
-            let major = s[..dot_pos]
-                .parse::<usize>()
-                .map_err(|e| e.description().to_string())?;
+            let major = s[..dot_pos].parse::<usize>().map_err(|e| e.to_string())?;
             let minor = s[dot_pos + 1..]
                 .parse::<usize>()
-                .map_err(|e| e.description().to_string())?;
+                .map_err(|e| e.to_string())?;
             Ok(BreakPointNumber {
                 major: major,
                 minor: Some(minor),
@@ -51,7 +47,7 @@ impl ::std::str::FromStr for BreakPointNumber {
                     major: val,
                     minor: None,
                 }),
-                Err(e) => Err(e.description().to_string()),
+                Err(e) => Err(e.to_string()),
             }
         }
     }

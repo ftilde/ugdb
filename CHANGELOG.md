@@ -1,6 +1,6 @@
 # Changelog
 
-## UNRELEASED
+## [0.1.7] - 2020-04-03
 ### Fixed
 - Breakpoint message parsing for newer versions of gdb.
 ### Added

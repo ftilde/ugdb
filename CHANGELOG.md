@@ -1,5 +1,11 @@
 # Changelog
 
+## UNRELEASED
+### Changed
+- Remove libgit2 build dependency.
+### Fixed
+- Compilation failing for arm-unknown-linux-* (via dependency).
+
 ## [0.1.7] - 2020-04-03
 ### Fixed
 - Breakpoint message parsing for newer versions of gdb.

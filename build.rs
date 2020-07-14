@@ -6,6 +6,7 @@ use toml::{from_str, Value};
 fn main() {
     // Preprocess lalrpop grammar files
     lalrpop::process_root().unwrap();
+    println!("cargo:rerun-if-changed=src/gdb_expression_parsing/parser.lalrpop");
 
     // Find git revision of current version, if possible
     let revision_str = if let Ok(output) = std::process::Command::new("git")

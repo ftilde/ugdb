@@ -43,7 +43,6 @@ nom = "2.1"
 lalrpop-util = "0.18.1"
 
 [build-dependencies]
-git2 = { version = "0.6", default_features = false }
 toml = "0.4"
 lalrpop = "0.18.1"
 

@@ -1,8 +1,6 @@
-extern crate git2;
 extern crate lalrpop;
 extern crate toml;
 
-use git2::Repository;
 use toml::{from_str, Value};
 
 fn main() {
@@ -10,18 +8,19 @@ fn main() {
     lalrpop::process_root().unwrap();
 
     // Find git revision of current version, if possible
-    let revision_str = if let Ok(repo) = Repository::open(".") {
-        let head = repo.head().unwrap();
-        let oid = head.target().unwrap();
-        oid.as_bytes()
-            .iter()
-            .take(4)
-            .map(|byte| format!("{:0length$x}", byte, length = 2))
-            .collect::<String>()
+    let revision_str = if let Ok(output) = std::process::Command::new("git")
+        .args(&["rev-parse", "HEAD"])
+        .output()
+    {
+        let prefix = &output.stdout[..8];
+        String::from_utf8(prefix.to_vec()).unwrap()
     } else {
         " release".to_owned()
     };
     println!("cargo:rustc-env=REVISION={}", revision_str);
+    // The .git directory mtime should change if something is commited, so we rerun the build
+    // script in that case to update the revision.
+    println!("cargo:rerun-if-changed=.git");
 
     // Find current release version (crate version specified in Cargo.toml)
     let file_str = include_str!("Cargo.toml");

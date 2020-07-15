@@ -30,7 +30,7 @@ rand = "0.3"
 unix_socket = "0.5"
 unicode-segmentation = "1.2"
 
-unsegen = "0.2.2"
+unsegen = "0.2"
 unsegen_signals = "0.2"
 unsegen_terminal = "0.2"
 unsegen_jsonviewer = "0.2"

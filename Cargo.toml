@@ -1,7 +1,7 @@
 [package]
 name = "ugdb"
-version = "0.1.7"
-authors = ["ftilde <ftilde@protonmail.com>"]
+version = "0.1.8"
+authors = ["ftilde <ftilde@tamepointer.de>"]
 description = "An alternative TUI for gdb"
 repository = "https://github.com/ftilde/ugdb"
 readme = "README.md"

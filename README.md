@@ -37,8 +37,8 @@ cargo install ugdb
 The command line interface is aimed to be *mostly* compatible with gdb:
 ```
 $ ugdb --help
-ugdb 0.1.7
-ftilde <ftilde@protonmail.com>
+ugdb 0.1.8
+ftilde <ftilde@tamepointer.de>
 An unsegen-based GDB frontend.
 
 USAGE:

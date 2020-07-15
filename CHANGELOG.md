@@ -1,6 +1,6 @@
 # Changelog
 
-## UNRELEASED
+## [0.1.8] - 2020-07-15
 ### Changed
 - Remove libgit2 build dependency.
 ### Fixed

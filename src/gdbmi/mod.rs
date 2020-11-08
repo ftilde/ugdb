@@ -3,6 +3,7 @@ pub mod output;
 
 use log::info;
 use std::ffi::OsString;
+use std::path::Path;
 use std::path::PathBuf;
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -17,11 +18,12 @@ pub struct GDB {
     is_running: Arc<AtomicBool>,
     result_output: mpsc::Receiver<output::ResultRecord>,
     current_command_token: Token,
+    binary_path: PathBuf,
     //outputThread: thread::Thread,
 }
 
 pub trait OutOfBandRecordSink: std::marker::Send {
-    fn send(&self, output::OutOfBandRecord);
+    fn send(&self, record: output::OutOfBandRecord);
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -199,14 +201,14 @@ impl GDBBuilder {
                 .arg("--interpreter=mi")
                 .arg(silence_arg)
                 .arg("-d")
-                .arg(self.gdb_path)
+                .arg(self.gdb_path.clone())
                 .args(args)
                 .args(rr_args)
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())
                 .spawn()?
         } else {
-            Command::new(self.gdb_path)
+            Command::new(self.gdb_path.clone())
                 .arg("--interpreter=mi")
                 .args(gdb_args)
                 .stdin(Stdio::piped())
@@ -231,6 +233,7 @@ impl GDBBuilder {
             is_running: is_running,
             result_output: result_output,
             current_command_token: 0,
+            binary_path: self.gdb_path,
             //outputThread: outputThread,
         };
         Ok(gdb)
@@ -242,6 +245,10 @@ impl GDB {
         use nix::sys::signal;
         use nix::unistd::Pid;
         signal::kill(Pid::from_raw(self.process.id() as i32), signal::SIGINT)
+    }
+
+    pub fn binary_path(&self) -> &Path {
+        &self.binary_path
     }
 
     pub fn is_running(&self) -> bool {

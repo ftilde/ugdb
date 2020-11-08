@@ -1,7 +1,9 @@
 use gdbmi::commands::MiCommand;
 use gdbmi::output::{JsonValue, ResultClass};
-use log::info;
+use log::{error, info};
 use std::ops::Range;
+use std::path::Path;
+use std::process::{Command, Stdio};
 
 pub struct CompletionState {
     original: String,
@@ -57,13 +59,40 @@ pub trait Completer {
     fn complete(&mut self, original: &str, cursor_pos: usize) -> CompletionState;
 }
 
-mod gdb_commands;
+struct CommandCompleter<'a> {
+    binary_path: &'a Path,
+}
 
-struct CommandCompleter;
+fn gen_command_list(binary_path: &Path) -> std::io::Result<Vec<String>> {
+    let child = Command::new(binary_path)
+        .arg("-batch")
+        .arg("-ex")
+        .arg("help all")
+        .stdout(Stdio::piped())
+        .spawn()?;
+    let gdb_output = child.wait_with_output()?;
+    let gdb_output = String::from_utf8_lossy(&gdb_output.stdout);
+    Ok(parse_command_names(&gdb_output))
+}
 
-impl Completer for CommandCompleter {
+fn parse_command_names(gdb_output: &str) -> Vec<String> {
+    gdb_output
+        .lines()
+        .filter_map(|l| l.find(" -- ").map(|pos| l[..pos].to_owned()))
+        .collect()
+}
+
+impl Completer for CommandCompleter<'_> {
     fn complete(&mut self, original: &str, cursor_pos: usize) -> CompletionState {
-        let candidates = find_candidates(&original[..cursor_pos], &gdb_commands::GDB_COMMANDS);
+        // Possible optimization: Only generate command list once, but it does not appear to be a
+        // real bottleneck so far.
+        let candidates = match gen_command_list(self.binary_path) {
+            Ok(commands) => find_candidates(&original[..cursor_pos], &commands),
+            Err(e) => {
+                error!("Failed to generate gdb command list: {}", e);
+                Vec::new()
+            }
+        };
         CompletionState::new(original.to_owned(), cursor_pos, candidates)
     }
 }
@@ -227,7 +256,10 @@ impl Completer for CmdlineCompleter<'_> {
             IdentifierCompleter(self.0).complete(original, cursor_pos)
         } else {
             // First "word" in command line, complete gdb command
-            CommandCompleter.complete(original, cursor_pos)
+            CommandCompleter {
+                binary_path: self.0.gdb.mi.binary_path(),
+            }
+            .complete(original, cursor_pos)
         }
         //TODO: path completer? not sure how to distinguish between IdentifierCompleter and path
         //completer. Maybe based on gdb command...
@@ -501,8 +533,39 @@ mod test {
         assert_eq!(current_line(&state), "ba)");
     }
     #[test]
+    fn test_gdb_help_parser() {
+        let input = "
+tsave -- Save the trace data to a file.
+while-stepping -- Specify single-stepping behavior at a tracepoint.
+
+Command class: user-defined
+
+myadder -- User-defined.
+
+Unclassified commands
+
+add-inferior -- Add a new inferior.
+function _any_caller_is -- Check all calling function's names.
+        ";
+        let got = parse_command_names(input);
+        let expected = [
+            "tsave",
+            "while-stepping",
+            "myadder",
+            "add-inferior",
+            "function _any_caller_is",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect::<Vec<String>>();
+        assert_eq!(got, expected);
+    }
+    #[test]
     fn test_command_completer() {
-        let state = CommandCompleter.complete("he", 2);
+        let state = CommandCompleter {
+            binary_path: Path::new("gdb"),
+        }
+        .complete("he", 2);
         assert_eq!(current_line(&state), "help");
         assert_eq!(state.completion_options, vec!["lp"]);
     }

@@ -11,7 +11,7 @@ use unsegen_terminal::Terminal;
 
 pub struct Tui<'a> {
     pub console: Console,
-    expression_table: ExpressionTable,
+    pub expression_table: ExpressionTable,
     process_pty: Terminal,
     src_view: CodeWindow<'a>,
 }

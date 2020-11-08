@@ -135,14 +135,20 @@ struct Options {
     source_dir: Option<PathBuf>,
     #[structopt(
         long = "log_dir",
-        help = "Directory in which the log file will be stored",
+        help = "Directory in which the log file will be stored.",
         parse(from_os_str),
         default_value = "/tmp"
     )]
     log_dir: PathBuf,
     #[structopt(
+        short = "e",
+        long = "initial-expression",
+        help = "Define initial entries for the expression table.",
+    )]
+    initial_expression_table_entries: Vec<String>,
+    #[structopt(
         help = "Path to program to debug (with arguments).",
-        parse(from_os_str)
+        parse(from_os_str),
     )]
     program: Vec<OsString>,
     // Not sure how to mimic gdbs cmdline behavior for the positional arguments...
@@ -322,6 +328,7 @@ fn run() -> i32 {
 
     let options = Options::from_args();
     let log_dir = options.log_dir.to_owned();
+    let initial_expression_table_entries = options.initial_expression_table_entries.clone();
 
     ::std::panic::set_hook(Box::new(move |info| {
         // Switch back to main screen
@@ -405,6 +412,9 @@ fn run() -> i32 {
             }
         };
         let mut tui = Tui::new(tui_terminal, &theme_set.themes["base16-ocean.dark"]);
+        for entry in initial_expression_table_entries {
+            tui.expression_table.add_entry(entry);
+        }
 
         // Start stdin thread _after_ building terminal (and setting the actual terminal to raw
         // mode to avoid race condition where the first 'set of input' is buffered

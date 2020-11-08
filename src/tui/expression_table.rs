@@ -97,6 +97,22 @@ impl ExpressionTable {
         table.rows_mut().push(ExpressionRow::new()); //Invariant: always at least one line
         ExpressionTable { table: table }
     }
+    pub fn add_entry(&mut self, entry: String) {
+        {
+            let mut rows = self.table.rows_mut();
+            match rows.last_mut() {
+                Some(row) if row.is_empty() => {
+                    row.expression.set(entry);
+                }
+                _ => {
+                    let mut row = ExpressionRow::new();
+                    row.expression.set(entry);
+                    rows.push(row);
+                }
+            }
+        }
+        self.shrink_to_fit();
+    }
     fn shrink_to_fit(&mut self) {
         let begin_of_empty_range = {
             let iter = self.table.rows().iter().enumerate().rev();

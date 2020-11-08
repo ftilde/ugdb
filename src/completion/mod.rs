@@ -1,6 +1,7 @@
 use gdbmi::commands::MiCommand;
 use gdbmi::output::{JsonValue, ResultClass};
 use log::{error, info};
+use std::ffi::OsString;
 use std::ops::Range;
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -61,10 +62,12 @@ pub trait Completer {
 
 struct CommandCompleter<'a> {
     binary_path: &'a Path,
+    init_options: &'a [OsString],
 }
 
-fn gen_command_list(binary_path: &Path) -> std::io::Result<Vec<String>> {
+fn gen_command_list(binary_path: &Path, init_options: &[OsString]) -> std::io::Result<Vec<String>> {
     let child = Command::new(binary_path)
+        .args(init_options)
         .arg("-batch")
         .arg("-ex")
         .arg("help all")
@@ -86,7 +89,7 @@ impl Completer for CommandCompleter<'_> {
     fn complete(&mut self, original: &str, cursor_pos: usize) -> CompletionState {
         // Possible optimization: Only generate command list once, but it does not appear to be a
         // real bottleneck so far.
-        let candidates = match gen_command_list(self.binary_path) {
+        let candidates = match gen_command_list(self.binary_path, self.init_options) {
             Ok(commands) => find_candidates(&original[..cursor_pos], &commands),
             Err(e) => {
                 error!("Failed to generate gdb command list: {}", e);
@@ -258,6 +261,7 @@ impl Completer for CmdlineCompleter<'_> {
             // First "word" in command line, complete gdb command
             CommandCompleter {
                 binary_path: self.0.gdb.mi.binary_path(),
+                init_options: self.0.gdb.mi.init_options(),
             }
             .complete(original, cursor_pos)
         }
@@ -564,6 +568,7 @@ function _any_caller_is -- Check all calling function's names.
     fn test_command_completer() {
         let state = CommandCompleter {
             binary_path: Path::new("gdb"),
+            init_options: &[],
         }
         .complete("he", 2);
         assert_eq!(current_line(&state), "help");

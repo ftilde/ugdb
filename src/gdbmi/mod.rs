@@ -19,6 +19,7 @@ pub struct GDB {
     result_output: mpsc::Receiver<output::ResultRecord>,
     current_command_token: Token,
     binary_path: PathBuf,
+    init_options: Vec<OsString>,
     //outputThread: thread::Thread,
 }
 
@@ -131,11 +132,14 @@ impl GDBBuilder {
         S: OutOfBandRecordSink + 'static,
     {
         let mut gdb_args = Vec::<OsString>::new();
+        let mut init_options = Vec::<OsString>::new();
         if self.opt_nh {
             gdb_args.push("--nh".into());
+            init_options.push("--nh".into());
         }
         if self.opt_nx {
             gdb_args.push("--nx".into());
+            init_options.push("--nx".into());
         }
         if self.opt_quiet {
             gdb_args.push("--quiet".into());
@@ -229,11 +233,12 @@ impl GDBBuilder {
             })?;
         let gdb = GDB {
             process: child,
-            stdin: stdin,
-            is_running: is_running,
-            result_output: result_output,
+            stdin,
+            is_running,
+            result_output,
             current_command_token: 0,
             binary_path: self.gdb_path,
+            init_options,
             //outputThread: outputThread,
         };
         Ok(gdb)
@@ -249,6 +254,9 @@ impl GDB {
 
     pub fn binary_path(&self) -> &Path {
         &self.binary_path
+    }
+    pub fn init_options(&self) -> &[OsString] {
+        &self.init_options
     }
 
     pub fn is_running(&self) -> bool {

@@ -88,6 +88,11 @@ struct Options {
     )]
     quiet: bool,
     #[structopt(
+        long = "rr",
+        help = "Start ugdb as an interface for rr. Trailing ugdb arguments will be passed to rr replay instead."
+    )]
+    rr: bool,
+    #[structopt(
         long = "cd",
         help = "Run GDB using directory as its working directory, instead of the current directory.",
         parse(from_os_str)
@@ -180,14 +185,18 @@ impl Options {
         if let Some(src_dir) = self.source_dir {
             gdb_builder = gdb_builder.source_dir(src_dir);
         }
-        let (program, args) = self
-            .program
-            .split_first()
-            .map(|(p, a)| (Some(p), a))
-            .unwrap_or_else(|| (None, &[]));
-        gdb_builder = gdb_builder.args(args);
-        if let Some(program) = program {
-            gdb_builder = gdb_builder.program(PathBuf::from(program));
+        if self.rr {
+            gdb_builder = gdb_builder.rr_args(self.program);
+        } else {
+            let (program, args) = self
+                .program
+                .split_first()
+                .map(|(p, a)| (Some(p), a))
+                .unwrap_or_else(|| (None, &[]));
+            gdb_builder = gdb_builder.args(args);
+            if let Some(program) = program {
+                gdb_builder = gdb_builder.program(PathBuf::from(program));
+            }
         }
 
         gdb_builder

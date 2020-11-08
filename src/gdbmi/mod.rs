@@ -45,6 +45,7 @@ pub struct GDBBuilder {
     opt_args: Vec<OsString>,
     opt_program: Option<PathBuf>,
     opt_tty: Option<PathBuf>,
+    rr_args: Option<Vec<OsString>>,
 }
 impl GDBBuilder {
     pub fn new(gdb: PathBuf) -> Self {
@@ -63,6 +64,7 @@ impl GDBBuilder {
             opt_args: Vec::new(),
             opt_program: None,
             opt_tty: None,
+            rr_args: None,
         }
     }
 
@@ -72,6 +74,10 @@ impl GDBBuilder {
     }
     pub fn nx(mut self) -> Self {
         self.opt_nx = true;
+        self
+    }
+    pub fn rr_args(mut self, args: Vec<OsString>) -> Self {
+        self.rr_args = Some(args);
         self
     }
     pub fn quiet(mut self) -> Self {
@@ -122,64 +128,92 @@ impl GDBBuilder {
     where
         S: OutOfBandRecordSink + 'static,
     {
-        let mut args = Vec::<OsString>::new();
+        let mut gdb_args = Vec::<OsString>::new();
         if self.opt_nh {
-            args.push("--nh".into());
+            gdb_args.push("--nh".into());
         }
         if self.opt_nx {
-            args.push("--nx".into());
+            gdb_args.push("--nx".into());
         }
         if self.opt_quiet {
-            args.push("--quiet".into());
+            gdb_args.push("--quiet".into());
         }
         if let Some(cd) = self.opt_cd {
-            args.push("--cd=".into());
-            args.last_mut().unwrap().push(&cd);
+            gdb_args.push("--cd=".into());
+            gdb_args.last_mut().unwrap().push(&cd);
         }
         if let Some(bps) = self.opt_bps {
-            args.push("-b".into());
-            args.push(bps.to_string().into());
+            gdb_args.push("-b".into());
+            gdb_args.push(bps.to_string().into());
         }
         if let Some(symbol_file) = self.opt_symbol_file {
-            args.push("--symbols=".into());
-            args.last_mut().unwrap().push(&symbol_file);
+            gdb_args.push("--symbols=".into());
+            gdb_args.last_mut().unwrap().push(&symbol_file);
         }
         if let Some(core_file) = self.opt_core_file {
-            args.push("--core=".into());
-            args.last_mut().unwrap().push(&core_file);
+            gdb_args.push("--core=".into());
+            gdb_args.last_mut().unwrap().push(&core_file);
         }
         if let Some(proc_id) = self.opt_proc_id {
-            args.push("--pid=".into());
-            args.last_mut().unwrap().push(proc_id.to_string());
+            gdb_args.push("--pid=".into());
+            gdb_args.last_mut().unwrap().push(proc_id.to_string());
         }
         if let Some(command) = self.opt_command {
-            args.push("--command=".into());
-            args.last_mut().unwrap().push(&command);
+            gdb_args.push("--command=".into());
+            gdb_args.last_mut().unwrap().push(&command);
         }
         if let Some(source_dir) = self.opt_source_dir {
-            args.push("--directory=".into());
-            args.last_mut().unwrap().push(&source_dir);
+            gdb_args.push("--directory=".into());
+            gdb_args.last_mut().unwrap().push(&source_dir);
         }
         if let Some(tty) = self.opt_tty {
-            args.push("--tty=".into());
-            args.last_mut().unwrap().push(&tty);
+            gdb_args.push("--tty=".into());
+            gdb_args.last_mut().unwrap().push(&tty);
         }
         if !self.opt_args.is_empty() {
-            args.push("--args".into());
-            args.push(self.opt_program.unwrap().into());
+            gdb_args.push("--args".into());
+            gdb_args.push(self.opt_program.unwrap().into());
             for arg in self.opt_args {
-                args.push(arg.into());
+                gdb_args.push(arg.into());
             }
         } else if let Some(program) = self.opt_program {
-            args.push(program.into());
+            gdb_args.push(program.into());
         }
 
-        let mut child = Command::new(self.gdb_path)
-            .arg("--interpreter=mi")
-            .args(args)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .spawn()?;
+        let mut child = if let Some(rr_args) = self.rr_args {
+            let args = gdb_args.into_iter().flat_map(|arg| vec!["-o".into(), arg]);
+
+            // It looks like rr acts as a remote target for gdb and "runs" (or simulates) the
+            // binary itself. Consequently, it also is responsible for stdin/stdout handling.
+            // Without "-q" it appears to pass all stdout to the terminal/output that gdb is
+            // connected to as well, which may confuse our gdbmi parser. For this reason we disable
+            // output using the "-q" flag.
+            //
+            // This also means that the --tty flag that we pass to gdb is useless. In order to get
+            // proper output in the ugdb's terminal emulator we would need a "tty" option in rr
+            // itself, I think.
+            let silence_arg = "-q";
+
+            Command::new("rr")
+                .arg("replay")
+                .arg("--interpreter=mi")
+                .arg(silence_arg)
+                .arg("-d")
+                .arg(self.gdb_path)
+                .args(args)
+                .args(rr_args)
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .spawn()?
+        } else {
+            Command::new(self.gdb_path)
+                .arg("--interpreter=mi")
+                .args(gdb_args)
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .spawn()?
+        };
+
         let stdin = child.stdin.take().expect("take stdin");
         let stdout = child.stdout.take().expect("take stdout");
         let is_running = Arc::new(AtomicBool::new(false));

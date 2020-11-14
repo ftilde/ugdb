@@ -1,5 +1,12 @@
 # Changelog
 
+## UNRELEASED
+### Changed
+- Generate gdb completions dynamically.
+### Added
+- Add rr support.
+- Allow initial expression table entries to be specified using -e.
+
 ## [0.1.8] - 2020-07-15
 ### Changed
 - Remove libgit2 build dependency.

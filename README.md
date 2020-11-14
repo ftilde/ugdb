@@ -137,7 +137,7 @@ In practice this means that you can install [vim-ugdb](https://github.com/ftilde
 
 ## FAQ
 
-### I get the error message "Cannot <something> because gdb is busy"
+### I get the error message "Cannot *something* because gdb is busy"
 
 Because we communicate with gdb in synchronous mode, some tasks that require cooperation of gdb (such as setting breakpoints and disassembling source files) cannot be done when gdb is busy, i.e., when the currently debugged program is running.
 In this case you have to interrupt execution by pressing Ctrl-C in the console first.

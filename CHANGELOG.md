@@ -1,6 +1,6 @@
 # Changelog
 
-## UNRELEASED
+## [0.1.9] - 2020-11-14
 ### Changed
 - Generate gdb completions dynamically.
 ### Added

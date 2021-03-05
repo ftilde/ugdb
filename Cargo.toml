@@ -48,6 +48,6 @@ lalrpop = "0.18.1"
 
 
 # Use one of these for development of new features of unsegen
-#[patch.crates-io]
-#unsegen = { git = 'https://github.com/ftilde/unsegen' }
+[patch.crates-io]
+unsegen = { git = 'https://github.com/ftilde/unsegen' }
 #unsegen = { path = "../unsegen" }

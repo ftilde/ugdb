@@ -25,12 +25,17 @@ pub struct Console {
 
 static STOPPED_PROMPT: &'static str = "(gdb) ";
 static RUNNING_PROMPT: &'static str = "(↻↻↻) ";
+static SCROLL_PROMPT: &'static str = "(↑↓) ";
+static SEARCH_PROMPT: &'static str = "(🔍) ";
 
 impl Console {
     pub fn new() -> Self {
+        let mut prompt_line = PromptLine::with_prompt(STOPPED_PROMPT.into());
+        prompt_line.set_search_prompt(SEARCH_PROMPT.to_owned());
+        prompt_line.set_scroll_prompt(SCROLL_PROMPT.to_owned());
         Console {
             gdb_log: LogViewer::new(),
-            prompt_line: PromptLine::with_prompt(STOPPED_PROMPT.into()),
+            prompt_line,
             layout: VerticalLayout::new(SeparatingStyle::Draw(
                 GraphemeCluster::try_from('=').unwrap(),
             )),
@@ -65,12 +70,12 @@ impl Console {
         if p.gdb.mi.is_running() {
             if self.last_gdb_state != GDBState::Running {
                 self.last_gdb_state = GDBState::Running;
-                self.prompt_line.set_prompt(RUNNING_PROMPT.to_owned());
+                self.prompt_line.set_edit_prompt(RUNNING_PROMPT.to_owned());
             }
         } else {
             if self.last_gdb_state != GDBState::Stopped {
                 self.last_gdb_state = GDBState::Stopped;
-                self.prompt_line.set_prompt(STOPPED_PROMPT.to_owned());
+                self.prompt_line.set_edit_prompt(STOPPED_PROMPT.to_owned());
             }
         }
     }
@@ -127,6 +132,7 @@ impl Container<::UpdateParametersStruct> for Console {
             self.completion_state = None;
             input
                 .chain((Key::Char('\n'), || self.handle_newline(p)))
+                .chain((Key::Ctrl('r'), || self.prompt_line.enter_search()))
                 .chain(
                     EditBehavior::new(&mut self.prompt_line)
                         .left_on(Key::Left)

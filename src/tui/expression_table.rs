@@ -3,11 +3,11 @@ use gdb_expression_parsing::parse_gdb_value;
 use gdbmi::commands::MiCommand;
 use gdbmi::output::ResultClass;
 use gdbmi::ExecuteError;
-use unsegen::base::{Color, GraphemeCluster, StyleModifier, Window};
+use unsegen::base::{Color, GraphemeCluster, StyleModifier};
 use unsegen::container::Container;
-use unsegen::input::{EditBehavior, Input, InputChain, Key, NavigateBehavior, ScrollBehavior};
+use unsegen::input::{EditBehavior, Input, Key, NavigateBehavior, ScrollBehavior};
 use unsegen::widget::builtin::{Column, LineEdit, Table, TableRow};
-use unsegen::widget::{Demand2D, RenderingHints, SeparatingStyle, Widget};
+use unsegen::widget::{SeparatingStyle, Widget};
 use unsegen_jsonviewer::{json_ext, JsonViewer};
 
 use completion::{Completer, CompletionState, IdentifierCompleter};
@@ -29,14 +29,74 @@ impl ExpressionRow {
     fn is_empty(&self) -> bool {
         self.expression.get().is_empty()
     }
+    fn update_result(&mut self, p: ::UpdateParameters) {
+        let expr = self.expression.get().to_owned();
+        let result = if expr.is_empty() {
+            JsonValue::Null
+        } else {
+            match p.gdb.mi.execute(MiCommand::data_evaluate_expression(expr)) {
+                Ok(res) => match res.class {
+                    ResultClass::Error => res.results["msg"].clone(),
+                    ResultClass::Done => {
+                        let to_parse = res.results["value"].as_str().expect("value present");
+                        match parse_gdb_value(to_parse) {
+                            Ok(p) => p,
+                            Err(_) => JsonValue::String(format!("*Error parsing*: {}", to_parse)),
+                        }
+                    }
+                    other => panic!("unexpected result class: {:?}", other),
+                },
+                Err(ExecuteError::Busy) => {
+                    return;
+                }
+                Err(ExecuteError::Quit) => {
+                    panic!("GDB quit!");
+                }
+            }
+        };
+        self.result.update(&result);
+    }
 }
 impl TableRow for ExpressionRow {
+    type BehaviorContext = ::UpdateParametersStruct;
     const COLUMNS: &'static [Column<ExpressionRow>] = &[
         Column {
-            access: |r| &r.expression,
-            access_mut: |r| &mut r.expression,
-            behavior: |r, input| {
-                input
+            access: |r| Box::new(r.expression.as_widget()),
+            behavior: |r, input, p| {
+                let prev_content = r.expression.get().to_owned();
+                let set_completion =
+                    |completion_state: &Option<CompletionState>, expression: &mut LineEdit| {
+                        let completion = completion_state.as_ref().unwrap();
+                        let (begin, option, after) = completion.current_line_parts();
+                        expression.set(&format!("{}{}{}", begin, option, after));
+                        expression
+                            .set_cursor_pos(begin.len() + option.len())
+                            .unwrap();
+                    };
+                let res = input
+                    .chain((&[Key::Ctrl('n'), Key::Char('\t')][..], || {
+                        if let Some(s) = &mut r.completion_state {
+                            s.select_next_option();
+                        } else {
+                            r.completion_state = Some(
+                                IdentifierCompleter(p)
+                                    .complete(r.expression.get(), r.expression.cursor_pos()),
+                            );
+                        }
+                        set_completion(&r.completion_state, &mut r.expression);
+                    }))
+                    .chain((Key::Ctrl('p'), || {
+                        if let Some(s) = &mut r.completion_state {
+                            s.select_prev_option();
+                        } else {
+                            r.completion_state = Some(
+                                IdentifierCompleter(p)
+                                    .complete(r.expression.get(), r.expression.cursor_pos()),
+                            );
+                        }
+                        set_completion(&r.completion_state, &mut r.expression);
+                    }))
+                    .if_not_consumed(|| r.completion_state = None)
                     .chain(
                         EditBehavior::new(&mut r.expression)
                             .left_on(Key::Left)
@@ -49,13 +109,17 @@ impl TableRow for ExpressionRow {
                             .go_to_end_of_line_on(Key::End)
                             .clear_on(Key::Ctrl('c')),
                     )
-                    .finish()
+                    .finish();
+
+                if r.expression.get() != &prev_content {
+                    r.update_result(p);
+                }
+                res
             },
         },
         Column {
-            access: |r| &r.result,
-            access_mut: |r| &mut r.result,
-            behavior: |r, input| {
+            access: |r| Box::new(r.result.as_widget()),
+            behavior: |r, input, _| {
                 input
                     .chain(
                         ScrollBehavior::new(&mut r.result)
@@ -89,11 +153,7 @@ pub struct ExpressionTable {
 
 impl ExpressionTable {
     pub fn new() -> Self {
-        let row_sep_style =
-            SeparatingStyle::AlternatingStyle(StyleModifier::new().bg_color(Color::Black));
-        let col_sep_style = SeparatingStyle::Draw(GraphemeCluster::try_from('│').unwrap());
-        let focused_style = StyleModifier::new().bold(true);
-        let mut table = Table::new(row_sep_style, col_sep_style, focused_style);
+        let mut table = Table::new();
         table.rows_mut().push(ExpressionRow::new()); //Invariant: always at least one line
         ExpressionTable { table: table }
     }
@@ -130,97 +190,19 @@ impl ExpressionTable {
 
     pub fn update_results(&mut self, p: ::UpdateParameters) {
         for row in self.table.rows_mut().iter_mut() {
-            let expr = row.expression.get().to_owned();
-            let result = if expr.is_empty() {
-                JsonValue::Null
-            } else {
-                match p.gdb.mi.execute(MiCommand::data_evaluate_expression(expr)) {
-                    Ok(res) => match res.class {
-                        ResultClass::Error => res.results["msg"].clone(),
-                        ResultClass::Done => {
-                            let to_parse = res.results["value"].as_str().expect("value present");
-                            match parse_gdb_value(to_parse) {
-                                Ok(p) => p,
-                                Err(_) => {
-                                    JsonValue::String(format!("*Error parsing*: {}", to_parse))
-                                }
-                            }
-                        }
-                        other => panic!("unexpected result class: {:?}", other),
-                    },
-                    Err(ExecuteError::Busy) => {
-                        return;
-                    }
-                    Err(ExecuteError::Quit) => {
-                        panic!("GDB quit!");
-                    }
-                }
-            };
-            row.result.update(&result);
+            row.update_result(p);
         }
-    }
-}
-
-impl Widget for ExpressionTable {
-    fn space_demand(&self) -> Demand2D {
-        self.table.space_demand()
-    }
-    fn draw(&self, window: Window, hints: RenderingHints) {
-        self.table.draw(window, hints);
     }
 }
 
 impl Container<::UpdateParametersStruct> for ExpressionTable {
     fn input(&mut self, input: Input, p: ::UpdateParameters) -> Option<Input> {
-        let after_completion: InputChain = if let Some(r) = self.table.current_row_mut() {
-            let set_completion = |completion_state: &Option<CompletionState>,
-                                  expression: &mut LineEdit| {
-                let completion = completion_state.as_ref().unwrap();
-                let (begin, option, after) = completion.current_line_parts();
-                expression.set(&format!("{}{}{}", begin, option, after));
-                expression
-                    .set_cursor_pos(begin.len() + option.len())
-                    .unwrap();
-            };
-            let res = input
-                .chain((&[Key::Ctrl('n'), Key::Char('\t')][..], || {
-                    if let Some(s) = &mut r.completion_state {
-                        s.select_next_option();
-                    } else {
-                        r.completion_state = Some(
-                            IdentifierCompleter(p)
-                                .complete(r.expression.get(), r.expression.cursor_pos()),
-                        );
-                    }
-                    set_completion(&r.completion_state, &mut r.expression);
-                }))
-                .chain((Key::Ctrl('p'), || {
-                    if let Some(s) = &mut r.completion_state {
-                        s.select_prev_option();
-                    } else {
-                        r.completion_state = Some(
-                            IdentifierCompleter(p)
-                                .complete(r.expression.get(), r.expression.cursor_pos()),
-                        );
-                    }
-                    set_completion(&r.completion_state, &mut r.expression);
-                }))
-                .finish();
-
-            if res.is_some() {
-                r.completion_state = None;
-            }
-            res.into()
-        } else {
-            input.into()
-        };
-
-        let res = after_completion
+        let res = input
             .chain(
                 NavigateBehavior::new(&mut self.table) //TODO: Fix this properly in lineedit
                     .down_on(Key::Char('\n')),
             )
-            .chain(self.table.current_cell_behavior())
+            .chain(self.table.current_cell_behavior(p))
             .chain(
                 NavigateBehavior::new(&mut self.table)
                     .up_on(Key::Up)
@@ -229,9 +211,21 @@ impl Container<::UpdateParametersStruct> for ExpressionTable {
                     .right_on(Key::Right),
             )
             .finish();
-
         self.shrink_to_fit();
-        self.update_results(p);
         res
+    }
+
+    fn as_widget<'a>(&'a self) -> Box<dyn Widget + 'a> {
+        Box::new(
+            self.table
+                .as_widget()
+                .row_separation(SeparatingStyle::AlternatingStyle(
+                    StyleModifier::new().bg_color(Color::Black),
+                ))
+                .col_separation(SeparatingStyle::Draw(
+                    GraphemeCluster::try_from('│').unwrap(),
+                ))
+                .focused(StyleModifier::new().bold(true)),
+        )
     }
 }

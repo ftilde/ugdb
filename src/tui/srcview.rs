@@ -13,8 +13,7 @@ use unsegen::base::{Color, Cursor, GraphemeCluster, StyleModifier, Window};
 use unsegen::container::Container;
 use unsegen::input::{Input, Key, ScrollBehavior};
 use unsegen::widget::{
-    text_width, ColDemand, Demand, Demand2D, HorizontalLayout, RenderingHints, SeparatingStyle,
-    Widget,
+    text_width, Centered, ColDemand, Demand, Demand2D, HLayout, RenderingHints, VLayout, Widget,
 };
 use unsegen_pager::{
     LineDecorator, Pager, PagerContent, PagerError, PagerLine, SyntectHighlighter,
@@ -420,15 +419,6 @@ impl<'a> AssemblyView<'a> {
     }
 }
 
-impl<'a> Widget for AssemblyView<'a> {
-    fn space_demand(&self) -> Demand2D {
-        self.pager.space_demand()
-    }
-    fn draw(&self, window: Window, hints: RenderingHints) {
-        self.pager.draw(window, hints)
-    }
-}
-
 struct SourceDecorator {
     stop_position: Option<LineNumber>,
     breakpoint_lines: HashSet<LineNumber>,
@@ -742,15 +732,6 @@ impl<'a> SourceView<'a> {
     }
 }
 
-impl<'a> Widget for SourceView<'a> {
-    fn space_demand(&self) -> Demand2D {
-        self.pager.space_demand()
-    }
-    fn draw(&self, window: Window, hints: RenderingHints) {
-        self.pager.draw(window, hints);
-    }
-}
-
 #[derive(Clone, PartialEq)]
 enum DisplayMode {
     Source,
@@ -781,7 +762,7 @@ struct StackInfo {
     function: Option<String>,
 }
 
-impl Widget for StackInfo {
+impl<'a> Widget for &'a StackInfo {
     fn space_demand(&self) -> Demand2D {
         Demand2D {
             // TODO: reenable this once configurable layouts are a thing.
@@ -909,7 +890,6 @@ fn disassemble_address(
 pub struct CodeWindow<'a> {
     src_view: SourceView<'a>,
     asm_view: AssemblyView<'a>,
-    layout: HorizontalLayout,
     preferred_mode: DisplayMode,
     src_state: SrcContentState,
     asm_state: AsmContentState,
@@ -922,9 +902,6 @@ impl<'a> CodeWindow<'a> {
         CodeWindow {
             src_view: SourceView::new(highlighting_theme),
             asm_view: AssemblyView::new(highlighting_theme),
-            layout: HorizontalLayout::new(SeparatingStyle::Draw(
-                GraphemeCluster::try_from('|').unwrap(),
-            )),
             preferred_mode: DisplayMode::Message(welcome_msg.to_owned()),
             src_state: SrcContentState::Unavailable,
             asm_state: AsmContentState::Unavailable,
@@ -1253,50 +1230,6 @@ impl<'a> CodeWindow<'a> {
     }
 }
 
-impl<'a> Widget for CodeWindow<'a> {
-    fn space_demand(&self) -> Demand2D {
-        let mode = self.available_display_mode();
-        let main_demand = match &mode {
-            DisplayMode::Assembly => self.asm_view.space_demand(),
-            DisplayMode::SideBySide => self.layout.space_demand(&[&self.asm_view, &self.src_view]),
-            DisplayMode::Source => self.src_view.space_demand(),
-            DisplayMode::Message(ref m) => MsgWindow::new(&m).space_demand(),
-        };
-        if let DisplayMode::Assembly | DisplayMode::Source | DisplayMode::SideBySide = mode {
-            main_demand.add_vertical(self.stack_info.space_demand())
-        } else {
-            main_demand
-        }
-    }
-    fn draw(&self, window: Window, hints: RenderingHints) {
-        let mode = self.available_display_mode();
-        let window =
-            if let DisplayMode::Assembly | DisplayMode::SideBySide | DisplayMode::Source = mode {
-                match window.split(RowIndex::new(1)) {
-                    Ok((top, window)) => {
-                        self.stack_info.draw(top, hints);
-                        window
-                    }
-                    Err(window) => window,
-                }
-            } else {
-                window
-            };
-        match mode {
-            DisplayMode::Assembly => self.asm_view.draw(window, hints),
-            DisplayMode::SideBySide => self.layout.draw(
-                window,
-                &[
-                    (&self.asm_view, hints),
-                    (&self.src_view, hints.active(false)),
-                ],
-            ),
-            DisplayMode::Source => self.src_view.draw(window, hints),
-            DisplayMode::Message(m) => MsgWindow::new(&m).draw(window, hints),
-        }
-    }
-}
-
 impl<'a> Container<::UpdateParametersStruct> for CodeWindow<'a> {
     fn input(&mut self, input: Input, p: ::UpdateParameters) -> Option<Input> {
         input
@@ -1323,39 +1256,24 @@ impl<'a> Container<::UpdateParametersStruct> for CodeWindow<'a> {
             })
             .finish()
     }
-}
+    fn as_widget<'e>(&'e self) -> Box<dyn Widget + 'e> {
+        let mode = self.available_display_mode();
 
-struct MsgWindow<'a> {
-    msg: &'a str,
-}
-
-impl<'a> MsgWindow<'a> {
-    fn new(msg: &'a str) -> Self {
-        MsgWindow { msg: msg }
-    }
-}
-
-impl<'a> Widget for MsgWindow<'a> {
-    fn space_demand(&self) -> Demand2D {
-        Demand2D {
-            width: Demand::at_least(1),
-            height: Demand::at_least(1),
+        let mut r = VLayout::new();
+        if let DisplayMode::Assembly | DisplayMode::Source | DisplayMode::SideBySide = mode {
+            r = r.widget(&self.stack_info)
         }
-    }
-    fn draw(&self, mut window: Window, _: RenderingHints) {
-        let lines: Vec<_> = self.msg.lines().collect();
-        let num_lines = lines.len();
-
-        let start_line = ((window.get_height() - num_lines as i32) / 2).from_origin();
-        let window_width = window.get_width();
-
-        let mut c = Cursor::new(&mut window);
-        c.move_to_y(start_line);
-        for line in lines {
-            let start_x = ((window_width - text_width(line)) / 2).from_origin();
-            c.move_to_x(start_x);
-            c.write(line);
-            c.wrap_line();
-        }
+        r = match mode {
+            DisplayMode::Assembly => r.widget(self.asm_view.pager.as_widget()),
+            DisplayMode::SideBySide => r.widget(
+                HLayout::new()
+                    .separator(GraphemeCluster::try_from('|').unwrap())
+                    .widget(self.asm_view.pager.as_widget())
+                    .widget(self.src_view.pager.as_widget()),
+            ),
+            DisplayMode::Source => r.widget(self.src_view.pager.as_widget()),
+            DisplayMode::Message(m) => r.widget(Centered(m)),
+        };
+        Box::new(r)
     }
 }

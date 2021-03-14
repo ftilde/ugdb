@@ -1,10 +1,10 @@
 use tui::commands::CommandState;
 
-use unsegen::base::{GraphemeCluster, Window};
+use unsegen::base::GraphemeCluster;
 use unsegen::container::Container;
 use unsegen::input::{EditBehavior, Input, Key, ScrollBehavior};
 use unsegen::widget::builtin::{LogViewer, PromptLine};
-use unsegen::widget::{Demand2D, RenderingHints, SeparatingStyle, VerticalLayout, Widget};
+use unsegen::widget::{VLayout, Widget};
 
 use completion::{CmdlineCompleter, Completer, CompletionState};
 
@@ -17,7 +17,6 @@ enum GDBState {
 pub struct Console {
     gdb_log: LogViewer,
     prompt_line: PromptLine,
-    layout: VerticalLayout,
     last_gdb_state: GDBState,
     command_state: CommandState,
     completion_state: Option<CompletionState>,
@@ -36,9 +35,6 @@ impl Console {
         Console {
             gdb_log: LogViewer::new(),
             prompt_line,
-            layout: VerticalLayout::new(SeparatingStyle::Draw(
-                GraphemeCluster::try_from('=').unwrap(),
-            )),
             last_gdb_state: GDBState::Stopped,
             command_state: CommandState::Idle,
             completion_state: None,
@@ -81,18 +77,6 @@ impl Console {
     }
 }
 
-impl Widget for Console {
-    fn space_demand(&self) -> Demand2D {
-        let widgets: Vec<&dyn Widget> = vec![&self.gdb_log, &self.prompt_line];
-        self.layout.space_demand(widgets.as_slice())
-    }
-    fn draw(&self, window: Window, hints: RenderingHints) {
-        self.layout.draw(
-            window,
-            &[(&self.gdb_log, hints), (&self.prompt_line, hints)],
-        )
-    }
-}
 impl Container<::UpdateParametersStruct> for Console {
     fn input(&mut self, input: Input, p: ::UpdateParameters) -> Option<Input> {
         let set_completion = |completion_state: &Option<CompletionState>,
@@ -160,5 +144,13 @@ impl Container<::UpdateParametersStruct> for Console {
         } else {
             None
         }
+    }
+    fn as_widget<'a>(&'a self) -> Box<dyn Widget + 'a> {
+        Box::new(
+            VLayout::new()
+                .separator(GraphemeCluster::try_from('=').unwrap())
+                .widget(self.gdb_log.as_widget())
+                .widget(self.prompt_line.as_widget()),
+        )
     }
 }

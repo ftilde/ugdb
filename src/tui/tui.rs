@@ -17,8 +17,7 @@ pub struct Tui<'a> {
 }
 
 const WELCOME_MSG: &str = concat!(
-    r#"
-       Welcome to        
+    r#"       Welcome to        
  _   _  __ _  __| | |__  
 | | | |/ _` |/ _` | '_ \ 
 | |_| | (_| | (_| | |_) |

@@ -387,14 +387,14 @@ fn run() -> i32 {
     let theme_set = unsegen_pager::ThemeSet::load_defaults();
 
     let left_pane = VSplit::new(vec![
-        Box::new(Leaf::new(TuiContainerType::SrcView)),
-        Box::new(Leaf::new(TuiContainerType::Console)),
+        (Box::new(Leaf::new(TuiContainerType::SrcView)), 1.0),
+        (Box::new(Leaf::new(TuiContainerType::Console)), 1.0),
     ]);
     let right_pane = VSplit::new(vec![
-        Box::new(Leaf::new(TuiContainerType::ExpressionTable)),
-        Box::new(Leaf::new(TuiContainerType::Terminal)),
+        (Box::new(Leaf::new(TuiContainerType::ExpressionTable)), 1.0),
+        (Box::new(Leaf::new(TuiContainerType::Terminal)), 1.0),
     ]);
-    let layout = HSplit::new(vec![Box::new(left_pane), Box::new(right_pane)]);
+    let layout = HSplit::new(vec![(Box::new(left_pane), 1.0), (Box::new(right_pane), 1.0)]);
 
     let mut update_parameters = UpdateParametersStruct {
         gdb: gdb,

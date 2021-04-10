@@ -149,12 +149,6 @@ checksum = "5f0dc55f2d8a1a85650ac47858bb001b4c0dd73d79e3c455a842925e68d29cd3"
 
 [[package]]
 name = "bitflags"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8dead7461c1127cf637931a1e50934eb6eee8bff2f74433ac7909e9afcee04a3"
-
-[[package]]
-name = "bitflags"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf1de2fe8c75bc145a2f577add951f8134889b4795d47466a54a5c846d691693"
@@ -263,7 +257,7 @@ checksum = "37e58ac78573c40708d45522f0d80fa2f01cc4f9b4e2bf749807255454312002"
 dependencies = [
  "ansi_term",
  "atty",
- "bitflags 1.2.1",
+ "bitflags",
  "strsim 0.8.0",
  "textwrap",
  "unicode-width",
@@ -276,7 +270,7 @@ version = "0.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ddfc5b9aa5d4507acaf872de71051dfd0e309860e88966e1051e462a077aac4f"
 dependencies = [
- "bitflags 1.2.1",
+ "bitflags",
 ]
 
 [[package]]
@@ -313,7 +307,7 @@ checksum = "6d944ac6003ed268757ef1ee686753b57efc5fcf0ebe7b64c9fc81e7e32ff839"
 dependencies = [
  "proc-macro2 0.4.30",
  "quote 0.6.13",
- "rustc_version 0.2.3",
+ "rustc_version",
  "syn 0.15.44",
 ]
 
@@ -607,25 +601,11 @@ checksum = "e4a24736216ec316047a1fc4252e27dabb04218aa4a3f37c6e7ddbf1f9782b54"
 
 [[package]]
 name = "nix"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0d95c5fa8b641c10ad0b8887454ebaafa3c92b5cd5350f8fc693adafd178e7b"
-dependencies = [
- "bitflags 0.4.0",
- "cfg-if 0.1.10",
- "libc",
- "rustc_version 0.1.7",
- "semver 0.1.20",
- "void",
-]
-
-[[package]]
-name = "nix"
 version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "50e4785f2c3b7589a0d0c1dd60285e1188adac4006e8abd6dd578e1567027363"
 dependencies = [
- "bitflags 1.2.1",
+ "bitflags",
  "cc",
  "cfg-if 0.1.10",
  "libc",
@@ -693,7 +673,7 @@ version = "3.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f5eeb268a4620c74ea5768c6d2ccd492d60a47a8754666b91a46bfc35cd4d1ba"
 dependencies = [
- "bitflags 1.2.1",
+ "bitflags",
  "lazy_static 1.4.0",
  "libc",
  "onig_sys",
@@ -1036,20 +1016,11 @@ checksum = "6e3bad0ee36814ca07d7968269dd4b7ec89ec2da10c4bb613928d3077083c232"
 
 [[package]]
 name = "rustc_version"
-version = "0.1.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c5f5376ea5e30ce23c03eb77cbe4962b988deead10910c372b226388b594c084"
-dependencies = [
- "semver 0.1.20",
-]
-
-[[package]]
-name = "rustc_version"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "138e3e0acb6c9fb258b19b67cb8abd63c00679d2851805ea151465464fe9030a"
 dependencies = [
- "semver 0.9.0",
+ "semver",
 ]
 
 [[package]]
@@ -1072,12 +1043,6 @@ checksum = "93fc1dc3aaa9bfed95e02e6eadabb4baf7e3078b0bd1b4d7b6b0b68378900502"
 dependencies = [
  "winapi-util",
 ]
-
-[[package]]
-name = "semver"
-version = "0.1.20"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d4f410fedcf71af0345d7607d246e7ad15faaadd49d240ee3b24e5dc21a820ac"
 
 [[package]]
 name = "semver"
@@ -1246,7 +1211,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc8a6f0db88d4afc340522c20d260411e746b2225b257c6b238a75de9d7cec78"
 dependencies = [
  "bincode",
- "bitflags 1.2.1",
+ "bitflags",
  "flate2",
  "fnv",
  "lazy_static 1.4.0",
@@ -1340,7 +1305,7 @@ dependencies = [
  "lalrpop",
  "lalrpop-util",
  "log",
- "nix 0.17.0",
+ "nix",
  "nom",
  "rand 0.3.23",
  "structopt",
@@ -1393,10 +1358,9 @@ dependencies = [
 [[package]]
 name = "unsegen"
 version = "0.2.5"
-source = "git+https://github.com/ftilde/unsegen#b0ecb802de2bff2c9435562158220e7f28ab1a91"
 dependencies = [
  "ndarray",
- "nix 0.17.0",
+ "nix",
  "raw_tty",
  "smallvec",
  "termion",
@@ -1407,8 +1371,6 @@ dependencies = [
 [[package]]
 name = "unsegen_jsonviewer"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f477418ccbbccd4004848be2bec3eb19f8dd093b0409333301efb00957ee89af"
 dependencies = [
  "json",
  "unsegen",
@@ -1417,8 +1379,6 @@ dependencies = [
 [[package]]
 name = "unsegen_pager"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c7d0baff3e4e2e111726d5d2fd40ad46799a7c682ddc47c7d6f2b5e54f2be24"
 dependencies = [
  "syntect",
  "unsegen",
@@ -1436,13 +1396,11 @@ dependencies = [
 
 [[package]]
 name = "unsegen_terminal"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af6d8ab41ee0d0fad9906c4b1ae39f05324a7385df75fcafa8dee271149e4eea"
+version = "0.2.2"
 dependencies = [
  "libc",
  "log",
- "nix 0.7.0",
+ "nix",
  "unsegen",
  "vte",
 ]
@@ -1534,7 +1492,7 @@ version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3c1cb601d29fe2c2ac60a2b2e5e293994d87a1f6fa9687a31a15270f909be9c2"
 dependencies = [
- "bitflags 1.2.1",
+ "bitflags",
 ]
 
 [[package]]

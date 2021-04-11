@@ -37,6 +37,7 @@ mod gdb_expression_parsing;
 mod gdbmi;
 mod ipc;
 mod tui;
+mod layout;
 
 use std::ffi::OsString;
 use std::ops::{Deref, DerefMut};
@@ -54,7 +55,7 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 use tui::{Tui, TuiContainerType};
 use unsegen::base::{Color, StyleModifier, Terminal};
-use unsegen::container::{ContainerManager, HSplit, Leaf, VSplit};
+use unsegen::container::{ContainerManager};
 use unsegen::input::{Input, Key, NavigateBehavior, ToEvent};
 use unsegen::widget::{Blink, RenderingHints};
 
@@ -146,6 +147,12 @@ struct Options {
         help = "Define initial entries for the expression table.",
     )]
     initial_expression_table_entries: Vec<String>,
+    #[structopt(
+        long = "layout",
+        help = "Define the initial tui layout via a format string.",
+        default_value = "(1s-1c)|(1e-1t)",
+    )]
+    layout: String,
     #[structopt(
         help = "Path to program to debug (with arguments).",
         parse(from_os_str),
@@ -329,6 +336,7 @@ fn run() -> i32 {
     let options = Options::from_args();
     let log_dir = options.log_dir.to_owned();
     let initial_expression_table_entries = options.initial_expression_table_entries.clone();
+    let layout = options.layout.clone();
 
     ::std::panic::set_hook(Box::new(move |info| {
         // Switch back to main screen
@@ -386,15 +394,31 @@ fn run() -> i32 {
 
     let theme_set = unsegen_pager::ThemeSet::load_defaults();
 
-    let left_pane = VSplit::new(vec![
-        (Box::new(Leaf::new(TuiContainerType::SrcView)), 1.0),
-        (Box::new(Leaf::new(TuiContainerType::Console)), 1.0),
-    ]);
-    let right_pane = VSplit::new(vec![
-        (Box::new(Leaf::new(TuiContainerType::ExpressionTable)), 1.0),
-        (Box::new(Leaf::new(TuiContainerType::Terminal)), 1.0),
-    ]);
-    let layout = HSplit::new(vec![(Box::new(left_pane), 1.0), (Box::new(right_pane), 1.0)]);
+    let layout = match layout::parse(&layout) {
+        Ok(l) => l,
+        Err(e) => {
+            eprintln!("Failed to parse layout string: ");
+
+            let format_expected = |expected: &'static[char]| {
+                match expected {
+                    &[l] => format!("'{}'", l),
+                    o => format!("One of {:?}", o),
+                }
+            };
+            match e {
+                layout::LayoutParseError::ExpectedGotMany(at, expected, got) => {
+                    eprintln!("Expected {}, but got {}!\n{}☛{} ", format_expected(expected), got, &layout[..at], &layout[at..]);
+                }
+                layout::LayoutParseError::TooShortExpected(expected) => {
+                    eprintln!("Too short! Expected at least {}.\n{}☚", format_expected(expected), &layout);
+                }
+                layout::LayoutParseError::SplitTypeChangeFromTo(at, from, to) => {
+                    eprintln!("Split type cannot change from '{}' to '{}' within a node. Try to use brackets.\n{}☛{}", from, to, &layout[..at], &layout[at..]);
+                }
+            }
+            return 0xfb;
+        }
+    };
 
     let mut update_parameters = UpdateParametersStruct {
         gdb: gdb,
@@ -427,7 +451,7 @@ fn run() -> i32 {
             }
         });
 
-        let mut app = ContainerManager::<Tui>::from_layout(Box::new(layout));
+        let mut app = ContainerManager::<Tui>::from_layout(layout);
         let mut input_mode = InputMode::Normal;
         let mut focus_esc_timer = MpscTimer::new();
         let mut cursor_status = Blink::On;

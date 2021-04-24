@@ -1,6 +1,5 @@
 use unix_socket::{UnixListener, UnixStream};
 
-use chan;
 use json;
 
 use gdb::BreakpointOperationError;
@@ -33,6 +32,7 @@ impl IPCError {
     }
 }
 
+#[derive(Debug)]
 pub struct IPCRequest {
     raw_request: Vec<u8>,
     response_channel: UnixStream,
@@ -171,7 +171,6 @@ const HEADER_LENGTH: usize = 12;
 
 pub struct IPC {
     socket_path: PathBuf,
-    pub requests: chan::Receiver<IPCRequest>,
 }
 
 fn write_ipc_header<W: Write>(w: &mut W, msg_len: u32) -> ::std::io::Result<()> {
@@ -220,7 +219,7 @@ fn try_read_ipc_request(connection: &mut UnixStream) -> Result<IPCRequest, ()> {
     })
 }
 
-fn start_connection(mut connection: UnixStream, request_sink: chan::Sender<IPCRequest>) {
+fn start_connection(mut connection: UnixStream, request_sink: std::sync::mpsc::Sender<::Event>) {
     let _ = thread::Builder::new()
         .name("IPC Connection".to_owned())
         .spawn(move || {
@@ -229,7 +228,7 @@ fn start_connection(mut connection: UnixStream, request_sink: chan::Sender<IPCRe
             loop {
                 match try_read_ipc_request(&mut connection) {
                     Ok(request) => {
-                        request_sink.send(request);
+                        request_sink.send(::Event::Ipc(request)).unwrap();
                     }
                     Err(_) => {
                         // If you don't play nicely, we don't want to talk:
@@ -241,9 +240,7 @@ fn start_connection(mut connection: UnixStream, request_sink: chan::Sender<IPCRe
 }
 
 impl IPC {
-    pub fn setup() -> ::std::io::Result<Self> {
-        let (request_sink, request_source) = chan::async();
-
+    pub fn setup(request_sink: std::sync::mpsc::Sender<::Event>) -> ::std::io::Result<Self> {
         let runtime_dir =
             ::std::env::var_os("XDG_RUNTIME_DIR").unwrap_or(OsString::from(FALLBACK_RUNTIME_DIR));
         let ugdb_dir = Path::join(runtime_dir.as_ref(), RUNTIME_SUBDIR);
@@ -270,7 +267,6 @@ impl IPC {
 
         Ok(IPC {
             socket_path: socket_path,
-            requests: request_source,
         })
     }
 }

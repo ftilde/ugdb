@@ -13,8 +13,6 @@ doc = false
 name = "ugdb"
 
 [dependencies]
-chan = "0.1"
-chan-signal = "0.3"
 structopt = "0.2.1"
 time = "0.1"
 backtrace = "0.3"

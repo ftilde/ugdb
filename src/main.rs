@@ -1,7 +1,4 @@
-#[macro_use]
-extern crate chan;
 extern crate backtrace;
-extern crate chan_signal;
 extern crate flexi_logger;
 extern crate log;
 extern crate nix;
@@ -36,26 +33,26 @@ mod gdb;
 mod gdb_expression_parsing;
 mod gdbmi;
 mod ipc;
-mod tui;
 mod layout;
+mod tui;
 
+use ipc::IPCRequest;
 use std::ffi::OsString;
-use std::ops::{Deref, DerefMut};
 use std::time::Duration;
 
-use chan::{Receiver, Sender};
-use chan_signal::Signal;
+use std::sync::mpsc::Sender;
 
 use gdb::GDB;
 use gdbmi::output::OutOfBandRecord;
 use gdbmi::{GDBBuilder, OutOfBandRecordSink};
 use log::{debug, warn};
+use nix::sys::signal::Signal;
 use nix::sys::termios;
 use std::path::PathBuf;
 use structopt::StructOpt;
 use tui::{Tui, TuiContainerType};
 use unsegen::base::{Color, StyleModifier, Terminal};
-use unsegen::container::{ContainerManager};
+use unsegen::container::ContainerManager;
 use unsegen::input::{Input, Key, NavigateBehavior, ToEvent};
 use unsegen::widget::{Blink, RenderingHints};
 
@@ -144,18 +141,18 @@ struct Options {
     #[structopt(
         short = "e",
         long = "initial-expression",
-        help = "Define initial entries for the expression table.",
+        help = "Define initial entries for the expression table."
     )]
     initial_expression_table_entries: Vec<String>,
     #[structopt(
         long = "layout",
         help = "Define the initial tui layout via a format string.",
-        default_value = "(1s-1c)|(1e-1t)",
+        default_value = "(1s-1c)|(1e-1t)"
     )]
     layout: String,
     #[structopt(
         help = "Path to program to debug (with arguments).",
-        parse(from_os_str),
+        parse(from_os_str)
     )]
     program: Vec<OsString>,
     // Not sure how to mimic gdbs cmdline behavior for the positional arguments...
@@ -216,19 +213,25 @@ impl Options {
     }
 }
 
-struct MpscOobRecordSink(Sender<OutOfBandRecord>);
+struct MpscOobRecordSink(Sender<Event>);
 
 impl OutOfBandRecordSink for MpscOobRecordSink {
     fn send(&self, data: OutOfBandRecord) {
-        self.0.send(data);
+        self.0.send(Event::OutOfBandRecord(data)).unwrap();
     }
 }
 
-struct MpscSlaveInputSink(Sender<Box<[u8]>>);
+impl Drop for MpscOobRecordSink {
+    fn drop(&mut self) {
+        self.0.send(Event::GdbShutdown).unwrap();
+    }
+}
+
+struct MpscSlaveInputSink(Sender<Event>);
 
 impl ::unsegen_terminal::SlaveInputSink for MpscSlaveInputSink {
     fn receive_bytes_from_pty(&mut self, data: Box<[u8]>) {
-        self.0.send(data);
+        self.0.send(Event::Pty(data)).unwrap();
     }
 }
 
@@ -257,48 +260,53 @@ pub struct UpdateParametersStruct {
 // A timer that can be used to receive an event at any time,
 // but will never send until started via try_start_ms.
 struct MpscTimer {
-    receiver: Receiver<()>,
-    sender: Option<Sender<()>>,
+    next_sender: Option<Sender<Event>>,
+    sender: Sender<Event>,
+    evt_fn: Box<dyn Fn() -> Event>,
+    counter: std::sync::Arc<std::sync::atomic::AtomicU64>,
 }
+
 impl MpscTimer {
-    fn new() -> Self {
-        let (sender, receiver) = chan::sync(0);
+    fn new(sender: Sender<Event>, evt_fn: Box<dyn Fn() -> Event>) -> Self {
         MpscTimer {
-            receiver: receiver,
-            sender: Some(sender),
+            next_sender: Some(sender.clone()),
+            sender,
+            evt_fn,
+            counter: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
         }
     }
 
     // Try to start the timer if it has not been started already.
     fn try_start(&mut self, duration: Duration) {
-        if let Some(sender) = self.sender.take() {
-            std::thread::spawn(move || {
+        if let Some(sender) = self.next_sender.take() {
+            let start_number = self.counter.load(std::sync::atomic::Ordering::SeqCst);
+            let counter = self.counter.clone();
+            let evt = (self.evt_fn)();
+            let _ = std::thread::spawn(move || {
                 std::thread::sleep(duration);
-                drop(sender);
+                let current = counter.load(std::sync::atomic::Ordering::SeqCst);
+                if current == start_number {
+                    sender.send(evt).unwrap();
+                }
             });
         }
     }
 
     fn has_been_started(&self) -> bool {
-        self.sender.is_none()
+        self.next_sender.is_none()
     }
 
     fn reset(&mut self) {
-        let (sender, receiver) = chan::sync(0);
-        self.receiver = receiver;
-        self.sender = Some(sender);
+        self.next_sender = Some(self.sender.clone());
+        self.counter
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     }
 }
-impl Deref for MpscTimer {
-    type Target = Receiver<()>;
 
-    fn deref(&self) -> &Self::Target {
-        &self.receiver
-    }
-}
-impl DerefMut for MpscTimer {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.receiver
+impl Drop for MpscTimer {
+    fn drop(&mut self) {
+        self.counter
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     }
 }
 
@@ -319,12 +327,40 @@ impl InputMode {
     }
 }
 
+#[derive(Debug)]
+pub enum Event {
+    Signal(nix::sys::signal::Signal),
+    Input(Input),
+    Pty(Box<[u8]>),
+    CursorTimer,
+    RenderTimer,
+    FocusEscTimer,
+    OutOfBandRecord(OutOfBandRecord),
+    GdbShutdown,
+    Ipc(IPCRequest),
+}
+
 fn run() -> i32 {
     // Setup signal piping:
-    // NOTE: This has to be set up before the creation of any other threads!
-    // (See chan_signal documentation)
-    let signal_event_source = chan_signal::notify(&[Signal::WINCH, Signal::TSTP, Signal::TERM]);
-    chan_signal::block(&[Signal::CONT]);
+    let mut signals_to_wait = nix::sys::signal::SigSet::empty();
+    signals_to_wait.add(Signal::SIGWINCH);
+    signals_to_wait.add(Signal::SIGTSTP);
+    signals_to_wait.add(Signal::SIGTERM);
+    let mut signals_to_block = signals_to_wait.clone();
+    signals_to_block.add(Signal::SIGCONT);
+
+    // We block the signals for the current (and so far only thread). This mask will be inherited
+    // by all other threads spawned subsequently, so that we retrieve signals using sigwait.
+    signals_to_block.thread_block().unwrap();
+
+    let (event_sink, event_source) = std::sync::mpsc::channel();
+
+    let signal_sink = event_sink.clone();
+    ::std::thread::spawn(move || loop {
+        if let Ok(signal) = signals_to_wait.wait() {
+            signal_sink.send(Event::Signal(signal)).unwrap();
+        }
+    });
 
     // Set up a panic hook that ALWAYS displays panic information (including stack) to the main
     // terminal screen.
@@ -366,29 +402,25 @@ fn run() -> i32 {
     }
 
     // Create terminal and setup slave input piping
-    let (pts_sink, pts_source) = chan::async();
-    let tui_terminal =
-        ::unsegen_terminal::Terminal::new(MpscSlaveInputSink(pts_sink)).expect("Create PTY");
+    let tui_terminal = ::unsegen_terminal::Terminal::new(MpscSlaveInputSink(event_sink.clone()))
+        .expect("Create PTY");
 
     // Setup ipc
-    let mut ipc = ipc::IPC::setup().expect("Setup ipc");
+    let _ipc = ipc::IPC::setup(event_sink.clone()).expect("Setup ipc");
 
     // Start gdb and setup output event piping
-    let (oob_sink, oob_source) = chan::async();
-
     let gdb_path = options.gdb_path.to_string_lossy().to_string();
     let mut gdb_builder = options.create_gdb_builder();
     gdb_builder = gdb_builder.tty(tui_terminal.slave_name().into());
-    let gdb = GDB::new(match gdb_builder.try_spawn(MpscOobRecordSink(oob_sink)) {
-        Ok(gdb) => gdb,
-        Err(e) => {
-            eprintln!("Failed to spawn gdb process (\"{}\"): {}", gdb_path, e);
-            return 0xfc;
-        }
-    });
-
-    // Setup input piping
-    let (keyboard_sink, keyboard_source) = chan::async();
+    let gdb = GDB::new(
+        match gdb_builder.try_spawn(MpscOobRecordSink(event_sink.clone())) {
+            Ok(gdb) => gdb,
+            Err(e) => {
+                eprintln!("Failed to spawn gdb process (\"{}\"): {}", gdb_path, e);
+                return 0xfc;
+            }
+        },
+    );
 
     let stdout = std::io::stdout();
 
@@ -403,7 +435,7 @@ fn run() -> i32 {
     };
 
     let mut update_parameters = UpdateParametersStruct {
-        gdb: gdb,
+        gdb,
         message_sink: MessageSink {
             messages: Vec::new(),
         },
@@ -425,114 +457,133 @@ fn run() -> i32 {
         // Start stdin thread _after_ building terminal (and setting the actual terminal to raw
         // mode to avoid race condition where the first 'set of input' is buffered
         /* let keyboard_input = */
+        let keyboard_sink = event_sink.clone();
         ::std::thread::spawn(move || {
             let stdin = ::std::io::stdin();
             let stdin = stdin.lock();
             for e in Input::read_all(stdin) {
-                keyboard_sink.send(e.expect("event"));
+                keyboard_sink.send(Event::Input(e.expect("event"))).unwrap();
             }
         });
 
         let mut app = ContainerManager::<Tui>::from_layout(layout);
         let mut input_mode = InputMode::Normal;
-        let mut focus_esc_timer = MpscTimer::new();
+        let mut focus_esc_timer =
+            MpscTimer::new(event_sink.clone(), Box::new(|| Event::FocusEscTimer));
         let mut cursor_status = Blink::On;
         let mut cursor_blinks_since_last_input = 0;
 
-        // Somehow ipc.requests does not work in the chan_select macro...
-        let ipc_requests = &mut ipc.requests;
-
         'runloop: loop {
-            let mut cursor_update_timer = MpscTimer::new();
+            let mut cursor_update_timer =
+                MpscTimer::new(event_sink.clone(), Box::new(|| Event::CursorTimer));
             if cursor_blinks_since_last_input < CURSOR_BLINK_TIMES {
                 cursor_update_timer.try_start(Duration::from_millis(CURSOR_BLINK_PERIOD_MS));
             }
 
-            let mut render_delay_timer = MpscTimer::new();
+            let mut render_delay_timer =
+                MpscTimer::new(event_sink.clone(), Box::new(|| Event::RenderTimer));
             let mut esc_timer_needs_reset = false;
             'displayloop: loop {
                 let mut esc_in_focused_context_pressed = false;
-                #[allow(unused_mut)]
-                {
-                    // Not sure where the unused mut in the chan_select macro is coming from...
-                    chan_select! {
-                        cursor_update_timer.recv() => {
-                            cursor_status.toggle();
-                            cursor_blinks_since_last_input += 1;
-                            break 'displayloop;
-                        },
-                        render_delay_timer.recv() => {
-                            cursor_status = Blink::On;
-                            cursor_blinks_since_last_input = 0;
-                            break 'displayloop;
-                        },
-                        focus_esc_timer.recv() => {
-                            Input { event: Key::Esc.to_event(), raw: vec![0x1bu8] }.chain(app.active_container_behavior(&mut tui, &mut update_parameters));
-                            esc_timer_needs_reset = true;
-                            break 'displayloop;
-                        },
-                        keyboard_source.recv() -> input => {
-                            let sig_behavior = ::unsegen_signals::SignalBehavior::new().on_default::<::unsegen_signals::SIGTSTP>();
-                            let input = input.expect("read keyboard event")
-                                .chain(sig_behavior);
-                            match input_mode {
-                                InputMode::ContainerSelect => {
-                                    input
-                                        .chain(NavigateBehavior::new(&mut app.navigatable(&mut tui))
-                                               .up_on(Key::Char('k'))
-                                               .up_on(Key::Up)
-                                               .down_on(Key::Char('j'))
-                                               .down_on(Key::Down)
-                                               .left_on(Key::Char('h'))
-                                               .left_on(Key::Left)
-                                               .right_on(Key::Char('l'))
-                                               .right_on(Key::Right)
-                                              )
-                                        .chain((Key::Char('i'), || { input_mode = InputMode::Normal; app.set_active(TuiContainerType::Console); }))
-                                        .chain((Key::Char('e'), || { input_mode = InputMode::Normal; app.set_active(TuiContainerType::ExpressionTable); }))
-                                        .chain((Key::Char('s'), || { input_mode = InputMode::Normal; app.set_active(TuiContainerType::SrcView); }))
-                                        .chain((Key::Char('t'), || { input_mode = InputMode::Normal; app.set_active(TuiContainerType::Terminal); }))
-                                        .chain((Key::Char('T'), || { input_mode = InputMode::Focused; app.set_active(TuiContainerType::Terminal); }))
-                                        .chain((Key::Char('\n'), || input_mode = InputMode::Normal ))
-                                }
-                                InputMode::Normal => {
-                                    input
-                                        .chain((Key::Esc, || input_mode = InputMode::ContainerSelect ))
-                                        .chain(app.active_container_behavior(&mut tui, &mut update_parameters))
-                                }
-                                InputMode::Focused => {
-                                    input
-                                        .chain((Key::Esc, || esc_in_focused_context_pressed = true ))
-                                        .chain(app.active_container_behavior(&mut tui, &mut update_parameters))
-                                }
-                            }.finish();
-                        },
-                        oob_source.recv() -> oob_evt => {
-                            if let Some(record) = oob_evt {
-                                tui.add_out_of_band_record(record, &mut update_parameters);
-                            } else {
-                                // OOB pipe has closed. => gdb will be stopping soon
-                                break 'runloop;
-                            }
-                        },
-                        ipc_requests.recv() -> request => {
-                            request.expect("receive request").respond(&mut update_parameters);
-                        },
-                        pts_source.recv() -> pty_output => {
-                            tui.add_pty_input(&pty_output.expect("get pty input"));
-                        },
-                        signal_event_source.recv() -> signal_event => {
-                            let sig = signal_event.expect("get signal event");
-                            match sig {
-                                Signal::WINCH => { /* Ignore, we just want to redraw */ },
-                                Signal::TSTP => { if let Err(e) = terminal.handle_sigtstp() {
+                let e = event_source.recv().unwrap();
+                use log::info;
+                info!("Got event: {:?}", e);
+                match e {
+                    Event::CursorTimer => {
+                        cursor_status.toggle();
+                        cursor_blinks_since_last_input += 1;
+                        break 'displayloop;
+                    }
+                    Event::RenderTimer => {
+                        cursor_status = Blink::On;
+                        cursor_blinks_since_last_input = 0;
+                        break 'displayloop;
+                    }
+                    Event::FocusEscTimer => {
+                        Input {
+                            event: Key::Esc.to_event(),
+                            raw: vec![0x1bu8],
+                        }
+                        .chain(app.active_container_behavior(&mut tui, &mut update_parameters));
+                        esc_timer_needs_reset = true;
+                        break 'displayloop;
+                    }
+                    Event::Input(input) => {
+                        let sig_behavior = ::unsegen_signals::SignalBehavior::new()
+                            .on_default::<::unsegen_signals::SIGTSTP>();
+                        let input = input.chain(sig_behavior);
+                        match input_mode {
+                            InputMode::ContainerSelect => input
+                                .chain(
+                                    NavigateBehavior::new(&mut app.navigatable(&mut tui))
+                                        .up_on(Key::Char('k'))
+                                        .up_on(Key::Up)
+                                        .down_on(Key::Char('j'))
+                                        .down_on(Key::Down)
+                                        .left_on(Key::Char('h'))
+                                        .left_on(Key::Left)
+                                        .right_on(Key::Char('l'))
+                                        .right_on(Key::Right),
+                                )
+                                .chain((Key::Char('i'), || {
+                                    input_mode = InputMode::Normal;
+                                    app.set_active(TuiContainerType::Console);
+                                }))
+                                .chain((Key::Char('e'), || {
+                                    input_mode = InputMode::Normal;
+                                    app.set_active(TuiContainerType::ExpressionTable);
+                                }))
+                                .chain((Key::Char('s'), || {
+                                    input_mode = InputMode::Normal;
+                                    app.set_active(TuiContainerType::SrcView);
+                                }))
+                                .chain((Key::Char('t'), || {
+                                    input_mode = InputMode::Normal;
+                                    app.set_active(TuiContainerType::Terminal);
+                                }))
+                                .chain((Key::Char('T'), || {
+                                    input_mode = InputMode::Focused;
+                                    app.set_active(TuiContainerType::Terminal);
+                                }))
+                                .chain((Key::Char('\n'), || input_mode = InputMode::Normal)),
+                            InputMode::Normal => input
+                                .chain((Key::Esc, || input_mode = InputMode::ContainerSelect))
+                                .chain(
+                                    app.active_container_behavior(&mut tui, &mut update_parameters),
+                                ),
+                            InputMode::Focused => input
+                                .chain((Key::Esc, || esc_in_focused_context_pressed = true))
+                                .chain(
+                                    app.active_container_behavior(&mut tui, &mut update_parameters),
+                                ),
+                        }
+                        .finish();
+                    }
+                    Event::OutOfBandRecord(record) => {
+                        tui.add_out_of_band_record(record, &mut update_parameters);
+                    }
+                    Event::GdbShutdown => {
+                        break 'runloop;
+                    }
+                    Event::Ipc(request) => {
+                        request.respond(&mut update_parameters);
+                    }
+                    Event::Pty(pty_output) => {
+                        tui.add_pty_input(&pty_output);
+                    }
+                    Event::Signal(signal_event) => {
+                        let sig = signal_event;
+                        match sig {
+                            Signal::SIGWINCH => { /* Ignore, we just want to redraw */ }
+                            Signal::SIGTSTP => {
+                                if let Err(e) = terminal.handle_sigtstp() {
                                     warn!("Unable to handle SIGTSTP: {}", e);
-                                }},
-                                Signal::TERM => { update_parameters.gdb.kill() },
-                                _ => {}
+                                }
                             }
-                            debug!("received signal {:?}", sig);
-                        },
+                            Signal::SIGTERM => update_parameters.gdb.kill(),
+                            _ => {}
+                        }
+                        debug!("received signal {:?}", sig);
                     }
                 }
                 if esc_in_focused_context_pressed {

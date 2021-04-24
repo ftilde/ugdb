@@ -119,27 +119,12 @@ dependencies = [
 
 [[package]]
 name = "bit-set"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9bf6104718e80d7b26a68fdbacff3481cfc05df670821affc7e9cbc1884400c"
-dependencies = [
- "bit-vec 0.4.4",
-]
-
-[[package]]
-name = "bit-set"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e11e16035ea35e4e5997b393eacbf6f63983188f7a2ad25bfb13465f5ad59de"
 dependencies = [
- "bit-vec 0.6.2",
+ "bit-vec",
 ]
-
-[[package]]
-name = "bit-vec"
-version = "0.4.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02b4ff8b16e6076c3e14220b39fbc1fabb6737522281a388998046859400895f"
 
 [[package]]
 name = "bit-vec"
@@ -216,27 +201,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
-name = "chan"
-version = "0.1.23"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d14956a3dae065ffaa0d92ece848ab4ced88d32361e7fdfbfd653a5c454a1ed8"
-dependencies = [
- "rand 0.3.23",
-]
-
-[[package]]
-name = "chan-signal"
-version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b829e3f5432da0cc46577d89fc88c937e78052e6735fb47ce0213b0db120b01"
-dependencies = [
- "bit-set 0.4.0",
- "chan",
- "lazy_static 0.2.11",
- "libc",
-]
-
-[[package]]
 name = "chrono"
 version = "0.4.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -296,7 +260,7 @@ checksum = "c3c7c73a2d1e9fc0886a08b93e98eb643461230d5f1925e4036204d5f2e261a8"
 dependencies = [
  "autocfg 1.0.1",
  "cfg-if 0.1.10",
- "lazy_static 1.4.0",
+ "lazy_static",
 ]
 
 [[package]]
@@ -343,7 +307,7 @@ version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f525a586d310c87df72ebcd98009e57f1cc030c8c268305287a476beb653969"
 dependencies = [
- "lazy_static 1.4.0",
+ "lazy_static",
  "regex",
  "serde",
  "strsim 0.9.3",
@@ -500,7 +464,7 @@ checksum = "de5e019883a6e9734d093f34216a3857160c6bc2a9a1ec196a177aaa737c74af"
 dependencies = [
  "ascii-canvas",
  "atty",
- "bit-set 0.5.2",
+ "bit-set",
  "diff",
  "docopt",
  "ena",
@@ -522,12 +486,6 @@ name = "lalrpop-util"
 version = "0.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d6e9bc1801eb54529fd6a020aaf9514e8193bb6b42d96d0fe7da99187efa93d"
-
-[[package]]
-name = "lazy_static"
-version = "0.2.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "76f033c7ad61445c5b347c7382dd1237847eb1bce590fe50365dcb33d546be73"
 
 [[package]]
 name = "lazy_static"
@@ -674,7 +632,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f5eeb268a4620c74ea5768c6d2ccd492d60a47a8754666b91a46bfc35cd4d1ba"
 dependencies = [
  "bitflags",
- "lazy_static 1.4.0",
+ "lazy_static",
  "libc",
  "onig_sys",
 ]
@@ -1120,7 +1078,7 @@ version = "0.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "89c058a82f9fd69b1becf8c274f412281038877c553182f1d02eb027045a2d67"
 dependencies = [
- "lazy_static 1.4.0",
+ "lazy_static",
  "new_debug_unreachable",
  "phf_shared",
  "precomputed-hash",
@@ -1214,7 +1172,7 @@ dependencies = [
  "bitflags",
  "flate2",
  "fnv",
- "lazy_static 1.4.0",
+ "lazy_static",
  "onig",
  "plist",
  "regex-syntax 0.4.2",
@@ -1263,7 +1221,7 @@ version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d40c6d1b69745a6ec6fb1ca717914848da4b44ae29d9b3080cbee91d72a69b14"
 dependencies = [
- "lazy_static 1.4.0",
+ "lazy_static",
 ]
 
 [[package]]
@@ -1297,8 +1255,6 @@ name = "ugdb"
 version = "0.1.9"
 dependencies = [
  "backtrace",
- "chan",
- "chan-signal",
  "derive_more",
  "flexi_logger",
  "json",

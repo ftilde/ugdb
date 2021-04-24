@@ -415,6 +415,9 @@ fn run() -> i32 {
                 layout::LayoutParseError::SplitTypeChangeFromTo(at, from, to) => {
                     eprintln!("Split type cannot change from '{}' to '{}' within a node. Try to use brackets.\n{}☛{}", from, to, &layout[..at], &layout[at..]);
                 }
+                layout::LayoutParseError::NoConsole => {
+                    eprintln!("Layout MUST contain gdb console. Insert 'c' somewhere in the layout.");
+                }
             }
             return 0xfb;
         }

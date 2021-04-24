@@ -7,6 +7,7 @@ pub enum LayoutParseError {
     TooShortExpected(&'static [char]),
     ExpectedGotMany(usize, &'static [char], char),
     SplitTypeChangeFromTo(usize, char, char),
+    NoConsole,
 }
 
 #[derive(Copy, Clone)]
@@ -151,6 +152,9 @@ fn parse_node<'a, 'b>(
 }
 
 pub fn parse(s: &str) -> Result<Box<dyn Layout<Tui> + '_>, LayoutParseError> {
+    if !s.contains('c') {
+        return Err(LayoutParseError::NoConsole);
+    }
     let mut i = Input::new(s)?;
     parse_node(&mut i)
 }

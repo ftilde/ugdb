@@ -397,28 +397,7 @@ fn run() -> i32 {
     let layout = match layout::parse(&layout) {
         Ok(l) => l,
         Err(e) => {
-            eprintln!("Failed to parse layout string: ");
-
-            let format_expected = |expected: &'static[char]| {
-                match expected {
-                    &[l] => format!("'{}'", l),
-                    o => format!("One of {:?}", o),
-                }
-            };
-            match e {
-                layout::LayoutParseError::ExpectedGotMany(at, expected, got) => {
-                    eprintln!("Expected {}, but got {}!\n{}☛{} ", format_expected(expected), got, &layout[..at], &layout[at..]);
-                }
-                layout::LayoutParseError::TooShortExpected(expected) => {
-                    eprintln!("Too short! Expected at least {}.\n{}☚", format_expected(expected), &layout);
-                }
-                layout::LayoutParseError::SplitTypeChangeFromTo(at, from, to) => {
-                    eprintln!("Split type cannot change from '{}' to '{}' within a node. Try to use brackets.\n{}☛{}", from, to, &layout[..at], &layout[at..]);
-                }
-                layout::LayoutParseError::NoConsole => {
-                    eprintln!("Layout MUST contain gdb console. Insert 'c' somewhere in the layout.");
-                }
-            }
+            eprintln!("{}", e);
             return 0xfb;
         }
     };

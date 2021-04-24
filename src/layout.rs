@@ -3,11 +3,58 @@ use tui::{Tui, TuiContainerType};
 use unsegen::container::{HSplit, Layout, Leaf, VSplit};
 
 #[derive(Debug, PartialEq)]
-pub enum LayoutParseError {
+pub enum LayoutParseErrorKind {
     TooShortExpected(&'static [char]),
     ExpectedGotMany(usize, &'static [char], char),
     SplitTypeChangeFromTo(usize, char, char),
     NoConsole,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct LayoutParseError {
+    layout: String,
+    kind: LayoutParseErrorKind,
+}
+
+impl std::fmt::Display for LayoutParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Failed to parse layout string: ")?;
+
+        let format_expected = |expected: &'static [char]| match expected {
+            &[l] => format!("'{}'", l),
+            o => format!("One of {:?}", o),
+        };
+        let layout = &self.layout;
+        match self.kind {
+            LayoutParseErrorKind::ExpectedGotMany(at, expected, got) => {
+                writeln!(
+                    f,
+                    "Expected {}, but got {}!\n{}☛{} ",
+                    format_expected(expected),
+                    got,
+                    &layout[..at],
+                    &layout[at..]
+                )
+            }
+            LayoutParseErrorKind::TooShortExpected(expected) => {
+                writeln!(
+                    f,
+                    "Too short! Expected at least {}.\n{}☚",
+                    format_expected(expected),
+                    &layout
+                )
+            }
+            LayoutParseErrorKind::SplitTypeChangeFromTo(at, from, to) => {
+                writeln!(f, "Split type cannot change from '{}' to '{}' within a node. Try to use brackets.\n{}☛{}", from, to, &layout[..at], &layout[at..])
+            }
+            LayoutParseErrorKind::NoConsole => {
+                writeln!(
+                    f,
+                    "Layout MUST contain gdb console. Insert 'c' somewhere in the layout."
+                )
+            }
+        }
+    }
 }
 
 #[derive(Copy, Clone)]
@@ -22,12 +69,12 @@ const NODE_START_CHARS: &'static [char] = &['c', 't', 's', 'e', '('];
 const CLOSING_BRACKET_CHARS: &'static [char] = &[')'];
 
 impl<'a> Input<'a> {
-    fn new(s: &'a str) -> Result<Self, LayoutParseError> {
+    fn new(s: &'a str) -> Result<Self, LayoutParseErrorKind> {
         let mut ret = Self(s.char_indices().peekable());
         let _ = ret
             .0
             .peek()
-            .ok_or(LayoutParseError::TooShortExpected(NODE_START_CHARS))?;
+            .ok_or(LayoutParseErrorKind::TooShortExpected(NODE_START_CHARS))?;
         Ok(ret)
     }
     fn current(&mut self) -> Option<char> {
@@ -72,7 +119,7 @@ fn try_parse_leaf<'a, 'b>(i: &mut Input<'a>) -> Option<Box<dyn Layout<Tui<'b>> +
 
 fn parse_node<'a, 'b>(
     i: &mut Input<'a>,
-) -> Result<Box<dyn Layout<Tui<'b>> + 'b>, LayoutParseError> {
+) -> Result<Box<dyn Layout<Tui<'b>> + 'b>, LayoutParseErrorKind> {
     let mut nodes = Vec::new();
     let mut split_type = SplitType::None;
     loop {
@@ -89,26 +136,28 @@ fn parse_node<'a, 'b>(
                             i.advance();
                         }
                         Some(o) => {
-                            return Err(LayoutParseError::ExpectedGotMany(
+                            return Err(LayoutParseErrorKind::ExpectedGotMany(
                                 i.current_index(),
                                 CLOSING_BRACKET_CHARS,
                                 o,
                             ));
                         }
                         None => {
-                            return Err(LayoutParseError::TooShortExpected(CLOSING_BRACKET_CHARS))
+                            return Err(LayoutParseErrorKind::TooShortExpected(
+                                CLOSING_BRACKET_CHARS,
+                            ))
                         }
                     }
                 }
                 Some(o) => {
-                    return Err(LayoutParseError::ExpectedGotMany(
+                    return Err(LayoutParseErrorKind::ExpectedGotMany(
                         i.current_index(),
                         NODE_START_CHARS,
                         o,
                     ));
                 }
                 None => {
-                    return Err(LayoutParseError::TooShortExpected(NODE_START_CHARS));
+                    return Err(LayoutParseErrorKind::TooShortExpected(NODE_START_CHARS));
                 }
             }
         }
@@ -122,7 +171,7 @@ fn parse_node<'a, 'b>(
             (SplitType::None, '|') => SplitType::H,
             (SplitType::H, '|') => SplitType::H,
             (SplitType::V, '|') => {
-                return Err(LayoutParseError::SplitTypeChangeFromTo(
+                return Err(LayoutParseErrorKind::SplitTypeChangeFromTo(
                     i.current_index(),
                     '-',
                     '|',
@@ -131,7 +180,7 @@ fn parse_node<'a, 'b>(
             (SplitType::None, '-') => SplitType::V,
             (SplitType::V, '-') => SplitType::V,
             (SplitType::H, '-') => {
-                return Err(LayoutParseError::SplitTypeChangeFromTo(
+                return Err(LayoutParseErrorKind::SplitTypeChangeFromTo(
                     i.current_index(),
                     '|',
                     '-',
@@ -153,10 +202,19 @@ fn parse_node<'a, 'b>(
 
 pub fn parse(s: &str) -> Result<Box<dyn Layout<Tui> + '_>, LayoutParseError> {
     if !s.contains('c') {
-        return Err(LayoutParseError::NoConsole);
+        return Err(LayoutParseError {
+            kind: LayoutParseErrorKind::NoConsole,
+            layout: s.to_owned(),
+        });
     }
-    let mut i = Input::new(s)?;
-    parse_node(&mut i)
+    let mut i = Input::new(s).map_err(|kind| LayoutParseError {
+        kind,
+        layout: s.to_owned(),
+    })?;
+    parse_node(&mut i).map_err(|kind| LayoutParseError {
+        kind,
+        layout: s.to_owned(),
+    })
 }
 
 #[cfg(test)]

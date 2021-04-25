@@ -50,19 +50,31 @@ FLAGS:
     -n, --nx         Do not execute commands from any .gdbinit initialization files.
     -q, --quiet      "Quiet".  Do not print the introductory and copyright messages.  These messages are also suppressed
                      in batch mode.
+        --rr         Start ugdb as an interface for rr. Trailing ugdb arguments will be passed to rr replay instead.
     -V, --version    Prints version information
 
 OPTIONS:
-    -b <bps>                        Set the line speed (baud rate or bits per second) of any serial interface used by
-                                    GDB for remote debugging.
-        --cd <cd>                   Run GDB using directory as its working directory, instead of the current directory.
-    -x, --command <command_file>    Execute GDB commands from file.
-    -c, --core <core_file>          Use file file as a core dump to examine.
-        --gdb <gdb_path>            Path to alternative gdb binary. [default: gdb]
-        --log_dir <log_dir>         Directory in which the log file will be stored [default: /tmp]
-    -p, --pid <proc_id>             Attach to process with given id.
-    -d, --directory <source_dir>    Add directory to the path to search for source files.
-    -s, --symbols <symbol_file>     Read symbols from the given file.
+    -b <bps>
+            Set the line speed (baud rate or bits per second) of any serial interface used by GDB for remote debugging.
+
+        --cd <cd>
+            Run GDB using directory as its working directory, instead of the current directory.
+
+    -x, --command <command_file>                                      Execute GDB commands from file.
+    -c, --core <core_file>                                            Use file file as a core dump to examine.
+        --gdb <gdb_path>                                              Path to alternative gdb binary. [default: gdb]
+    -e, --initial-expression <initial_expression_table_entries>...    Define initial entries for the expression table.
+        --layout <layout>
+            Define the initial tui layout via a format string. [default: (1s-1c)|(1e-1t)]
+
+        --log_dir <log_dir>
+            Directory in which the log file will be stored. [default: /tmp]
+
+    -p, --pid <proc_id>                                               Attach to process with given id.
+    -d, --directory <source_dir>
+            Add directory to the path to search for source files.
+
+    -s, --symbols <symbol_file>                                       Read symbols from the given file.
 
 ARGS:
     <program>...    Path to program to debug (with arguments).

@@ -51,8 +51,7 @@ mod test {
 
     #[test]
     fn test_complex() {
-        let testcase = "
-        {
+        let testcase = "{
             boolean = 128,
             x = 0,
             y = \"kdf\\\\j}{\\\"\",
@@ -70,13 +69,14 @@ mod test {
                 z = 4197294
             },
             {...},
+            map = std::map with 0 elements,
+            vec = std::vector of length 0, capacity 0,
             uni_extern = {...},
             uni_intern = {...},
             const_array = {0, 0},
             ptr = 0x400bf0 <__libc_csu_init>,
             array = 0x7fffffffe018
-        }
-        ";
+        }";
         let result_obj = object! {
             "boolean" => "128",
             "x" => "0",
@@ -92,6 +92,8 @@ mod test {
                 "v" => "1.40129846e-45",
                 "w" => "0"
             },
+            "map" => "std::map with 0 elements",
+            "vec" => "std::vector of length 0, capacity 0",
             "bar" => object! {
                 "x" => "4295032831",
                 "y" => "140737488347120",
@@ -270,6 +272,15 @@ mod test {
             })
         );
         assert_eq!(
+            parse_gdb_value("{\n foo = 27,\n bar = 37\n }").unwrap(),
+            JsonValue::Object({
+                let mut o = object::Object::new();
+                o.insert("foo", JsonValue::String("27".to_owned()));
+                o.insert("bar", JsonValue::String("37".to_owned()));
+                o
+            })
+        );
+        assert_eq!(
             parse_gdb_value("{{...}}").unwrap(),
             array! { array! { "..." } }
         );
@@ -328,6 +339,15 @@ mod test {
         );
         assert_eq!(
             parse_gdb_value("[ 27, 37]").unwrap(),
+            JsonValue::Array({
+                let mut o = Array::new();
+                o.push(JsonValue::String("27".to_owned()));
+                o.push(JsonValue::String("37".to_owned()));
+                o
+            })
+        );
+        assert_eq!(
+            parse_gdb_value("[\n 27,\n 37\n]").unwrap(),
             JsonValue::Array({
                 let mut o = Array::new();
                 o.push(JsonValue::String("27".to_owned()));

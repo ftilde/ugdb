@@ -14,6 +14,7 @@ pub enum Token {
     Equals,
     String,
     Text,
+    Newline,
 }
 
 #[derive(Copy, Clone)]
@@ -57,7 +58,8 @@ impl<'input> Iterator for Lexer<'input> {
                     ']' => (Some((i, Token::RSquareBracket, i + 1)), LexerState::Free),
                     ',' => (Some((i, Token::Comma, i + 1)), LexerState::Free),
                     '=' => (Some((i, Token::Equals, i + 1)), LexerState::Free),
-                    ' ' | '\t' | '\n' => (None, LexerState::Free),
+                    '\n' => (Some((i, Token::Newline, i + 1)), LexerState::Free),
+                    ' ' | '\t' => (None, LexerState::Free),
                     _ => (None, LexerState::InText(i, i + 1)),
                 },
                 LexerState::PendingOutput(output) => match c {
@@ -86,7 +88,11 @@ impl<'input> Iterator for Lexer<'input> {
                         Some(output),
                         LexerState::PendingOutput((i, Token::Equals, i + 1)),
                     ),
-                    ' ' | '\t' | '\n' => (Some(output), LexerState::Free),
+                    '\n' => (
+                        Some(output),
+                        LexerState::PendingOutput((i, Token::Newline, i + 1)),
+                    ),
+                    ' ' | '\t' => (Some(output), LexerState::Free),
                     _ => (Some(output), LexerState::InText(i, i + 1)),
                 },
                 LexerState::InString(begin) => match c {
@@ -123,7 +129,11 @@ impl<'input> Iterator for Lexer<'input> {
                         Some((begin, Token::Text, end)),
                         LexerState::PendingOutput((i, Token::Equals, i + 1)),
                     ),
-                    ' ' | '\t' | '\n' => (None, LexerState::InText(begin, end)),
+                    '\n' => (
+                        Some((begin, Token::Text, end)),
+                        LexerState::PendingOutput((i, Token::Newline, i + 1)),
+                    ),
+                    ' ' | '\t' => (None, LexerState::InText(begin, end)),
                     _ => (None, LexerState::InText(begin, i + 1)),
                 },
             };
@@ -166,11 +176,12 @@ mod test {
     fn test_lexer_basic_success() {
         assert_eq_lexer_tokens("", &[]);
         assert_eq_lexer_tokens(
-            "lj \"dlfj}[{}]=,  \\t \\\"\"    dfdf sadfad {{  []},   =\t\t",
+            "lj \"dlfj}[{}]=,  \\t \\\"\"    dfdf sadfad\n {{  []},   =\t\n\t",
             &[
                 Token::Text,
                 Token::String,
                 Token::Text,
+                Token::Newline,
                 Token::LBrace,
                 Token::LBrace,
                 Token::LSquareBracket,
@@ -178,6 +189,7 @@ mod test {
                 Token::RBrace,
                 Token::Comma,
                 Token::Equals,
+                Token::Newline,
             ],
         );
     }

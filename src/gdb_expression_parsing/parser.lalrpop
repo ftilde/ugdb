@@ -19,6 +19,7 @@ Scalar: Span  = {
 Array: Node = {
     "[" "]" => Node::Array(Vec::new()),
     "[" <r:(<Value> ",")*> <f:Value>"]" => Node::Array(build_vec(r, f)),
+    "[" NL <r:(<Value> "," NL)*> <f:Value> NL "]" => Node::Array(build_vec(r, f)),
 };
 
 #[inline]
@@ -36,6 +37,7 @@ MapElement: (Span, Node) = {
 Map: Node = {
     "{" "}" => Node::Map(Vec::new()),
     "{" <r:(<MapElement> ",")*> <l:MapElement>"}" => Node::Map(build_vec(r, l)),
+    "{" NL <r:(<MapElement> "," NL)*> <l:MapElement> NL "}" => Node::Map(build_vec(r, l)),
 };
 
 pub Value: Node = {
@@ -58,5 +60,6 @@ extern {
         "=" => lexer::Token::Equals,
         String => lexer::Token::String,
         Text => lexer::Token::Text,
+        NL => lexer::Token::Newline,
     }
 }

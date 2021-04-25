@@ -41,19 +41,12 @@ impl Console {
         }
     }
 
-    pub fn display_messages(&mut self, sink: &mut ::MessageSink) {
-        use std::fmt::Write;
-        for msg in sink.drain_messages() {
-            writeln!(self.gdb_log, "{}", msg).expect("Write Message");
-        }
-    }
-
     pub fn write_to_gdb_log<S: AsRef<str>>(&mut self, msg: S) {
         use std::fmt::Write;
         write!(self.gdb_log, "{}", msg.as_ref()).expect("Write Message");
     }
 
-    fn handle_newline(&mut self, p: ::UpdateParameters) {
+    fn handle_newline(&mut self, p: &mut ::Context) {
         let line = if self.prompt_line.active_line().is_empty() {
             self.prompt_line.previous_line(1).unwrap_or("").to_owned()
         } else {
@@ -62,7 +55,7 @@ impl Console {
         self.write_to_gdb_log(format!("{}{}\n", STOPPED_PROMPT, line));
         self.command_state.handle_input_line(&line, p);
     }
-    pub fn update_after_event(&mut self, p: ::UpdateParameters) {
+    pub fn update_after_event(&mut self, p: &mut ::Context) {
         if p.gdb.mi.is_running() {
             if self.last_gdb_state != GDBState::Running {
                 self.last_gdb_state = GDBState::Running;
@@ -77,8 +70,8 @@ impl Console {
     }
 }
 
-impl Container<::UpdateParametersStruct> for Console {
-    fn input(&mut self, input: Input, p: ::UpdateParameters) -> Option<Input> {
+impl Container<::Context> for Console {
+    fn input(&mut self, input: Input, p: &mut ::Context) -> Option<Input> {
         let set_completion = |completion_state: &Option<CompletionState>,
                               prompt_line: &mut PromptLine| {
             let completion = completion_state.as_ref().unwrap();

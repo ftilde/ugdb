@@ -250,14 +250,12 @@ impl MessageSink {
     }
 }
 
-type UpdateParameters<'u> = &'u mut UpdateParametersStruct;
-
-pub struct UpdateParametersStruct {
+pub struct Context {
     pub gdb: GDB,
     event_sink: Sender<Event>,
 }
 
-impl UpdateParametersStruct {
+impl Context {
     fn log(&mut self, msg: impl Into<String>) {
         self.event_sink.send(Event::Log(msg.into())).unwrap();
     }
@@ -442,7 +440,7 @@ fn run() -> i32 {
         }
     };
 
-    let mut update_parameters = UpdateParametersStruct {
+    let mut context = Context {
         gdb,
         event_sink: event_sink.clone(),
     };
@@ -510,7 +508,7 @@ fn run() -> i32 {
                             event: Key::Esc.to_event(),
                             raw: vec![0x1bu8],
                         }
-                        .chain(app.active_container_behavior(&mut tui, &mut update_parameters));
+                        .chain(app.active_container_behavior(&mut tui, &mut context));
                         esc_timer_needs_reset = true;
                         break 'displayloop;
                     }
@@ -554,19 +552,15 @@ fn run() -> i32 {
                                 .chain((Key::Char('\n'), || input_mode = InputMode::Normal)),
                             InputMode::Normal => input
                                 .chain((Key::Esc, || input_mode = InputMode::ContainerSelect))
-                                .chain(
-                                    app.active_container_behavior(&mut tui, &mut update_parameters),
-                                ),
+                                .chain(app.active_container_behavior(&mut tui, &mut context)),
                             InputMode::Focused => input
                                 .chain((Key::Esc, || esc_in_focused_context_pressed = true))
-                                .chain(
-                                    app.active_container_behavior(&mut tui, &mut update_parameters),
-                                ),
+                                .chain(app.active_container_behavior(&mut tui, &mut context)),
                         }
                         .finish();
                     }
                     Event::OutOfBandRecord(record) => {
-                        tui.add_out_of_band_record(record, &mut update_parameters);
+                        tui.add_out_of_band_record(record, &mut context);
                     }
                     Event::Log(msg) => {
                         tui.console.write_to_gdb_log(msg);
@@ -585,7 +579,7 @@ fn run() -> i32 {
                         break 'runloop;
                     }
                     Event::Ipc(request) => {
-                        request.respond(&mut update_parameters);
+                        request.respond(&mut context);
                     }
                     Event::Pty(pty_output) => {
                         tui.add_pty_input(&pty_output);
@@ -599,7 +593,7 @@ fn run() -> i32 {
                                     warn!("Unable to handle SIGTSTP: {}", e);
                                 }
                             }
-                            Signal::SIGTERM => update_parameters.gdb.kill(),
+                            Signal::SIGTERM => context.gdb.kill(),
                             _ => {}
                         }
                         debug!("received signal {:?}", sig);
@@ -613,7 +607,7 @@ fn run() -> i32 {
                             .try_start(Duration::from_millis(FOCUS_ESCAPE_MAX_DURATION_MS));
                     }
                 }
-                tui.update_after_event(&mut update_parameters);
+                tui.update_after_event(&mut context);
                 render_delay_timer.try_start(Duration::from_millis(EVENT_BUFFER_DURATION_MS));
             }
             if esc_timer_needs_reset {
@@ -632,13 +626,7 @@ fn run() -> i32 {
     let mut join_retry_counter = 0;
     let join_retry_duration = Duration::from_millis(100);
     let child_exit_status = loop {
-        if let Some(ret) = update_parameters
-            .gdb
-            .mi
-            .process
-            .try_wait()
-            .expect("gdb exited")
-        {
+        if let Some(ret) = context.gdb.mi.process.try_wait().expect("gdb exited") {
             break ret;
         }
         std::thread::sleep(join_retry_duration);

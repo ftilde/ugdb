@@ -200,14 +200,14 @@ fn parse_node<'a, 'b>(
     })
 }
 
-pub fn parse(s: &str) -> Result<Box<dyn Layout<Tui> + '_>, LayoutParseError> {
+pub fn parse<'a>(s: String) -> Result<Box<dyn Layout<Tui<'a>> + 'a>, LayoutParseError> {
     if !s.contains('c') {
         return Err(LayoutParseError {
             kind: LayoutParseErrorKind::NoConsole,
             layout: s.to_owned(),
         });
     }
-    let mut i = Input::new(s).map_err(|kind| LayoutParseError {
+    let mut i = Input::new(&s).map_err(|kind| LayoutParseError {
         kind,
         layout: s.to_owned(),
     })?;

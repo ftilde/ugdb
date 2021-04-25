@@ -29,7 +29,7 @@ impl ExpressionRow {
     fn is_empty(&self) -> bool {
         self.expression.get().is_empty()
     }
-    fn update_result(&mut self, p: ::UpdateParameters) {
+    fn update_result(&mut self, p: &mut ::Context) {
         let expr = self.expression.get().to_owned();
         let result = if expr.is_empty() {
             JsonValue::Null
@@ -58,7 +58,7 @@ impl ExpressionRow {
     }
 }
 impl TableRow for ExpressionRow {
-    type BehaviorContext = ::UpdateParametersStruct;
+    type BehaviorContext = ::Context;
     const COLUMNS: &'static [Column<ExpressionRow>] = &[
         Column {
             access: |r| Box::new(r.expression.as_widget()),
@@ -188,15 +188,15 @@ impl ExpressionTable {
         rows.push(ExpressionRow::new());
     }
 
-    pub fn update_results(&mut self, p: ::UpdateParameters) {
+    pub fn update_results(&mut self, p: &mut ::Context) {
         for row in self.table.rows_mut().iter_mut() {
             row.update_result(p);
         }
     }
 }
 
-impl Container<::UpdateParametersStruct> for ExpressionTable {
-    fn input(&mut self, input: Input, p: ::UpdateParameters) -> Option<Input> {
+impl Container<::Context> for ExpressionTable {
+    fn input(&mut self, input: Input, p: &mut ::Context) -> Option<Input> {
         let res = input
             .chain(
                 NavigateBehavior::new(&mut self.table) //TODO: Fix this properly in lineedit

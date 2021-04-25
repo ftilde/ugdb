@@ -45,7 +45,7 @@ impl<'a> Tui<'a> {
         kind: AsyncKind,
         class: AsyncClass,
         results: &Object,
-        p: ::UpdateParameters,
+        p: &mut ::Context,
     ) {
         match (kind, class) {
             (AsyncKind::Exec, AsyncClass::Stopped)
@@ -75,7 +75,7 @@ impl<'a> Tui<'a> {
         }
     }
 
-    pub fn add_out_of_band_record(&mut self, record: OutOfBandRecord, p: ::UpdateParameters) {
+    pub fn add_out_of_band_record(&mut self, record: OutOfBandRecord, p: &mut ::Context) {
         match record {
             OutOfBandRecord::StreamRecord { kind: _, data } => {
                 self.console.write_to_gdb_log(data);
@@ -95,7 +95,7 @@ impl<'a> Tui<'a> {
         self.process_pty.add_byte_input(input);
     }
 
-    pub fn update_after_event(&mut self, p: ::UpdateParameters) {
+    pub fn update_after_event(&mut self, p: &mut ::Context) {
         self.src_view.update_after_event(p);
         self.console.update_after_event(p);
     }
@@ -110,9 +110,9 @@ pub enum TuiContainerType {
 }
 
 impl<'t> ContainerProvider for Tui<'t> {
-    type Parameters = ::UpdateParametersStruct;
+    type Context = ::Context;
     type Index = TuiContainerType;
-    fn get<'a, 'b: 'a>(&'b self, index: &'a Self::Index) -> &'b dyn Container<Self::Parameters> {
+    fn get<'a, 'b: 'a>(&'b self, index: &'a Self::Index) -> &'b dyn Container<Self::Context> {
         match index {
             &TuiContainerType::SrcView => &self.src_view,
             &TuiContainerType::Console => &self.console,
@@ -123,7 +123,7 @@ impl<'t> ContainerProvider for Tui<'t> {
     fn get_mut<'a, 'b: 'a>(
         &'b mut self,
         index: &'a Self::Index,
-    ) -> &'b mut dyn Container<Self::Parameters> {
+    ) -> &'b mut dyn Container<Self::Context> {
         match index {
             &TuiContainerType::SrcView => &mut self.src_view,
             &TuiContainerType::Console => &mut self.console,

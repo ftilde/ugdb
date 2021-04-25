@@ -5,24 +5,24 @@ use gdbmi::ExecuteError;
 use log::error;
 
 pub struct Command {
-    cmd: Box<dyn FnMut(::UpdateParameters) -> Result<(), ExecuteError>>,
+    cmd: Box<dyn FnMut(&mut ::Context) -> Result<(), ExecuteError>>,
 }
 
 impl Command {
-    fn new(cmd: Box<dyn FnMut(::UpdateParameters) -> Result<(), ExecuteError>>) -> Command {
+    fn new(cmd: Box<dyn FnMut(&mut ::Context) -> Result<(), ExecuteError>>) -> Command {
         Command { cmd: cmd }
     }
     fn from_mi_with_msg(cmd: MiCommand, success_msg: &'static str) -> Command {
-        Command::new(Box::new(move |p: ::UpdateParameters| {
+        Command::new(Box::new(move |p: &mut ::Context| {
             let res = p.gdb.mi.execute(cmd.clone()).map(|_| ());
             if res.is_ok() {
-                p.message_sink.send(success_msg);
+                p.log(success_msg);
             }
             res
         }))
     }
     fn from_mi(cmd: MiCommand) -> Command {
-        Command::new(Box::new(move |p: ::UpdateParameters| {
+        Command::new(Box::new(move |p: &mut ::Context| {
             p.gdb.mi.execute(cmd.clone()).map(|_| ())
         }))
     }
@@ -34,7 +34,7 @@ pub enum CommandState {
 }
 
 impl CommandState {
-    pub fn handle_input_line(&mut self, line: &str, p: ::UpdateParameters) {
+    pub fn handle_input_line(&mut self, line: &str, p: &mut ::Context) {
         let mut tmp_state = CommandState::Idle;
         ::std::mem::swap(&mut tmp_state, self);
         *self = match tmp_state {
@@ -43,7 +43,7 @@ impl CommandState {
         }
     }
 
-    fn execute_if_confirmed(line: &str, cmd: Command, p: ::UpdateParameters) -> Self {
+    fn execute_if_confirmed(line: &str, cmd: Command, p: &mut ::Context) -> Self {
         match line {
             "y" | "Y" | "yes" => {
                 Self::try_execute(cmd, p);
@@ -51,20 +51,20 @@ impl CommandState {
             }
             "n" | "N" | "no" => CommandState::Idle,
             _ => {
-                p.message_sink.send("Please type 'y' or 'n'.");
+                p.log("Please type 'y' or 'n'.");
                 CommandState::WaitingForConfirmation(cmd)
             }
         }
     }
 
-    fn print_execute_error(e: ExecuteError, p: ::UpdateParameters) {
+    fn print_execute_error(e: ExecuteError, p: &mut ::Context) {
         match e {
-            ExecuteError::Quit => p.message_sink.send("quit"),
-            ExecuteError::Busy => p.message_sink.send("GDB is running!"),
+            ExecuteError::Quit => p.log("quit"),
+            ExecuteError::Busy => p.log("GDB is running!"),
         }
     }
 
-    fn try_execute(mut cmd: Command, p: ::UpdateParameters) {
+    fn try_execute(mut cmd: Command, p: &mut ::Context) {
         match (cmd.cmd)(p) {
             Ok(_) => {}
             Err(e) => Self::print_execute_error(e, p),
@@ -74,11 +74,11 @@ impl CommandState {
     fn ask_if_session_active(
         cmd: Command,
         confirmation_question: &'static str,
-        p: ::UpdateParameters,
+        p: &mut ::Context,
     ) -> Self {
         match p.gdb.mi.is_session_active() {
             Ok(true) => {
-                p.message_sink.send(format!(
+                p.log(format!(
                     "A debugging session is active. {} (y or n)",
                     confirmation_question
                 ));
@@ -95,19 +95,21 @@ impl CommandState {
         }
     }
 
-    fn dispatch_command(line: &str, p: ::UpdateParameters) -> Self {
-        let mut cmd_split = line.split(' ');
-        let cmd = if let Some(cmd) = cmd_split.next() {
-            cmd
-        } else {
-            return CommandState::Idle;
-        };
-        let _arguments = cmd_split.collect::<Vec<_>>();
+    fn dispatch_command(line: &str, p: &mut ::Context) -> Self {
+        let cmd_end = line.find(' ').unwrap_or(line.len());
+        let cmd = &line[..cmd_end];
+        let args_begin = (cmd_end + 1).min(line.len());
+        let args_str = &line[args_begin..];
         match cmd {
             "!stop" => {
                 p.gdb.mi.interrupt_execution().expect("interrupted gdb");
                 // This does not always seem to unblock gdb, but only hang it
                 //gdb.execute(&MiCommand::exec_interrupt()).expect("Interrupt");
+
+                CommandState::Idle
+            }
+            "!layout" => {
+                p.log(format!("got layout string '{}'", args_str));
 
                 CommandState::Idle
             }
@@ -121,8 +123,7 @@ impl CommandState {
                     p,
                 ),
                 Ok(None) => {
-                    p.message_sink
-                        .send("No target. Use the 'file' command to specify one.");
+                    p.log("No target. Use the 'file' command to specify one.");
                     CommandState::Idle
                 }
                 Err(e) => {

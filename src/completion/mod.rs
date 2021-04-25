@@ -100,7 +100,7 @@ impl Completer for CommandCompleter<'_> {
     }
 }
 
-pub struct IdentifierCompleter<'a>(pub &'a mut ::UpdateParametersStruct);
+pub struct IdentifierCompleter<'a>(pub &'a mut ::Context);
 
 struct VarObject {
     name: String,
@@ -119,7 +119,7 @@ impl VarObject {
         let typ = o["type"].as_str().map(|s| s.to_owned());
         Ok(VarObject { name, expr, typ })
     }
-    fn create(p: &mut ::UpdateParametersStruct, expr: &str) -> Result<Self, String> {
+    fn create(p: &mut ::Context, expr: &str) -> Result<Self, String> {
         let res = p
             .gdb
             .mi
@@ -135,7 +135,7 @@ impl VarObject {
         VarObject::from_val(&JsonValue::Object(res.results))
     }
 
-    fn children(&self, p: &mut ::UpdateParametersStruct) -> Result<Vec<Self>, String> {
+    fn children(&self, p: &mut ::Context) -> Result<Vec<Self>, String> {
         let res = p
             .gdb
             .mi
@@ -156,7 +156,7 @@ impl VarObject {
 
     fn collect_children_exprs(
         &self,
-        p: &mut ::UpdateParametersStruct,
+        p: &mut ::Context,
         output: &mut Vec<String>,
     ) -> Result<(), String> {
         // try to flatten public/private fields etc.
@@ -180,7 +180,7 @@ impl VarObject {
         Ok(())
     }
 
-    fn delete(self, p: &mut ::UpdateParametersStruct) -> Result<(), String> {
+    fn delete(self, p: &mut ::Context) -> Result<(), String> {
         let res = p
             .gdb
             .mi
@@ -196,7 +196,7 @@ impl VarObject {
     }
 }
 
-fn get_children(p: &mut ::UpdateParametersStruct, expr: &str) -> Result<Vec<String>, String> {
+fn get_children(p: &mut ::Context, expr: &str) -> Result<Vec<String>, String> {
     let root = VarObject::create(p, &expr)?;
 
     let mut children = Vec::new();
@@ -208,7 +208,7 @@ fn get_children(p: &mut ::UpdateParametersStruct, expr: &str) -> Result<Vec<Stri
     Ok(children)
 }
 
-fn get_variables(p: &mut ::UpdateParametersStruct) -> Result<Vec<String>, String> {
+fn get_variables(p: &mut ::Context) -> Result<Vec<String>, String> {
     let res = p
         .gdb
         .mi
@@ -251,7 +251,7 @@ impl Completer for IdentifierCompleter<'_> {
     }
 }
 
-pub struct CmdlineCompleter<'a>(pub &'a mut ::UpdateParametersStruct);
+pub struct CmdlineCompleter<'a>(pub &'a mut ::Context);
 impl Completer for CmdlineCompleter<'_> {
     fn complete(&mut self, original: &str, cursor_pos: usize) -> CompletionState {
         if original[..cursor_pos].find(' ').is_some() {

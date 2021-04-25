@@ -39,7 +39,7 @@ pub struct IPCRequest {
 }
 
 impl IPCRequest {
-    pub fn respond(mut self, p: ::UpdateParameters) {
+    pub fn respond(mut self, p: &mut ::Context) {
         let reply = match Self::handle(p, self.raw_request) {
             Ok(reply_success) => reply_success,
             Err(reply_fail) => reply_fail.into_json(),
@@ -49,7 +49,7 @@ impl IPCRequest {
         let _ = write_ipc_response(&mut self.response_channel, reply.dump().as_bytes());
     }
 
-    fn handle(p: ::UpdateParameters, raw_request: Vec<u8>) -> Result<json::JsonValue, IPCError> {
+    fn handle(p: &mut ::Context, raw_request: Vec<u8>) -> Result<json::JsonValue, IPCError> {
         let str_request = ::std::str::from_utf8(raw_request.as_slice())
             .map_err(|_| IPCError::new("Malformed utf8.", ""))?;
         let json_request =
@@ -84,7 +84,7 @@ impl IPCRequest {
     fn dispatch(
         function_name: &str,
     ) -> Result<
-        fn(p: ::UpdateParameters, &json::JsonValue) -> Result<json::JsonValue, IPCError>,
+        fn(p: &mut ::Context, &json::JsonValue) -> Result<json::JsonValue, IPCError>,
         IPCError,
     > {
         match function_name {
@@ -95,7 +95,7 @@ impl IPCRequest {
     }
 
     fn set_breakpoint(
-        p: ::UpdateParameters,
+        p: &mut ::Context,
         parameters: &json::JsonValue,
     ) -> Result<json::JsonValue, IPCError> {
         let parameters_obj = if let &json::JsonValue::Object(ref parameters_obj) = parameters {
@@ -139,7 +139,7 @@ impl IPCRequest {
     }
 
     fn get_instance_info(
-        p: ::UpdateParameters,
+        p: &mut ::Context,
         _: &json::JsonValue,
     ) -> Result<json::JsonValue, IPCError> {
         let result = p

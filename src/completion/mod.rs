@@ -81,7 +81,13 @@ fn gen_command_list(binary_path: &Path, init_options: &[OsString]) -> std::io::R
 fn parse_command_names(gdb_output: &str) -> Vec<String> {
     gdb_output
         .lines()
-        .filter_map(|l| l.find(" -- ").map(|pos| l[..pos].to_owned()))
+        .filter_map(|l| {
+            let end = l.find(" -- ")?;
+            let before_info = &l[..end];
+            Some(before_info.split(","))
+        })
+        .flatten()
+        .map(|l| l.trim().to_owned())
         .collect()
 }
 
@@ -549,6 +555,7 @@ myadder -- User-defined.
 Unclassified commands
 
 add-inferior -- Add a new inferior.
+help, h -- Print list of commands.
 function _any_caller_is -- Check all calling function's names.
         ";
         let got = parse_command_names(input);
@@ -557,6 +564,8 @@ function _any_caller_is -- Check all calling function's names.
             "while-stepping",
             "myadder",
             "add-inferior",
+            "help",
+            "h",
             "function _any_caller_is",
         ]
         .iter()

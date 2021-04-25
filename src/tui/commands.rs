@@ -109,7 +109,7 @@ impl CommandState {
                 CommandState::Idle
             }
             "!layout" => {
-                p.log(format!("got layout string '{}'", args_str));
+                p.try_change_layout(args_str.to_owned());
 
                 CommandState::Idle
             }

@@ -259,6 +259,12 @@ impl Context {
     fn log(&mut self, msg: impl Into<String>) {
         self.event_sink.send(Event::Log(msg.into())).unwrap();
     }
+
+    fn try_change_layout(&mut self, layout_str: String) {
+        self.event_sink
+            .send(Event::ChangeLayout(layout_str))
+            .unwrap();
+    }
 }
 
 // A timer that can be used to receive an event at any time,
@@ -489,10 +495,7 @@ fn run() -> i32 {
             let mut esc_timer_needs_reset = false;
             'displayloop: loop {
                 let mut esc_in_focused_context_pressed = false;
-                let e = event_source.recv().unwrap();
-                use log::info;
-                info!("Got event: {:?}", e);
-                match e {
+                match event_source.recv().unwrap() {
                     Event::CursorTimer => {
                         cursor_status.toggle();
                         cursor_blinks_since_last_input += 1;

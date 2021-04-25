@@ -254,7 +254,13 @@ type UpdateParameters<'u> = &'u mut UpdateParametersStruct;
 
 pub struct UpdateParametersStruct {
     pub gdb: GDB,
-    pub message_sink: MessageSink,
+    event_sink: Sender<Event>,
+}
+
+impl UpdateParametersStruct {
+    fn log(&mut self, msg: impl Into<String>) {
+        self.event_sink.send(Event::Log(msg.into())).unwrap();
+    }
 }
 
 // A timer that can be used to receive an event at any time,
@@ -336,6 +342,8 @@ pub enum Event {
     RenderTimer,
     FocusEscTimer,
     OutOfBandRecord(OutOfBandRecord),
+    Log(String),
+    ChangeLayout(String),
     GdbShutdown,
     Ipc(IPCRequest),
 }
@@ -426,7 +434,7 @@ fn run() -> i32 {
 
     let theme_set = unsegen_pager::ThemeSet::load_defaults();
 
-    let layout = match layout::parse(&layout) {
+    let layout = match layout::parse(layout) {
         Ok(l) => l,
         Err(e) => {
             eprintln!("{}", e);
@@ -436,9 +444,7 @@ fn run() -> i32 {
 
     let mut update_parameters = UpdateParametersStruct {
         gdb,
-        message_sink: MessageSink {
-            messages: Vec::new(),
-        },
+        event_sink: event_sink.clone(),
     };
 
     {
@@ -562,6 +568,19 @@ fn run() -> i32 {
                     Event::OutOfBandRecord(record) => {
                         tui.add_out_of_band_record(record, &mut update_parameters);
                     }
+                    Event::Log(msg) => {
+                        tui.console.write_to_gdb_log(msg);
+                    }
+                    Event::ChangeLayout(layout) => {
+                        match layout::parse(layout) {
+                            Ok(layout) => {
+                                app.set_layout(layout);
+                            }
+                            Err(e) => {
+                                tui.console.write_to_gdb_log(e.to_string());
+                            }
+                        };
+                    }
                     Event::GdbShutdown => {
                         break 'runloop;
                     }
@@ -600,8 +619,6 @@ fn run() -> i32 {
             if esc_timer_needs_reset {
                 focus_esc_timer.reset();
             }
-            tui.console
-                .display_messages(&mut update_parameters.message_sink);
             app.draw(
                 terminal.create_root_window(),
                 &mut tui,

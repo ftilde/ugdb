@@ -38,7 +38,7 @@ The command line interface is aimed to be *mostly* compatible with gdb:
 ```
 $ ugdb --help
 ugdb 0.1.9
-ftilde <ftilde@tamepointer.de>
+ftilde <ftilde@REDACTED>
 An unsegen-based GDB frontend.
 
 USAGE:
@@ -151,7 +151,7 @@ The layout string represents a tree with single letters as leafs representing th
 Nodes can be arranged in horizontal (e.g., `c|s|e`) or vertical (e.g., `c-s-e`) layouts using the separators `|` and `-`.
 Brackets can be used to nest horizontal and vertical layouts (e.g., `(c|s)-e`).
 Finally, integers preceeding a node optionally define a weight (other than the default weight of 1) that will be used when assigning screen space to the node.
-For example, `1c|3s` will create arrange the console and pager horizontally while assigning 25% of the space to the console and 75% to the pager.
+For example, `1c|3s` will create arrange the console and pager horizontally while assigning roughly 25% of the space to the console and 75% to the pager.
 The default layout of ugdb is `(1s-1c)|(1e-1t)`.
 An initial layout can also be specified using the command line parameter `--layout`.
 

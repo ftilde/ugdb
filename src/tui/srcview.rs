@@ -120,7 +120,7 @@ impl LineDecorator for AssemblyDecorator {
             .last()
             .map(|(_, l)| text_width(format!(" 0x{:x} ", l.address.0).as_str()))
             .unwrap_or(Width::new(0).unwrap());
-        Demand::from_to(0, max_space.into())
+        Demand::exact(max_space)
     }
     fn decorate(
         &self,
@@ -458,7 +458,7 @@ impl LineDecorator for SourceDecorator {
             .last()
             .map(|(i, _)| text_width(format!(" {} ", i).as_str()))
             .unwrap_or(Width::new(0).unwrap());
-        Demand::from_to(0, max_space.into())
+        Demand::exact(max_space)
     }
     fn decorate(
         &self,

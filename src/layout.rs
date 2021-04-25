@@ -226,13 +226,13 @@ mod test {
     }
     #[track_caller]
     fn expect_equal(input: &str, expected: &str) {
-        let parsed = parse(input).unwrap();
+        let parsed = parse(input.to_owned()).unwrap();
         assert_eq!(&stringify(&*parsed), expected);
     }
     #[track_caller]
-    fn expect_error(input: &str, e: LayoutParseError) {
-        let pe = parse(input).unwrap_err();
-        assert_eq!(pe, e);
+    fn expect_error(input: &str, e: LayoutParseErrorKind) {
+        let pe = parse(input.to_owned()).unwrap_err();
+        assert_eq!(pe.kind, e);
     }
     #[test]
     fn parse_default() {
@@ -250,27 +250,27 @@ mod test {
     }
     #[test]
     fn parse_empty() {
-        expect_error("", LayoutParseError::TooShortExpected(NODE_START_CHARS));
+        expect_error("", LayoutParseErrorKind::NoConsole);
     }
     #[test]
     fn parse_unclosed() {
         expect_error(
             "(c-e",
-            LayoutParseError::TooShortExpected(CLOSING_BRACKET_CHARS),
+            LayoutParseErrorKind::TooShortExpected(CLOSING_BRACKET_CHARS),
         );
     }
     #[test]
     fn parse_unexpected() {
         expect_error(
-            "f",
-            LayoutParseError::ExpectedGotMany(0, NODE_START_CHARS, 'f'),
+            "fc",
+            LayoutParseErrorKind::ExpectedGotMany(0, NODE_START_CHARS, 'f'),
         );
     }
     #[test]
     fn parse_change_split() {
         expect_error(
-            "s-e|t",
-            LayoutParseError::SplitTypeChangeFromTo(3, '-', '|'),
+            "c-e|t",
+            LayoutParseErrorKind::SplitTypeChangeFromTo(3, '-', '|'),
         );
     }
 }

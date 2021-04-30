@@ -1,5 +1,4 @@
-use self::json_ext::JsonValue;
-use gdb_expression_parsing::parse_gdb_value;
+use gdb_expression_parsing::{parse_gdb_value, GDBValue};
 use gdbmi::commands::MiCommand;
 use gdbmi::output::ResultClass;
 use gdbmi::ExecuteError;
@@ -8,7 +7,7 @@ use unsegen::container::Container;
 use unsegen::input::{EditBehavior, Input, Key, NavigateBehavior, ScrollBehavior};
 use unsegen::widget::builtin::{Column, LineEdit, Table, TableRow};
 use unsegen::widget::{SeparatingStyle, Widget};
-use unsegen_jsonviewer::{json_ext, JsonViewer};
+use unsegen_jsonviewer::JsonViewer;
 
 use completion::{Completer, CompletionState, IdentifierCompleter};
 
@@ -22,7 +21,7 @@ impl ExpressionRow {
         ExpressionRow {
             expression: LineEdit::new(),
             completion_state: None,
-            result: JsonViewer::new(&JsonValue::Null),
+            result: JsonViewer::new(&GDBValue::String(" ".to_owned())),
         }
     }
 
@@ -31,17 +30,17 @@ impl ExpressionRow {
     }
     fn update_result(&mut self, p: &mut ::Context) {
         let expr = self.expression.get().to_owned();
-        let result = if expr.is_empty() {
-            JsonValue::Null
+        let result: GDBValue = if expr.is_empty() {
+            GDBValue::String(" ".to_owned())
         } else {
             match p.gdb.mi.execute(MiCommand::data_evaluate_expression(expr)) {
                 Ok(res) => match res.class {
-                    ResultClass::Error => res.results["msg"].clone(),
+                    ResultClass::Error => GDBValue::String(res.results["msg"].to_string()),
                     ResultClass::Done => {
                         let to_parse = res.results["value"].as_str().expect("value present");
                         match parse_gdb_value(to_parse) {
                             Ok(p) => p,
-                            Err(_) => JsonValue::String(format!("*Error parsing*: {}", to_parse)),
+                            Err(_) => GDBValue::String(format!("*Error parsing*: {}", to_parse)),
                         }
                     }
                     other => panic!("unexpected result class: {:?}", other),

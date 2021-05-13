@@ -41,12 +41,8 @@ unsegen_pager = {path="../unsegen_pager"}
 # gdbmi
 nom = "2.1"
 
-# gdb-expression-parsing
-lalrpop-util = "0.18.1"
-
 [build-dependencies]
 toml = "0.4"
-lalrpop = "0.18.1"
 
 
 # Use one of these for development of new features of unsegen

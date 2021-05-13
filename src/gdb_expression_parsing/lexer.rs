@@ -6,10 +6,14 @@ pub type Span = (Location, Location);
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Token {
+    LBracket,
+    RBracket,
     LBrace,
     RBrace,
     LSquareBracket,
     RSquareBracket,
+    LPointyBracket,
+    RPointyBracket,
     Comma,
     Equals,
     String,
@@ -56,6 +60,10 @@ impl<'input> Iterator for Lexer<'input> {
                     '}' => (Some((i, Token::RBrace, i + 1)), LexerState::Free),
                     '[' => (Some((i, Token::LSquareBracket, i + 1)), LexerState::Free),
                     ']' => (Some((i, Token::RSquareBracket, i + 1)), LexerState::Free),
+                    '(' => (Some((i, Token::LBracket, i + 1)), LexerState::Free),
+                    ')' => (Some((i, Token::RBracket, i + 1)), LexerState::Free),
+                    '<' => (Some((i, Token::LPointyBracket, i + 1)), LexerState::Free),
+                    '>' => (Some((i, Token::RPointyBracket, i + 1)), LexerState::Free),
                     ',' => (Some((i, Token::Comma, i + 1)), LexerState::Free),
                     '=' => (Some((i, Token::Equals, i + 1)), LexerState::Free),
                     '\n' => (Some((i, Token::Newline, i + 1)), LexerState::Free),
@@ -79,6 +87,22 @@ impl<'input> Iterator for Lexer<'input> {
                     ']' => (
                         Some(output),
                         LexerState::PendingOutput((i, Token::RSquareBracket, i + 1)),
+                    ),
+                    '(' => (
+                        Some(output),
+                        LexerState::PendingOutput((i, Token::LBracket, i + 1)),
+                    ),
+                    ')' => (
+                        Some(output),
+                        LexerState::PendingOutput((i, Token::RBracket, i + 1)),
+                    ),
+                    '<' => (
+                        Some(output),
+                        LexerState::PendingOutput((i, Token::LPointyBracket, i + 1)),
+                    ),
+                    '>' => (
+                        Some(output),
+                        LexerState::PendingOutput((i, Token::RPointyBracket, i + 1)),
                     ),
                     ',' => (
                         Some(output),
@@ -120,6 +144,22 @@ impl<'input> Iterator for Lexer<'input> {
                     ']' => (
                         Some((begin, Token::Text, end)),
                         LexerState::PendingOutput((i, Token::RSquareBracket, i + 1)),
+                    ),
+                    '(' => (
+                        Some((begin, Token::Text, end)),
+                        LexerState::PendingOutput((i, Token::LBracket, i + 1)),
+                    ),
+                    ')' => (
+                        Some((begin, Token::Text, end)),
+                        LexerState::PendingOutput((i, Token::RBracket, i + 1)),
+                    ),
+                    '<' => (
+                        Some((begin, Token::Text, end)),
+                        LexerState::PendingOutput((i, Token::LPointyBracket, i + 1)),
+                    ),
+                    '>' => (
+                        Some((begin, Token::Text, end)),
+                        LexerState::PendingOutput((i, Token::RPointyBracket, i + 1)),
                     ),
                     ',' => (
                         Some((begin, Token::Text, end)),

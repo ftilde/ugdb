@@ -53,8 +53,3 @@ impl Node {
         }
     }
 }
-
-pub fn build_vec<T>(mut v: Vec<T>, a: T) -> Vec<T> {
-    v.push(a);
-    v
-}

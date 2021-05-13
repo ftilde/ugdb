@@ -1,14 +1,14 @@
 mod ast;
 mod lexer;
-lalrpop_mod!(parser, "/gdb_expression_parsing/parser.rs");
+mod parser;
 
 use unsegen_jsonviewer::Value;
 
-pub type ParseError = lalrpop_util::ParseError<lexer::Location, lexer::Token, lexer::LexicalError>;
+pub type ParseError = parser::Error;
 
 pub fn parse_gdb_value(result_string: &str) -> Result<GDBValue, ParseError> {
     let lexer = lexer::Lexer::new(result_string);
-    let ast = parser::ValueParser::new().parse(lexer)?;
+    let ast = parser::parse(lexer)?;
     Ok(ast.to_value(result_string))
 }
 
@@ -75,7 +75,6 @@ mod test {
             GDBValue::Integer("-123".to_string(), -123)
         );
         assert_eq!(parse_gdb_value("{}").unwrap(), GDBValue::Map(Vec::new()));
-        assert_eq!(parse_gdb_value("[]").unwrap(), GDBValue::Array(Vec::new()));
         assert_eq!(
             parse_gdb_value("{...}").unwrap(),
             GDBValue::Array(vec! { GDBValue::String("...".to_owned()) })
@@ -250,7 +249,7 @@ mod test {
         );
 
         assert_eq!(
-            parse_gdb_value("[ l r, l r]").unwrap(),
+            parse_gdb_value("{ l r, l r}").unwrap(),
             GDBValue::Array({
                 let mut o = Vec::new();
                 o.push(GDBValue::String("l r".to_string()));
@@ -259,7 +258,7 @@ mod test {
             })
         );
         assert_eq!(
-            parse_gdb_value("[l r,l r]").unwrap(),
+            parse_gdb_value("{l r,l r}").unwrap(),
             GDBValue::Array({
                 let mut o = Vec::new();
                 o.push(GDBValue::String("l r".to_string()));
@@ -268,7 +267,7 @@ mod test {
             })
         );
         assert_eq!(
-            parse_gdb_value("[ l r ,l r ]").unwrap(),
+            parse_gdb_value("{ l r ,l r }").unwrap(),
             GDBValue::Array({
                 let mut o = Vec::new();
                 o.push(GDBValue::String("l r".to_string()));
@@ -277,7 +276,7 @@ mod test {
             })
         );
         assert_eq!(
-            parse_gdb_value("[ l r , l r ]").unwrap(),
+            parse_gdb_value("{ l r , l r }").unwrap(),
             GDBValue::Array({
                 let mut o = Vec::new();
                 o.push(GDBValue::String("l r".to_string()));
@@ -330,7 +329,7 @@ mod test {
         );
 
         assert_eq!(
-            parse_gdb_value("[ {int (int, int)} 0x400a76 <foo(int, int)> ]").unwrap(),
+            parse_gdb_value("{ {int (int, int)} 0x400a76 <foo(int, int)> }").unwrap(),
             GDBValue::Array(vec![GDBValue::String(
                 "{int (int, int)} 0x400a76 <foo(int, int)>".to_string()
             )])
@@ -412,14 +411,6 @@ mod test {
     #[test]
     fn test_parse_arrays() {
         assert_eq!(
-            parse_gdb_value("[27]").unwrap(),
-            GDBValue::Array({
-                let mut o = Vec::new();
-                o.push(GDBValue::Integer("27".to_owned(), 27));
-                o
-            })
-        );
-        assert_eq!(
             parse_gdb_value("{27}").unwrap(),
             GDBValue::Array({
                 let mut o = Vec::new();
@@ -428,7 +419,7 @@ mod test {
             })
         );
         assert_eq!(
-            parse_gdb_value("[ 27, 37]").unwrap(),
+            parse_gdb_value("{ 27, 37}").unwrap(),
             GDBValue::Array({
                 let mut o = Vec::new();
                 o.push(GDBValue::Integer("27".to_owned(), 27));
@@ -437,7 +428,7 @@ mod test {
             })
         );
         assert_eq!(
-            parse_gdb_value("[\n 27,\n 37\n]").unwrap(),
+            parse_gdb_value("{\n 27,\n 37\n}").unwrap(),
             GDBValue::Array({
                 let mut o = Vec::new();
                 o.push(GDBValue::Integer("27".to_owned(), 27));

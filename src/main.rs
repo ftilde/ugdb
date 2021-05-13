@@ -25,9 +25,6 @@ extern crate unsegen_terminal;
 // gdbmi
 #[macro_use]
 extern crate nom;
-// expression parsing
-#[macro_use]
-extern crate lalrpop_util;
 
 mod completion;
 mod gdb;

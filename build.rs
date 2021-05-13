@@ -1,4 +1,3 @@
-extern crate lalrpop;
 extern crate toml;
 
 use toml::{from_str, Value};
@@ -16,10 +15,6 @@ fn get_revision() -> Option<String> {
 }
 
 fn main() {
-    // Preprocess lalrpop grammar files
-    lalrpop::process_root().unwrap();
-    println!("cargo:rerun-if-changed=src/gdb_expression_parsing/parser.lalrpop");
-
     // Find git revision of current version, if possible
     let revision_str = get_revision().unwrap_or_else(|| " release".to_owned());
     println!("cargo:rustc-env=REVISION={}", revision_str);

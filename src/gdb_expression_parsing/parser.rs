@@ -1,5 +1,5 @@
 use super::ast::Node;
-use super::lexer::{Lexer, LexicalError, Token};
+use super::lexer::{Lexer, LexicalError, Span, Token};
 
 /// These are "stage 2 tokens", which only distinguish between the parts of the expression relevant
 /// for the parser below. See collapse_tokens for the conversion.
@@ -121,7 +121,12 @@ fn collapse_tokens(
     ret
 }
 
-fn parse_structure(tokens: &mut Tokens) -> Result<Node, ()> {
+enum Struct {
+    Array(Vec<Node>),
+    Map(Vec<(Span, Node)>),
+}
+
+fn parse_structure(tokens: &mut Tokens) -> Result<Struct, ()> {
     let mut kv = Vec::new();
     let mut single = Vec::new();
     let multiline = if let &[(_, TokenS2::Newline, _), ..] = tokens.tokens {
@@ -133,7 +138,7 @@ fn parse_structure(tokens: &mut Tokens) -> Result<Node, ()> {
     match tokens.tokens {
         &[(_, TokenS2::RBrace, _), ..] => {
             tokens.consume(1);
-            return Ok(Node::Map(Vec::new()));
+            return Ok(Struct::Map(Vec::new()));
         }
         _ => {}
     };
@@ -170,16 +175,16 @@ fn parse_structure(tokens: &mut Tokens) -> Result<Node, ()> {
             | (true, &[(_, TokenS2::Newline, _), (_, TokenS2::RBrace, _), ..]) => {
                 tokens.consume(if multiline { 2 } else { 1 });
                 return Ok(match (kv.is_empty(), single.len()) {
-                    (true, 0) => Node::Array(Vec::new()),
-                    (true, _) => Node::Array(single),
-                    (false, 0) => Node::Map(kv),
+                    (true, 0) => Struct::Array(Vec::new()),
+                    (true, _) => Struct::Array(single),
+                    (false, 0) => Struct::Map(kv),
                     (false, 1) => {
                         kv.push(((0, 0), single.drain(..).next().unwrap()));
-                        Node::Map(kv)
+                        Struct::Map(kv)
                     }
                     (false, _) => {
                         kv.push(((0, 0), Node::Array(single)));
-                        Node::Map(kv)
+                        Struct::Map(kv)
                     }
                 });
             }
@@ -211,15 +216,14 @@ pub type Error = LexicalError;
 
 // TODO: Use or-patterns starting from 1.53?
 fn parse_value(tokens: &mut Tokens, context: ValueContext) -> Node {
-    let mut range = None;
-    let update_range = |range: &mut Option<(usize, usize)>, b, e| {
-        *range = if let Some((ob, _)) = *range {
-            Some((ob, e))
-        } else {
-            Some((b, e))
+    let mut text_begin = None;
+    let mut text_end = 0;
+    let update_range =
+        |text_begin: &mut Option<usize>, text_end: &mut usize, b: usize, e: usize| {
+            *text_begin = Some(text_begin.unwrap_or(b));
+            *text_end = (*text_end).max(e);
         };
-    };
-    let mut current_res = Node::Leaf((0, 0));
+    let mut current_struct = None;
     loop {
         match (context, tokens.tokens) {
             (ValueContext::SingleLineStruct, &[(_, TokenS2::Comma, _), ..])
@@ -234,25 +238,29 @@ fn parse_value(tokens: &mut Tokens, context: ValueContext) -> Node {
                 &[(_, TokenS2::Newline, _), (_, TokenS2::RBrace, _), ..],
             )
             | (_, &[]) => {
-                return current_res;
+                return match current_struct {
+                    None => Node::Leaf((text_begin.unwrap_or(0), text_end)),
+                    Some(Struct::Map(v)) => Node::Map(v),
+                    Some(Struct::Array(v)) => Node::Array(v),
+                };
             }
             (_, &[(b, TokenS2::Text, e), ..])
             | (_, &[(b, TokenS2::Equals, e), ..])
             | (ValueContext::MultiLineStruct, &[(b, TokenS2::Comma, e), ..])
             | (ValueContext::Free, &[(b, TokenS2::Comma, e), ..])
             | (ValueContext::Free, &[(b, TokenS2::RBrace, e), ..]) => {
-                update_range(&mut range, b, e);
-                current_res = Node::Leaf(range.unwrap());
+                update_range(&mut text_begin, &mut text_end, b, e);
+                current_struct = None;
                 tokens.consume(1);
             }
             (_, &[(_, TokenS2::Newline, _), ..]) => {
                 tokens.consume(1);
             }
             (_, &[(b, TokenS2::LBrace, e), ..]) => {
-                update_range(&mut range, b, e);
+                update_range(&mut text_begin, &mut text_end, b, e);
                 tokens.consume(1);
                 if let Ok(strct) = parse_structure(tokens) {
-                    current_res = strct;
+                    current_struct = Some(strct);
                 }
             }
         }

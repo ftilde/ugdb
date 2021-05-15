@@ -79,6 +79,18 @@ mod test {
             parse_gdb_value("{...}").unwrap(),
             GDBValue::Array(vec! { GDBValue::String("...".to_owned()) })
         );
+        assert_eq!(
+            parse_gdb_value("foo,bar").unwrap(),
+            GDBValue::String("foo,bar".to_owned())
+        );
+        assert_eq!(
+            parse_gdb_value("foo}bar").unwrap(),
+            GDBValue::String("foo}bar".to_owned())
+        );
+        assert_eq!(
+            parse_gdb_value("\nfoo\nbar").unwrap(),
+            GDBValue::String("foo\nbar".to_owned())
+        );
     }
 
     #[test]

@@ -146,7 +146,14 @@ fn parse_structure(tokens: &mut Tokens) -> Result<Node, ()> {
             }
             _ => None,
         };
-        let val = parse_value(tokens, multiline);
+        let val = parse_value(
+            tokens,
+            if multiline {
+                ValueContext::MultiLineStruct
+            } else {
+                ValueContext::SingleLineStruct
+            },
+        );
         if let Some(key) = key {
             kv.push((key, val));
         } else {
@@ -193,10 +200,17 @@ impl Tokens<'_> {
     }
 }
 
+#[derive(Copy, Clone)]
+enum ValueContext {
+    Free,
+    SingleLineStruct,
+    MultiLineStruct,
+}
+
 pub type Error = LexicalError;
 
 // TODO: Use or-patterns starting from 1.53?
-fn parse_value(tokens: &mut Tokens, multiline_context: bool) -> Node {
+fn parse_value(tokens: &mut Tokens, context: ValueContext) -> Node {
     let mut range = None;
     let update_range = |range: &mut Option<(usize, usize)>, b, e| {
         *range = if let Some((ob, _)) = *range {
@@ -207,26 +221,31 @@ fn parse_value(tokens: &mut Tokens, multiline_context: bool) -> Node {
     };
     let mut current_res = Node::Leaf((0, 0));
     loop {
-        if let &[(_, TokenS2::Newline, _)] = tokens.tokens {
-            tokens.consume(1);
-        } else {
-            break;
-        }
-    }
-    loop {
-        match (multiline_context, tokens.tokens) {
-            (false, &[(_, TokenS2::Comma, _), ..])
-            | (true, &[(_, TokenS2::Comma, _), (_, TokenS2::Newline, _), ..])
-            | (_, &[(_, TokenS2::RBrace, _), ..])
-            | (_, &[(_, TokenS2::Newline, _), ..])
+        match (context, tokens.tokens) {
+            (ValueContext::SingleLineStruct, &[(_, TokenS2::Comma, _), ..])
+            | (
+                ValueContext::MultiLineStruct,
+                &[(_, TokenS2::Comma, _), (_, TokenS2::Newline, _), ..],
+            )
+            | (ValueContext::SingleLineStruct, &[(_, TokenS2::RBrace, _), ..])
+            | (ValueContext::MultiLineStruct, &[(_, TokenS2::RBrace, _), ..])
+            | (
+                ValueContext::MultiLineStruct,
+                &[(_, TokenS2::Newline, _), (_, TokenS2::RBrace, _), ..],
+            )
             | (_, &[]) => {
                 return current_res;
             }
             (_, &[(b, TokenS2::Text, e), ..])
             | (_, &[(b, TokenS2::Equals, e), ..])
-            | (true, &[(b, TokenS2::Comma, e), ..]) => {
+            | (ValueContext::MultiLineStruct, &[(b, TokenS2::Comma, e), ..])
+            | (ValueContext::Free, &[(b, TokenS2::Comma, e), ..])
+            | (ValueContext::Free, &[(b, TokenS2::RBrace, e), ..]) => {
                 update_range(&mut range, b, e);
                 current_res = Node::Leaf(range.unwrap());
+                tokens.consume(1);
+            }
+            (_, &[(_, TokenS2::Newline, _), ..]) => {
                 tokens.consume(1);
             }
             (_, &[(b, TokenS2::LBrace, e), ..]) => {
@@ -246,7 +265,7 @@ pub fn parse(lexer: Lexer) -> Result<Node, Error> {
     let mut tokens = Tokens {
         tokens: &tokens[..],
     };
-    Ok(parse_value(&mut tokens, false))
+    Ok(parse_value(&mut tokens, ValueContext::Free))
 }
 
 #[cfg(test)]

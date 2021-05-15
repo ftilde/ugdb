@@ -113,8 +113,17 @@ mod test {
                 z = 4197294
             },
             {...},
-            map = std::map with 0 elements,
-            vec = std::vector of length 0, capacity 0,
+            vec_empty = std::vector of length 0, capacity 0,
+            map_empty = std::map with 0 elements,
+            vec = std::vector of length 1, capacity 1 = {{
+                x = 1,
+                y = 2,
+                z = 3
+            }},
+            map = std::map with 2 elements = {
+              [\"blub\"] = 2,
+              [\"foo\"] = 123
+            },
             uni_extern = {...},
             uni_intern = {...},
             const_array = {0, 0},
@@ -159,12 +168,33 @@ mod test {
                 ]),
             ),
             (
-                "map".to_owned(),
+                "vec_empty".to_owned(),
+                GDBValue::String("std::vector of length 0, capacity 0".to_owned()),
+            ),
+            (
+                "map_empty".to_owned(),
                 GDBValue::String("std::map with 0 elements".to_owned()),
             ),
             (
                 "vec".to_owned(),
-                GDBValue::String("std::vector of length 0, capacity 0".to_owned()),
+                GDBValue::Array(vec![GDBValue::Map(vec![
+                    ("x".to_owned(), GDBValue::Integer("1".to_owned(), 1)),
+                    ("y".to_owned(), GDBValue::Integer("2".to_owned(), 2)),
+                    ("z".to_owned(), GDBValue::Integer("3".to_owned(), 3)),
+                ])]),
+            ),
+            (
+                "map".to_owned(),
+                GDBValue::Map(vec![
+                    (
+                        "[\"blub\"]".to_owned(),
+                        GDBValue::Integer("2".to_owned(), 2),
+                    ),
+                    (
+                        "[\"foo\"]".to_owned(),
+                        GDBValue::Integer("123".to_owned(), 123),
+                    ),
+                ]),
             ),
             (
                 "uni_extern".to_owned(),

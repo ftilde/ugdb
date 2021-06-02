@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.1.10] - UNRELEASED
+### Changed
+- Generate gdb completions dynamically.
+- Reduce dependencies and thus compile time.
+- Make expression table scrollable
+### Added
+- Add cli history search.
+- Make layout configurable.
+- Add !layout command.
+- Add ability to change expression integer format in expression table.
+
 ## [0.1.9] - 2020-11-14
 ### Changed
 - Generate gdb completions dynamically.

@@ -125,6 +125,7 @@ Enter by pressing `e`.
 * Navigate using arrow keys.
 * Use `Space` in the right column to interact with the structure viewer.
 * Use `Tab`/`Ctrl-n`/`Ctrl-p` for identifier completion.
+* Use `Ctrl-f` to cycle through original/hex/decimal/octal/binary format for integers.
 
 Note: The viewer is somewhat broken for displaying structures with custom pretty-printers.
 A workaround would be to use [variable objects](https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI-Variable-Objects.html), but that would not allow for evaluation of arbitrary expressions.

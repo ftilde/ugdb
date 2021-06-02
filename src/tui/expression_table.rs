@@ -1,3 +1,4 @@
+use crate::gdb_expression_parsing::Format;
 use gdbmi::commands::MiCommand;
 use gdbmi::output::ResultClass;
 use gdbmi::ExecuteError;
@@ -14,13 +15,26 @@ pub struct ExpressionRow {
     expression: LineEdit,
     completion_state: Option<CompletionState>,
     result: JsonViewer,
+    format: Option<crate::gdb_expression_parsing::Format>,
 }
+
+fn next_format(f: Option<Format>) -> Option<Format> {
+    match f {
+        None => Some(Format::Hex),
+        Some(Format::Hex) => Some(Format::Decimal),
+        Some(Format::Decimal) => Some(Format::Octal),
+        Some(Format::Octal) => Some(Format::Binary),
+        Some(Format::Binary) => None,
+    }
+}
+
 impl ExpressionRow {
     fn new() -> Self {
         ExpressionRow {
             expression: LineEdit::new(),
             completion_state: None,
             result: JsonViewer::new(" "),
+            format: None,
         }
     }
 
@@ -41,7 +55,10 @@ impl ExpressionRow {
                         let to_parse = res.results["value"].as_str().expect("value present");
                         match crate::gdb_expression_parsing::parse_gdb_value(to_parse) {
                             Ok(n) => {
-                                let v = crate::gdb_expression_parsing::Value { node: &n };
+                                let v = crate::gdb_expression_parsing::Value {
+                                    node: &n,
+                                    format: self.format,
+                                };
                                 self.result.update(v);
                             }
                             Err(_) => {
@@ -68,6 +85,7 @@ impl TableRow for ExpressionRow {
         Column {
             access: |r| Box::new(r.expression.as_widget()),
             behavior: |r, input, p| {
+                let mut format_changed = false;
                 let prev_content = r.expression.get().to_owned();
                 let set_completion =
                     |completion_state: &Option<CompletionState>, expression: &mut LineEdit| {
@@ -101,6 +119,10 @@ impl TableRow for ExpressionRow {
                         }
                         set_completion(&r.completion_state, &mut r.expression);
                     }))
+                    .chain((Key::Ctrl('f'), || {
+                        r.format = next_format(r.format);
+                        format_changed = true;
+                    }))
                     .if_not_consumed(|| r.completion_state = None)
                     .chain(
                         EditBehavior::new(&mut r.expression)
@@ -116,7 +138,7 @@ impl TableRow for ExpressionRow {
                     )
                     .finish();
 
-                if r.expression.get() != &prev_content {
+                if r.expression.get() != &prev_content || format_changed {
                     r.update_result(p);
                 }
                 res

@@ -18,26 +18,57 @@ pub enum Node<'a> {
     Map(Option<&'a str>, Vec<(&'a str, Node<'a>)>),
 }
 
+#[derive(Clone, Copy)]
+pub enum Format {
+    Decimal,
+    Hex,
+    Octal,
+    Binary,
+}
+
 #[derive(Clone)]
 pub struct Value<'s> {
     pub node: &'s Node<'s>,
+    pub format: Option<Format>,
 }
 
 impl<'n> unsegen_jsonviewer::Value for Value<'n> {
     fn visit<'s>(self) -> unsegen_jsonviewer::ValueVariant<'s, Self> {
         match self.node {
-            Node::Leaf(s) => unsegen_jsonviewer::ValueVariant::Scalar(s.to_string()),
+            Node::Leaf(s) => {
+                let res = if let Some(format) = self.format {
+                    match parse_int::parse::<i128>(s) {
+                        Err(_) => s.to_string(),
+                        Ok(i) => match format {
+                            Format::Decimal => i.to_string(),
+                            Format::Hex => format!("{:#x}", i),
+                            Format::Octal => format!("{:#o}", i),
+                            Format::Binary => format!("{:#b}", i),
+                        },
+                    }
+                } else {
+                    s.to_string()
+                };
+                unsegen_jsonviewer::ValueVariant::Scalar(res)
+            }
             Node::Map(description, items) => unsegen_jsonviewer::ValueVariant::Map(
                 description.map(|s| s.to_owned()),
-                Box::new(
-                    items
-                        .iter()
-                        .map(move |(s, v)| (s.to_string(), Value { node: v })),
-                ),
+                Box::new(items.iter().map(move |(s, v)| {
+                    (
+                        s.to_string(),
+                        Value {
+                            node: v,
+                            format: self.format,
+                        },
+                    )
+                })),
             ),
             Node::Array(description, items) => unsegen_jsonviewer::ValueVariant::Array(
                 description.map(|s| s.to_owned()),
-                Box::new(items.iter().map(move |v| Value { node: v })),
+                Box::new(items.iter().map(move |v| Value {
+                    node: v,
+                    format: self.format,
+                })),
             ),
         }
     }

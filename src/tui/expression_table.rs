@@ -1,4 +1,3 @@
-use gdb_expression_parsing::{parse_gdb_value, GDBValue};
 use gdbmi::commands::MiCommand;
 use gdbmi::output::ResultClass;
 use gdbmi::ExecuteError;
@@ -21,7 +20,7 @@ impl ExpressionRow {
         ExpressionRow {
             expression: LineEdit::new(),
             completion_state: None,
-            result: JsonViewer::new(&GDBValue::String(" ".to_owned())),
+            result: JsonViewer::new(" "),
         }
     }
 
@@ -30,17 +29,25 @@ impl ExpressionRow {
     }
     fn update_result(&mut self, p: &mut ::Context) {
         let expr = self.expression.get().to_owned();
-        let result: GDBValue = if expr.is_empty() {
-            GDBValue::String(" ".to_owned())
+        if expr.is_empty() {
+            self.result.update(" ");
         } else {
             match p.gdb.mi.execute(MiCommand::data_evaluate_expression(expr)) {
                 Ok(res) => match res.class {
-                    ResultClass::Error => GDBValue::String(res.results["msg"].to_string()),
+                    ResultClass::Error => {
+                        self.result.update(&res.results["msg"]);
+                    }
                     ResultClass::Done => {
                         let to_parse = res.results["value"].as_str().expect("value present");
-                        match parse_gdb_value(to_parse) {
-                            Ok(p) => p,
-                            Err(_) => GDBValue::String(format!("*Error parsing*: {}", to_parse)),
+                        match crate::gdb_expression_parsing::parse_gdb_value(to_parse) {
+                            Ok(n) => {
+                                let v = crate::gdb_expression_parsing::Value { node: &n };
+                                self.result.update(v);
+                            }
+                            Err(_) => {
+                                self.result
+                                    .update(format!("*Error parsing*: {}", to_parse).as_str());
+                            }
                         }
                     }
                     other => panic!("unexpected result class: {:?}", other),
@@ -53,7 +60,6 @@ impl ExpressionRow {
                 }
             }
         };
-        self.result.update(&result);
     }
 }
 impl TableRow for ExpressionRow {

@@ -1,5 +1,5 @@
-use super::ast::Node;
-use super::lexer::{Lexer, LexicalError, Span, Token};
+use super::lexer::{Lexer, LexicalError, Token};
+use super::Node;
 
 /// These are "stage 2 tokens", which only distinguish between the parts of the expression relevant
 /// for the parser below. See collapse_tokens for the conversion.
@@ -121,12 +121,12 @@ fn collapse_tokens(
     ret
 }
 
-enum Struct {
-    Array(Vec<Node>),
-    Map(Vec<(Span, Node)>),
+enum Struct<'s> {
+    Array(Vec<Node<'s>>),
+    Map(Vec<(&'s str, Node<'s>)>),
 }
 
-fn parse_structure(tokens: &mut Tokens) -> Result<Struct, ()> {
+fn parse_structure<'s>(tokens: &mut Tokens, string: &'s str) -> Result<Struct<'s>, ()> {
     let mut kv = Vec::new();
     let mut single = Vec::new();
     let multiline = if let &[(_, TokenS2::Newline, _), ..] = tokens.tokens {
@@ -138,7 +138,7 @@ fn parse_structure(tokens: &mut Tokens) -> Result<Struct, ()> {
     match tokens.tokens {
         &[(_, TokenS2::RBrace, _), ..] => {
             tokens.consume(1);
-            return Ok(Struct::Map(Vec::new()));
+            return Ok(Struct::Array(Vec::new()));
         }
         _ => {}
     };
@@ -153,14 +153,15 @@ fn parse_structure(tokens: &mut Tokens) -> Result<Struct, ()> {
         };
         let val = parse_value(
             tokens,
+            string,
             if multiline {
                 ValueContext::MultiLineStruct
             } else {
                 ValueContext::SingleLineStruct
             },
         );
-        if let Some(key) = key {
-            kv.push((key, val));
+        if let Some((b, e)) = key {
+            kv.push((&string[b..e], val));
         } else {
             single.push(val);
         }
@@ -179,11 +180,11 @@ fn parse_structure(tokens: &mut Tokens) -> Result<Struct, ()> {
                     (true, _) => Struct::Array(single),
                     (false, 0) => Struct::Map(kv),
                     (false, 1) => {
-                        kv.push(((0, 0), single.drain(..).next().unwrap()));
+                        kv.push((super::ANON_KEY, single.drain(..).next().unwrap()));
                         Struct::Map(kv)
                     }
                     (false, _) => {
-                        kv.push(((0, 0), Node::Array(single)));
+                        kv.push((super::ANON_KEY, Node::Array(None, single)));
                         Struct::Map(kv)
                     }
                 });
@@ -215,7 +216,7 @@ enum ValueContext {
 pub type Error = LexicalError;
 
 // TODO: Use or-patterns starting from 1.53?
-fn parse_value(tokens: &mut Tokens, context: ValueContext) -> Node {
+fn parse_value<'s>(tokens: &mut Tokens, string: &'s str, context: ValueContext) -> Node<'s> {
     let mut text_begin = None;
     let mut text_end = 0;
     let update_range =
@@ -238,10 +239,13 @@ fn parse_value(tokens: &mut Tokens, context: ValueContext) -> Node {
                 &[(_, TokenS2::Newline, _), (_, TokenS2::RBrace, _), ..],
             )
             | (_, &[]) => {
+                let text_begin = text_begin.unwrap_or(text_end);
+                let text = &string[text_begin..text_end];
+                let description = if text.is_empty() { None } else { Some(text) };
                 return match current_struct {
-                    None => Node::Leaf((text_begin.unwrap_or(0), text_end)),
-                    Some(Struct::Map(v)) => Node::Map(v),
-                    Some(Struct::Array(v)) => Node::Array(v),
+                    None => Node::Leaf(text),
+                    Some(Struct::Map(v)) => Node::Map(description, v),
+                    Some(Struct::Array(v)) => Node::Array(description, v),
                 };
             }
             (_, &[(b, TokenS2::Text, e), ..])
@@ -256,10 +260,13 @@ fn parse_value(tokens: &mut Tokens, context: ValueContext) -> Node {
             (_, &[(_, TokenS2::Newline, _), ..]) => {
                 tokens.consume(1);
             }
-            (_, &[(b, TokenS2::LBrace, e), ..]) => {
-                update_range(&mut text_begin, &mut text_end, b, e);
+            (_, &[(b, TokenS2::LBrace, _), ..]) => {
+                if text_begin.is_none() {
+                    text_begin = Some(b);
+                    text_end = b;
+                }
                 tokens.consume(1);
-                if let Ok(strct) = parse_structure(tokens) {
+                if let Ok(strct) = parse_structure(tokens, string) {
                     current_struct = Some(strct);
                 }
             }
@@ -267,13 +274,13 @@ fn parse_value(tokens: &mut Tokens, context: ValueContext) -> Node {
     }
 }
 
-pub fn parse(lexer: Lexer) -> Result<Node, Error> {
+pub fn parse<'s>(lexer: Lexer, string: &'s str) -> Result<Node<'s>, Error> {
     let tokens = lexer.into_iter().collect::<Result<Vec<_>, _>>()?;
     let tokens = collapse_tokens(tokens.into_iter());
     let mut tokens = Tokens {
         tokens: &tokens[..],
     };
-    Ok(parse_value(&mut tokens, ValueContext::Free))
+    Ok(parse_value(&mut tokens, string, ValueContext::Free))
 }
 
 #[cfg(test)]

@@ -2,7 +2,6 @@ use std::str::CharIndices;
 
 pub type Location = usize;
 pub type TokenWithLocation = (Location, Token, Location);
-pub type Span = (Location, Location);
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Token {

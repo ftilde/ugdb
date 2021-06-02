@@ -2,94 +2,74 @@ mod ast;
 mod lexer;
 mod parser;
 
-use unsegen_jsonviewer::Value;
+const ANON_KEY: &'static str = "*anon*";
 
 pub type ParseError = parser::Error;
 
-pub fn parse_gdb_value(result_string: &str) -> Result<GDBValue, ParseError> {
+pub fn parse_gdb_value<'s>(result_string: &'s str) -> Result<Node, ParseError> {
     let lexer = lexer::Lexer::new(result_string);
-    let ast = parser::parse(lexer)?;
-    Ok(ast.to_value(result_string))
+    parser::parse(lexer, result_string)
 }
 
-#[derive(PartialEq, Debug)]
-pub enum GDBValue {
-    String(String),
-    Integer(String, i128),
-    Array(Vec<GDBValue>),
-    Map(Vec<(String, GDBValue)>),
+#[derive(Debug, PartialEq)]
+pub enum Node<'a> {
+    Leaf(&'a str),
+    Array(Option<&'a str>, Vec<Node<'a>>),
+    Map(Option<&'a str>, Vec<(&'a str, Node<'a>)>),
 }
 
-impl unsegen_jsonviewer::Value for GDBValue {
-    fn visit<'children>(&'children self) -> unsegen_jsonviewer::ValueVariant<'children> {
-        match self {
-            GDBValue::String(s) => unsegen_jsonviewer::ValueVariant::Scalar(s.clone()),
-            GDBValue::Integer(s, _) => unsegen_jsonviewer::ValueVariant::Scalar(s.clone()), //TODO
-            GDBValue::Map(val) => unsegen_jsonviewer::ValueVariant::Map(Box::new(
-                val.iter().map(|(k, v)| (k.to_owned(), v as &dyn Value)),
-            )),
-            GDBValue::Array(val) => unsegen_jsonviewer::ValueVariant::Array(Box::new(
-                val.iter().map(|v| v as &dyn Value),
-            )),
+#[derive(Clone)]
+pub struct Value<'s> {
+    pub node: &'s Node<'s>,
+}
+
+impl<'n> unsegen_jsonviewer::Value for Value<'n> {
+    fn visit<'s>(self) -> unsegen_jsonviewer::ValueVariant<'s, Self> {
+        match self.node {
+            Node::Leaf(s) => unsegen_jsonviewer::ValueVariant::Scalar(s.to_string()),
+            Node::Map(description, items) => unsegen_jsonviewer::ValueVariant::Map(
+                description.map(|s| s.to_owned()),
+                Box::new(
+                    items
+                        .iter()
+                        .map(move |(s, v)| (s.to_string(), Value { node: v })),
+                ),
+            ),
+            Node::Array(description, items) => unsegen_jsonviewer::ValueVariant::Array(
+                description.map(|s| s.to_owned()),
+                Box::new(items.iter().map(move |v| Value { node: v })),
+            ),
         }
     }
 }
 
 #[cfg(test)]
 mod test {
-    use super::ast::ANON_KEY;
     use super::*;
 
     #[test]
     fn test_parse_basic() {
+        assert_eq!(parse_gdb_value("true").unwrap(), Node::Leaf("true"));
+        assert_eq!(parse_gdb_value("false").unwrap(), Node::Leaf("false"));
+        assert_eq!(parse_gdb_value("27").unwrap(), Node::Leaf("27")); //This is probably sufficient for us
+        assert_eq!(parse_gdb_value("27.1").unwrap(), Node::Leaf("27.1"));
+        assert_eq!(parse_gdb_value("\"dfd\"").unwrap(), Node::Leaf("\"dfd\""));
+        assert_eq!(parse_gdb_value(" l r ").unwrap(), Node::Leaf("l r"));
+        assert_eq!(parse_gdb_value(" 0x123").unwrap(), Node::Leaf("0x123"));
+        assert_eq!(parse_gdb_value(" -123").unwrap(), Node::Leaf("-123"));
         assert_eq!(
-            parse_gdb_value("true").unwrap(),
-            GDBValue::String("true".to_owned())
+            parse_gdb_value("{}").unwrap(),
+            Node::Array(None, Vec::new())
         );
-        assert_eq!(
-            parse_gdb_value("false").unwrap(),
-            GDBValue::String("false".to_owned())
-        );
-        assert_eq!(
-            parse_gdb_value("27").unwrap(),
-            GDBValue::Integer("27".to_string(), 27)
-        ); //This is probably sufficient for us
-        assert_eq!(
-            parse_gdb_value("27.1").unwrap(),
-            GDBValue::String("27.1".to_string())
-        );
-        assert_eq!(
-            parse_gdb_value("\"dfd\"").unwrap(),
-            GDBValue::String("\"dfd\"".to_string())
-        );
-        assert_eq!(
-            parse_gdb_value(" l r ").unwrap(),
-            GDBValue::String("l r".to_string())
-        );
-        assert_eq!(
-            parse_gdb_value(" 0x123").unwrap(),
-            GDBValue::Integer("0x123".to_string(), 0x123)
-        );
-        assert_eq!(
-            parse_gdb_value(" -123").unwrap(),
-            GDBValue::Integer("-123".to_string(), -123)
-        );
-        assert_eq!(parse_gdb_value("{}").unwrap(), GDBValue::Map(Vec::new()));
         assert_eq!(
             parse_gdb_value("{...}").unwrap(),
-            GDBValue::Array(vec! { GDBValue::String("...".to_owned()) })
+            Node::Array(None, vec! { Node::Leaf("...") })
         );
-        assert_eq!(
-            parse_gdb_value("foo,bar").unwrap(),
-            GDBValue::String("foo,bar".to_owned())
-        );
-        assert_eq!(
-            parse_gdb_value("foo}bar").unwrap(),
-            GDBValue::String("foo}bar".to_owned())
-        );
+        assert_eq!(parse_gdb_value("foo,bar").unwrap(), Node::Leaf("foo,bar"));
+        assert_eq!(parse_gdb_value("foo}bar").unwrap(), Node::Leaf("foo}bar"));
         assert_eq!(
             parse_gdb_value("\nfoo\nbar").unwrap(),
-            GDBValue::String("foo\nbar".to_owned())
+            Node::Leaf("foo\nbar")
         );
     }
 
@@ -130,109 +110,82 @@ mod test {
             ptr = 0x400bf0 <__libc_csu_init>,
             array = 0x7fffffffe018
         }";
-        let result_obj = GDBValue::Map(vec![
-            (
-                "boolean".to_owned(),
-                GDBValue::Integer("128".to_owned(), 128),
-            ),
-            ("x".to_owned(), GDBValue::Integer("0".to_owned(), 0)),
-            (
-                "y".to_owned(),
-                GDBValue::String("\"kdf\\\\j}{\\\"\"".to_owned()),
-            ),
-            (
-                "named_inner".to_owned(),
-                GDBValue::Map(vec![
-                    (
-                        "v".to_owned(),
-                        GDBValue::String("1.40129846e-45".to_owned()),
+        let result_obj = Node::Map(
+            None,
+            vec![
+                ("boolean", Node::Leaf("128")),
+                ("x", Node::Leaf("0")),
+                ("y", Node::Leaf("\"kdf\\\\j}{\\\"\"")),
+                (
+                    "named_inner",
+                    Node::Map(
+                        None,
+                        vec![("v", Node::Leaf("1.40129846e-45")), ("w", Node::Leaf("0"))],
                     ),
-                    ("w".to_owned(), GDBValue::Integer("0".to_owned(), 0)),
-                ]),
-            ),
-            (
-                "bar".to_owned(),
-                GDBValue::Map(vec![
-                    (
-                        "x".to_owned(),
-                        GDBValue::Integer("4295032831".to_owned(), 4295032831),
+                ),
+                (
+                    "bar",
+                    Node::Map(
+                        None,
+                        vec![
+                            ("x", Node::Leaf("4295032831")),
+                            ("y", Node::Leaf("140737488347120")),
+                            ("z", Node::Leaf("4197294")),
+                        ],
                     ),
-                    (
-                        "y".to_owned(),
-                        GDBValue::Integer("140737488347120".to_owned(), 140737488347120),
+                ),
+                (
+                    "vec_empty",
+                    Node::Leaf("std::vector of length 0, capacity 0"),
+                ),
+                ("map_empty", Node::Leaf("std::map with 0 elements")),
+                (
+                    "vec",
+                    Node::Array(
+                        Some("std::vector of length 1, capacity 1 ="),
+                        vec![Node::Map(
+                            None,
+                            vec![
+                                ("x", Node::Leaf("1")),
+                                ("y", Node::Leaf("2")),
+                                ("z", Node::Leaf("3")),
+                            ],
+                        )],
                     ),
-                    (
-                        "z".to_owned(),
-                        GDBValue::Integer("4197294".to_owned(), 4197294),
+                ),
+                (
+                    "map",
+                    Node::Map(
+                        Some("std::map with 2 elements ="),
+                        vec![
+                            ("[\"blub\"]", Node::Leaf("2")),
+                            ("[\"foo\"]", Node::Leaf("123")),
+                        ],
                     ),
-                ]),
-            ),
-            (
-                "vec_empty".to_owned(),
-                GDBValue::String("std::vector of length 0, capacity 0".to_owned()),
-            ),
-            (
-                "map_empty".to_owned(),
-                GDBValue::String("std::map with 0 elements".to_owned()),
-            ),
-            (
-                "vec".to_owned(),
-                GDBValue::Array(vec![GDBValue::Map(vec![
-                    ("x".to_owned(), GDBValue::Integer("1".to_owned(), 1)),
-                    ("y".to_owned(), GDBValue::Integer("2".to_owned(), 2)),
-                    ("z".to_owned(), GDBValue::Integer("3".to_owned(), 3)),
-                ])]),
-            ),
-            (
-                "map".to_owned(),
-                GDBValue::Map(vec![
-                    (
-                        "[\"blub\"]".to_owned(),
-                        GDBValue::Integer("2".to_owned(), 2),
+                ),
+                ("uni_extern", Node::Array(None, vec![Node::Leaf("...")])),
+                ("uni_intern", Node::Array(None, vec![Node::Leaf("...")])),
+                (
+                    "const_array",
+                    Node::Array(None, vec![Node::Leaf("0"), Node::Leaf("0")]),
+                ),
+                ("ptr", Node::Leaf("0x400bf0 <__libc_csu_init>")),
+                ("array", Node::Leaf("0x7fffffffe018")),
+                (
+                    ANON_KEY,
+                    Node::Array(
+                        None,
+                        vec![
+                            Node::Map(
+                                None,
+                                vec![("z", Node::Leaf("5.88163081e-39")), ("w", Node::Leaf("0"))],
+                            ),
+                            Node::Array(None, vec![Node::Leaf("...")]),
+                        ],
                     ),
-                    (
-                        "[\"foo\"]".to_owned(),
-                        GDBValue::Integer("123".to_owned(), 123),
-                    ),
-                ]),
-            ),
-            (
-                "uni_extern".to_owned(),
-                GDBValue::Array(vec![GDBValue::String("...".to_owned())]),
-            ),
-            (
-                "uni_intern".to_owned(),
-                GDBValue::Array(vec![GDBValue::String("...".to_owned())]),
-            ),
-            (
-                "const_array".to_owned(),
-                GDBValue::Array(vec![
-                    GDBValue::Integer("0".to_owned(), 0),
-                    GDBValue::Integer("0".to_owned(), 0),
-                ]),
-            ),
-            (
-                "ptr".to_owned(),
-                GDBValue::String("0x400bf0 <__libc_csu_init>".to_owned()),
-            ),
-            (
-                "array".to_owned(),
-                GDBValue::Integer("0x7fffffffe018".to_owned(), 0x7fffffffe018),
-            ),
-            (
-                ANON_KEY.to_owned(),
-                GDBValue::Array(vec![
-                    GDBValue::Map(vec![
-                        (
-                            "z".to_owned(),
-                            GDBValue::String("5.88163081e-39".to_owned()),
-                        ),
-                        ("w".to_owned(), GDBValue::Integer("0".to_owned(), 0)),
-                    ]),
-                    GDBValue::Array(vec![GDBValue::String("...".to_owned())]),
-                ]),
-            ),
-        ]);
+                ),
+            ],
+        );
         let r = parse_gdb_value(testcase).unwrap();
         //println!("{}", r.pretty(2));
         assert_eq!(r, result_obj);
@@ -240,141 +193,90 @@ mod test {
 
     #[test]
     fn test_parse_string() {
-        //assert_eq!(parse_gdb_value("\"foo{]}]]}]<>,\\\\\""), GDBValue::String("\"foo{]}]]}]<>,\\\"".to_string()));
-        assert_eq!(
-            parse_gdb_value("\"foo\"").unwrap(),
-            GDBValue::String("\"foo\"".to_string())
-        );
+        //assert_eq!(parse_gdb_value("\"foo{]}]]}]<>,\\\\\""), Node::Leaf("\"foo{]}]]}]<>,\\\"".to_string()));
+        assert_eq!(parse_gdb_value("\"foo\"").unwrap(), Node::Leaf("\"foo\""));
         assert_eq!(
             parse_gdb_value("\"foo\\\"\"").unwrap(),
-            GDBValue::String("\"foo\\\"\"".to_string())
+            Node::Leaf("\"foo\\\"\"")
         );
         assert_eq!(
             parse_gdb_value("\"\\\\}{\\\"\"").unwrap(),
-            GDBValue::String("\"\\\\}{\\\"\"".to_string())
+            Node::Leaf("\"\\\\}{\\\"\"")
         );
-        assert_eq!(
-            parse_gdb_value("\"\\t\"").unwrap(),
-            GDBValue::String("\"\\t\"".to_string())
-        );
-        assert_eq!(
-            parse_gdb_value("\"\\n\"").unwrap(),
-            GDBValue::String("\"\\n\"".to_string())
-        );
-        assert_eq!(
-            parse_gdb_value("\"\\r\"").unwrap(),
-            GDBValue::String("\"\\r\"".to_string())
-        );
+        assert_eq!(parse_gdb_value("\"\\t\"").unwrap(), Node::Leaf("\"\\t\""));
+        assert_eq!(parse_gdb_value("\"\\n\"").unwrap(), Node::Leaf("\"\\n\""));
+        assert_eq!(parse_gdb_value("\"\\r\"").unwrap(), Node::Leaf("\"\\r\""));
         assert_eq!(
             parse_gdb_value("\"kdf\\\\j}{\\\"\"").unwrap(),
-            GDBValue::String("\"kdf\\\\j}{\\\"\"".to_string())
+            Node::Leaf("\"kdf\\\\j}{\\\"\"")
         );
     }
 
     #[test]
     fn test_parse_something_else() {
-        assert_eq!(
-            parse_gdb_value("l r").unwrap(),
-            GDBValue::String("l r".to_string())
-        );
-        assert_eq!(
-            parse_gdb_value(" l r").unwrap(),
-            GDBValue::String("l r".to_string())
-        );
-        assert_eq!(
-            parse_gdb_value("l r ").unwrap(),
-            GDBValue::String("l r".to_string())
-        );
-        assert_eq!(
-            parse_gdb_value(" l r ").unwrap(),
-            GDBValue::String("l r".to_string())
-        );
+        assert_eq!(parse_gdb_value("l r").unwrap(), Node::Leaf("l r"));
+        assert_eq!(parse_gdb_value(" l r").unwrap(), Node::Leaf("l r"));
+        assert_eq!(parse_gdb_value("l r ").unwrap(), Node::Leaf("l r"));
+        assert_eq!(parse_gdb_value(" l r ").unwrap(), Node::Leaf("l r"));
 
         assert_eq!(
             parse_gdb_value("{ l r, l r}").unwrap(),
-            GDBValue::Array({
-                let mut o = Vec::new();
-                o.push(GDBValue::String("l r".to_string()));
-                o.push(GDBValue::String("l r".to_string()));
-                o
-            })
+            Node::Array(None, vec![Node::Leaf("l r"), Node::Leaf("l r")])
         );
         assert_eq!(
             parse_gdb_value("{l r,l r}").unwrap(),
-            GDBValue::Array({
-                let mut o = Vec::new();
-                o.push(GDBValue::String("l r".to_string()));
-                o.push(GDBValue::String("l r".to_string()));
-                o
-            })
+            Node::Array(None, vec![Node::Leaf("l r"), Node::Leaf("l r")])
         );
         assert_eq!(
             parse_gdb_value("{ l r ,l r }").unwrap(),
-            GDBValue::Array({
-                let mut o = Vec::new();
-                o.push(GDBValue::String("l r".to_string()));
-                o.push(GDBValue::String("l r".to_string()));
-                o
-            })
+            Node::Array(None, vec![Node::Leaf("l r"), Node::Leaf("l r")])
         );
         assert_eq!(
             parse_gdb_value("{ l r , l r }").unwrap(),
-            GDBValue::Array({
-                let mut o = Vec::new();
-                o.push(GDBValue::String("l r".to_string()));
-                o.push(GDBValue::String("l r".to_string()));
-                o
-            })
+            Node::Array(None, vec![Node::Leaf("l r"), Node::Leaf("l r")])
         );
 
         assert_eq!(
             parse_gdb_value("{foo =l r,bar =l r}").unwrap(),
-            GDBValue::Map({
-                let mut o = Vec::new();
-                o.push(("foo".to_owned(), GDBValue::String("l r".to_owned())));
-                o.push(("bar".to_owned(), GDBValue::String("l r".to_owned())));
-                o
-            })
+            Node::Map(
+                None,
+                vec![("foo", Node::Leaf("l r")), ("bar", Node::Leaf("l r"))]
+            )
         );
         assert_eq!(
             parse_gdb_value("{foo = l r ,bar =l r}").unwrap(),
-            GDBValue::Map({
-                let mut o = Vec::new();
-                o.push(("foo".to_owned(), GDBValue::String("l r".to_owned())));
-                o.push(("bar".to_owned(), GDBValue::String("l r".to_owned())));
-                o
-            })
+            Node::Map(
+                None,
+                vec![("foo", Node::Leaf("l r")), ("bar", Node::Leaf("l r"))]
+            )
         );
         assert_eq!(
             parse_gdb_value("{foo =l r,bar = l r }").unwrap(),
-            GDBValue::Map({
-                let mut o = Vec::new();
-                o.push(("foo".to_owned(), GDBValue::String("l r".to_owned())));
-                o.push(("bar".to_owned(), GDBValue::String("l r".to_owned())));
-                o
-            })
+            Node::Map(
+                None,
+                vec![("foo", Node::Leaf("l r")), ("bar", Node::Leaf("l r"))]
+            )
         );
         assert_eq!(
             parse_gdb_value("{foo = l r ,bar = l r }").unwrap(),
-            GDBValue::Map({
-                let mut o = Vec::new();
-                o.push(("foo".to_owned(), GDBValue::String("l r".to_owned())));
-                o.push(("bar".to_owned(), GDBValue::String("l r".to_owned())));
-                o
-            })
+            Node::Map(
+                None,
+                vec![("foo", Node::Leaf("l r")), ("bar", Node::Leaf("l r"))]
+            )
         );
 
         // GDB really does not make it easy for us...
         assert_eq!(
             parse_gdb_value("{int (int, int)} 0x400a76 <foo(int, int)>").unwrap(),
-            GDBValue::String("{int (int, int)} 0x400a76 <foo(int, int)>".to_string())
+            Node::Leaf("{int (int, int)} 0x400a76 <foo(int, int)>")
         );
 
         assert_eq!(
             parse_gdb_value("{ {int (int, int)} 0x400a76 <foo(int, int)> }").unwrap(),
-            GDBValue::Array(vec![GDBValue::String(
-                "{int (int, int)} 0x400a76 <foo(int, int)>".to_string()
-            )])
+            Node::Array(
+                None,
+                vec![Node::Leaf("{int (int, int)} 0x400a76 <foo(int, int)>")]
+            )
         );
     }
 
@@ -382,71 +284,49 @@ mod test {
     fn test_parse_objects() {
         assert_eq!(
             parse_gdb_value(" { foo = 27}").unwrap(),
-            GDBValue::Map({
-                let mut o = Vec::new();
-                o.push(("foo".to_owned(), GDBValue::Integer("27".to_owned(), 27)));
-                o
-            })
+            Node::Map(None, vec![("foo", Node::Leaf("27"))])
         );
         assert_eq!(
             parse_gdb_value("{ foo = 27, bar = 37}").unwrap(),
-            GDBValue::Map({
-                let mut o = Vec::new();
-                o.push(("foo".to_owned(), GDBValue::Integer("27".to_owned(), 27)));
-                o.push(("bar".to_owned(), GDBValue::Integer("37".to_owned(), 37)));
-                o
-            })
+            Node::Map(
+                None,
+                vec![("foo", Node::Leaf("27")), ("bar", Node::Leaf("37"))]
+            )
         );
         assert_eq!(
             parse_gdb_value("{\n foo = 27,\n bar = 37\n }").unwrap(),
-            GDBValue::Map({
-                let mut o = Vec::new();
-                o.push(("foo".to_owned(), GDBValue::Integer("27".to_owned(), 27)));
-                o.push(("bar".to_owned(), GDBValue::Integer("37".to_owned(), 37)));
-                o
-            })
+            Node::Map(
+                None,
+                vec![("foo", Node::Leaf("27")), ("bar", Node::Leaf("37"))]
+            )
         );
         assert_eq!(
             parse_gdb_value("{{...}}").unwrap(),
-            GDBValue::Array(vec![GDBValue::Array(vec![GDBValue::String(
-                "...".to_owned()
-            )])])
+            Node::Array(None, vec![Node::Array(None, vec![Node::Leaf("...")])])
         );
         assert_eq!(
             parse_gdb_value("{{}}").unwrap(),
-            GDBValue::Array(vec![GDBValue::Map(vec![])])
+            Node::Array(None, vec![Node::Array(None, vec![])])
         );
         assert_eq!(
             parse_gdb_value("{foo = 27, { bar=37}}").unwrap(),
-            GDBValue::Map({
-                let mut o = Vec::new();
-                o.push(("foo".to_owned(), GDBValue::Integer("27".to_owned(), 27)));
-                o.push((
-                    ANON_KEY.to_owned(),
-                    GDBValue::Map({
-                        let mut o = Vec::new();
-                        o.push(("bar".to_owned(), GDBValue::Integer("37".to_owned(), 37)));
-                        o
-                    }),
-                ));
-                o
-            })
+            Node::Map(
+                None,
+                vec![
+                    ("foo", Node::Leaf("27")),
+                    (ANON_KEY, Node::Map(None, vec![("bar", Node::Leaf("37"))]))
+                ]
+            )
         );
         assert_eq!(
             parse_gdb_value("{{ bar=37}, foo = 27}").unwrap(),
-            GDBValue::Map({
-                let mut o = Vec::new();
-                o.push(("foo".to_owned(), GDBValue::Integer("27".to_owned(), 27)));
-                o.push((
-                    ANON_KEY.to_owned(),
-                    GDBValue::Map({
-                        let mut o = Vec::new();
-                        o.push(("bar".to_owned(), GDBValue::Integer("37".to_owned(), 37)));
-                        o
-                    }),
-                ));
-                o
-            })
+            Node::Map(
+                None,
+                vec![
+                    ("foo", Node::Leaf("27")),
+                    (ANON_KEY, Node::Map(None, vec![("bar", Node::Leaf("37"))]))
+                ]
+            )
         );
     }
 
@@ -454,29 +334,15 @@ mod test {
     fn test_parse_arrays() {
         assert_eq!(
             parse_gdb_value("{27}").unwrap(),
-            GDBValue::Array({
-                let mut o = Vec::new();
-                o.push(GDBValue::Integer("27".to_owned(), 27));
-                o
-            })
+            Node::Array(None, vec![Node::Leaf("27")])
         );
         assert_eq!(
             parse_gdb_value("{ 27, 37}").unwrap(),
-            GDBValue::Array({
-                let mut o = Vec::new();
-                o.push(GDBValue::Integer("27".to_owned(), 27));
-                o.push(GDBValue::Integer("37".to_owned(), 37));
-                o
-            })
+            Node::Array(None, vec![Node::Leaf("27"), Node::Leaf("37")])
         );
         assert_eq!(
             parse_gdb_value("{\n 27,\n 37\n}").unwrap(),
-            GDBValue::Array({
-                let mut o = Vec::new();
-                o.push(GDBValue::Integer("27".to_owned(), 27));
-                o.push(GDBValue::Integer("37".to_owned(), 37));
-                o
-            })
+            Node::Array(None, vec![Node::Leaf("27"), Node::Leaf("37")])
         );
     }
 }

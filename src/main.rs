@@ -265,6 +265,10 @@ impl Context {
             .send(Event::ChangeLayout(layout_str))
             .unwrap();
     }
+
+    fn show_file(&mut self, file: String) {
+        self.event_sink.send(Event::ShowFile(file)).unwrap();
+    }
 }
 
 // A timer that can be used to receive an event at any time,
@@ -348,6 +352,7 @@ pub enum Event {
     OutOfBandRecord(OutOfBandRecord),
     Log(String),
     ChangeLayout(String),
+    ShowFile(String),
     GdbShutdown,
     Ipc(IPCRequest),
 }
@@ -567,6 +572,9 @@ fn run() -> i32 {
                     }
                     Event::Log(msg) => {
                         tui.console.write_to_gdb_log(msg);
+                    }
+                    Event::ShowFile(file) => {
+                        tui.src_view.show_file(file, &mut context);
                     }
                     Event::ChangeLayout(layout) => {
                         match layout::parse(layout) {

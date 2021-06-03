@@ -158,6 +158,11 @@ These commands all start with a leading `!` and can be entered instead of regula
 Read the current executable from disk.
 You should run this, for example, when you have recompiled the binary that you are debugging and want to reuse an existing ugdb session.
 
+### `!show <file>`
+
+Show the specified file in the pager.
+This may be useful if you interactively want to set breakpoints, but can't or don't want to use the IPC call from your editor (see [vim-ugdb](https://github.com/ftilde/vim-ugdb)).
+
 ### `!layout <layout_string>`
 
 Change ugdb's tui layout at runtime.

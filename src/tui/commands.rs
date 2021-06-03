@@ -113,6 +113,11 @@ impl CommandState {
 
                 CommandState::Idle
             }
+            "!show" => {
+                p.show_file(args_str.to_owned());
+
+                CommandState::Idle
+            }
             "!reload" => match p.gdb.get_target() {
                 Ok(Some(target)) => Self::ask_if_session_active(
                     Command::from_mi_with_msg(

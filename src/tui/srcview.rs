@@ -2,6 +2,7 @@ use gdb::{response::*, Address, BreakPoint, BreakpointOperationError, SrcPositio
 use gdbmi::commands::{BreakPointLocation, BreakPointNumber, DisassembleMode, MiCommand};
 use gdbmi::output::{JsonValue, Object, ResultClass};
 use gdbmi::ExecuteError;
+use json::number::Number;
 use log::warn;
 use std::collections::HashSet;
 use std::fs;
@@ -1048,6 +1049,13 @@ impl<'a> CodeWindow<'a> {
             .ok_or_else(|| DisassembleError::Other("Not enough lines".to_owned()))?;
         let end_address = get_addr(penultimate, "address")?;
         Ok((at, end_address))
+    }
+
+    pub fn show_file(&mut self, file: String, p: &mut ::Context) {
+        let mut object = Object::new();
+        object.insert("fullname", JsonValue::String(file));
+        object.insert("line", JsonValue::Number(Number::from(0)));
+        self.show_frame(&object, p);
     }
 
     pub fn show_frame(&mut self, frame: &Object, p: &mut ::Context) {

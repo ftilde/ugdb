@@ -13,7 +13,7 @@ pub struct Tui<'a> {
     pub console: Console,
     pub expression_table: ExpressionTable,
     process_pty: Terminal,
-    src_view: CodeWindow<'a>,
+    pub src_view: CodeWindow<'a>,
 }
 
 const WELCOME_MSG: &str = concat!(

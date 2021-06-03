@@ -11,6 +11,7 @@
 - Add !layout command.
 - Add ability to change expression integer format in expression table.
 - Add hotkey (ctrl-w) for adding watchpoints for expressions in expression table.
+- Add !show command to explicitly load files in the pager.
 
 ## [0.1.9] - 2020-11-14
 ### Changed

@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.1.10] - UNRELEASED
+## [0.1.10] - 2020-06-03
 ### Changed
 - Reduce dependencies and thus compile time.
 - Make expression table scrollable.

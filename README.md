@@ -146,7 +146,8 @@ The virtual terminal does not yet properly implement all ansi functions, but it 
 
 ## IPC Interface
 
-`ugdb` can be controlled remotely via a unix domain socket-based (undocumented, quite limited) IPC interface.
+`ugdb` can be controlled remotely via a unix domain socket-based IPC interface.
+The interface is documented [here](https://github.com/ftilde/ugdb/blob/master/IPC.md).
 In practice this means that you can install [vim-ugdb](https://github.com/ftilde/vim-ugdb) and set breakpoints in ugdb from vim using the `UGDBBreakpoint` command.
 
 ## Builtin commands

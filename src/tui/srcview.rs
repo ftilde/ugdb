@@ -13,7 +13,8 @@ use unsegen::base::{Color, Cursor, GraphemeCluster, StyleModifier, Window};
 use unsegen::container::Container;
 use unsegen::input::{Input, Key, ScrollBehavior};
 use unsegen::widget::{
-    text_width, Centered, ColDemand, Demand, Demand2D, HLayout, RenderingHints, VLayout, Widget,
+    text_width, ColDemand, Demand, Demand2D, HLayout, RenderingHints, RowDemand, VLayout, Widget,
+    WidgetExt,
 };
 use unsegen_pager::{
     LineDecorator, Pager, PagerContent, PagerError, PagerLine, SyntectHighlighter,
@@ -1273,7 +1274,10 @@ impl<'a> Container<::Context> for CodeWindow<'a> {
                     .widget(self.src_view.pager.as_widget()),
             ),
             DisplayMode::Source => r.widget(self.src_view.pager.as_widget()),
-            DisplayMode::Message(m) => r.widget(Centered(m)),
+            DisplayMode::Message(m) => r.widget(m.centered().with_demand(|d| Demand2D {
+                width: ColDemand::at_least(d.width.min),
+                height: RowDemand::at_least(d.height.min),
+            })),
         };
         Box::new(r)
     }

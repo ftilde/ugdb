@@ -2,9 +2,9 @@
 
 ## [0.1.10] - UNRELEASED
 ### Changed
-- Generate gdb completions dynamically.
 - Reduce dependencies and thus compile time.
-- Make expression table scrollable
+- Make expression table scrollable.
+- Reduce updates to expression table during editing.
 ### Added
 - Add cli history search.
 - Make layout configurable.

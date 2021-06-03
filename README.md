@@ -105,6 +105,7 @@ Interact using the standard gdb interface. Enter by pressing `i`.
 * Use arrow keys/Backspace/`Home`/`End` to move the cursor.
 * Characters are inserted at the cursor position.
 * Use `Tab`/`Ctrl-n`/`Ctrl-p` for identifier and gdb command completion.
+* Use `Ctrl-r` to initiate history search and `Ctrl-c`/left/right to accept and continue editing.
 
 ### Pager
 
@@ -171,7 +172,7 @@ Change ugdb's tui layout at runtime.
 The layout string represents a tree with single letters as leafs representing the different panes of ugdb (`c` for the GDB console, `s` for the pager, `e` for the expression table, and `t` for the terminal).
 Nodes can be arranged in horizontal (e.g., `c|s|e`) or vertical (e.g., `c-s-e`) layouts using the separators `|` and `-`.
 Brackets can be used to nest horizontal and vertical layouts (e.g., `(c|s)-e`).
-Finally, integers preceeding a node optionally define a weight (other than the default weight of 1) that will be used when assigning screen space to the node.
+Finally, integers preceding a node optionally define a weight (other than the default weight of 1) that will be used when assigning screen space to the node.
 For example, `1c|3s` will create arrange the console and pager horizontally while assigning roughly 25% of the space to the console and 75% to the pager.
 The default layout of ugdb is `(1s-1c)|(1e-1t)`.
 An initial layout can also be specified using the command line parameter `--layout`.

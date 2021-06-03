@@ -10,6 +10,7 @@
 - Make layout configurable.
 - Add !layout command.
 - Add ability to change expression integer format in expression table.
+- Add hotkey (ctrl-w) for adding watchpoints for expressions in expression table.
 
 ## [0.1.9] - 2020-11-14
 ### Changed

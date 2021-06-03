@@ -17,6 +17,12 @@ pub enum DisassembleMode {
     MixedSourceAndDisassemblyWithRawOpcodes = 3, // deprecated and 5 would be preferred, same as above
 }
 
+pub enum WatchMode {
+    Read,
+    Write,
+    Access,
+}
+
 pub enum BreakPointLocation<'a> {
     Address(usize),
     Function(&'a Path, &'a str),
@@ -213,6 +219,19 @@ impl MiCommand {
             operation: "break-delete",
             options: options,
             parameters: Vec::new(),
+        }
+    }
+
+    pub fn insert_watchpoing(expression: &str, mode: WatchMode) -> MiCommand {
+        let options = match mode {
+            WatchMode::Write => Vec::new(),
+            WatchMode::Read => vec!["-r".into()],
+            WatchMode::Access => vec!["-a".into()],
+        };
+        MiCommand {
+            operation: "break-watch",
+            options,
+            parameters: vec![expression.into()],
         }
     }
 

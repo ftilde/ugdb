@@ -124,6 +124,31 @@ impl TableRow for ExpressionRow {
                         format_changed = true;
                     }))
                     .if_not_consumed(|| r.completion_state = None)
+                    .chain((Key::Ctrl('w'), || {
+                        match p.gdb.mi.execute(MiCommand::insert_watchpoing(
+                            r.expression.get(),
+                            crate::gdbmi::commands::WatchMode::Access,
+                        )) {
+                            Ok(o) => match o.class {
+                                ResultClass::Done => {
+                                    p.log(format!(
+                                        "Inserted watchpoint for expression \"{}\"",
+                                        r.expression.get()
+                                    ));
+                                }
+                                ResultClass::Error => {
+                                    p.log(format!(
+                                        "Failed to set watchpoint: {}",
+                                        o.results["msg"].as_str().unwrap(),
+                                    ));
+                                }
+                                other => panic!("unexpected result class: {:?}", other),
+                            },
+                            Err(e) => {
+                                p.log(format!("Failed to set watchpoint: {:?}", e));
+                            }
+                        }
+                    }))
                     .chain(
                         EditBehavior::new(&mut r.expression)
                             .left_on(Key::Left)

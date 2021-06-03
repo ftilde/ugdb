@@ -39,10 +39,10 @@ The command line interface is aimed to be *mostly* compatible with gdb:
 $ ugdb --help
 ugdb 0.1.9
 ftilde <ftilde@REDACTED>
-An unsegen-based GDB frontend.
+An alternative TUI for gdb
 
 USAGE:
-    ugdb [FLAGS] [OPTIONS] [program]...
+    ugdb [FLAGS] [OPTIONS] [--] [program]...
 
 FLAGS:
     -h, --help       Prints help information
@@ -71,6 +71,7 @@ OPTIONS:
             Directory in which the log file will be stored. [default: /tmp]
 
     -p, --pid <proc_id>                                               Attach to process with given id.
+        --rr-path <rr_path>                                           Path to alternative rr binary. [default: rr]
     -d, --directory <source_dir>
             Add directory to the path to search for source files.
 

@@ -89,6 +89,13 @@ struct Options {
     )]
     rr: bool,
     #[structopt(
+        long = "rr-path",
+        help = "Path to alternative rr binary.",
+        default_value = "rr",
+        parse(from_os_str)
+    )]
+    rr_path: PathBuf,
+    #[structopt(
         long = "cd",
         help = "Run GDB using directory as its working directory, instead of the current directory.",
         parse(from_os_str)
@@ -194,7 +201,7 @@ impl Options {
             gdb_builder = gdb_builder.source_dir(src_dir);
         }
         if self.rr {
-            gdb_builder = gdb_builder.rr_args(self.program);
+            gdb_builder = gdb_builder.rr_args(self.rr_path, self.program);
         } else {
             let (program, args) = self
                 .program

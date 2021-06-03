@@ -12,7 +12,8 @@
 - Add ability to change expression integer format in expression table.
 - Add hotkey (ctrl-w) for adding watchpoints for expressions in expression table.
 - Add !show command to explicitly load files in the pager.
-- Add show_file ipc command
+- Add show_file ipc command.
+- Add rr-path flag for specifying alternate rr binary.
 
 ## [0.1.9] - 2020-11-14
 ### Changed

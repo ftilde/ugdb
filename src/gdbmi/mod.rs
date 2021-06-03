@@ -48,7 +48,7 @@ pub struct GDBBuilder {
     opt_args: Vec<OsString>,
     opt_program: Option<PathBuf>,
     opt_tty: Option<PathBuf>,
-    rr_args: Option<Vec<OsString>>,
+    rr_args: Option<(PathBuf, Vec<OsString>)>,
 }
 impl GDBBuilder {
     pub fn new(gdb: PathBuf) -> Self {
@@ -79,8 +79,8 @@ impl GDBBuilder {
         self.opt_nx = true;
         self
     }
-    pub fn rr_args(mut self, args: Vec<OsString>) -> Self {
-        self.rr_args = Some(args);
+    pub fn rr_args(mut self, binary: PathBuf, args: Vec<OsString>) -> Self {
+        self.rr_args = Some((binary, args));
         self
     }
     pub fn quiet(mut self) -> Self {
@@ -187,8 +187,6 @@ impl GDBBuilder {
         }
 
         let mut child = if let Some(rr_args) = self.rr_args {
-            let args = gdb_args.into_iter().flat_map(|arg| vec!["-o".into(), arg]);
-
             // It looks like rr acts as a remote target for gdb and "runs" (or simulates) the
             // binary itself. Consequently, it also is responsible for stdin/stdout handling.
             // Without "-q" it appears to pass all stdout to the terminal/output that gdb is
@@ -198,16 +196,21 @@ impl GDBBuilder {
             // This also means that the --tty flag that we pass to gdb is useless. In order to get
             // proper output in the ugdb's terminal emulator we would need a "tty" option in rr
             // itself, I think.
+            let args = gdb_args
+                .into_iter()
+                .filter(|v| !v.to_string_lossy().contains("--tty"))
+                .flat_map(|arg| vec!["-o".into(), arg]);
+
             let silence_arg = "-q";
 
-            Command::new("rr")
+            Command::new(rr_args.0)
                 .arg("replay")
                 .arg("--interpreter=mi")
                 .arg(silence_arg)
                 .arg("-d")
                 .arg(self.gdb_path.clone())
                 .args(args)
-                .args(rr_args)
+                .args(rr_args.1)
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())
                 .spawn()?

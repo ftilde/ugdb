@@ -254,8 +254,10 @@ pub struct Context {
 }
 
 impl Context {
-    fn log(&mut self, msg: impl Into<String>) {
-        self.event_sink.send(Event::Log(msg.into())).unwrap();
+    fn log(&mut self, msg: impl AsRef<str>) {
+        self.event_sink
+            .send(Event::Log(format!("{}\n", msg.as_ref())))
+            .unwrap();
     }
 
     fn try_change_layout(&mut self, layout_str: String) {

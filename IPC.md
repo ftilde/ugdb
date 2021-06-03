@@ -31,7 +31,7 @@ Currently the response only contains the working directory of the gdb instance:
 
 ```json
 {
-    "type": "success"
+    "type": "success",
     "result": {
         "working_directory": "/some/path"
     }
@@ -48,7 +48,7 @@ Parameters are given as follows:
 {
     "function": "show_file",
     "parameters": {
-        "file": "/path/to/some/file.c"
+        "file": "/path/to/some/file.c",
         "line": 42
     }
 }
@@ -64,7 +64,7 @@ Parameters are given as follows:
 {
     "function": "set_breakpoint",
     "parameters": {
-        "file": "/path/to/some/file.c"
+        "file": "/path/to/some/file.c",
         "line": 42
     }
 }
@@ -83,7 +83,7 @@ On success `result` contains either return information or info about the action 
 
 ```json
 {
-    "type": "success"
+    "type": "success",
     "result": ...
 }
 ```
@@ -94,8 +94,8 @@ An error contains the `reason` for the failure as well as `details` that can pro
 
 ```json
 {
-    "type": "error"
-    "reason": "Malformed (non-object) request"
+    "type": "error",
+    "reason": "Malformed (non-object) request",
     "details": "{definitely not json"
 }
 ```

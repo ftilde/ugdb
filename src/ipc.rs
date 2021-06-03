@@ -89,6 +89,7 @@ impl IPCRequest {
     > {
         match function_name {
             "set_breakpoint" => Ok(Self::set_breakpoint),
+            "show_file" => Ok(Self::show_file),
             "get_instance_info" => Ok(Self::get_instance_info),
             _ => Err(IPCError::new("unknown function", function_name)),
         }
@@ -136,6 +137,37 @@ impl IPCRequest {
                 Err(IPCError::new("Could not insert breakpoint:", msg))
             }
         }
+    }
+
+    fn show_file(
+        p: &mut ::Context,
+        parameters: &json::JsonValue,
+    ) -> Result<json::JsonValue, IPCError> {
+        let parameters_obj = if let &json::JsonValue::Object(ref parameters_obj) = parameters {
+            parameters_obj
+        } else {
+            return Err(IPCError::new(
+                "Parameters is not an object",
+                parameters.dump(),
+            ));
+        };
+        let file = parameters_obj
+            .get("file")
+            .and_then(|o| o.as_str())
+            .ok_or(IPCError::new("Missing file name", parameters.dump()))?;
+        let line = parameters_obj
+            .get("line")
+            .and_then(|o| o.as_u32())
+            .ok_or(IPCError::new(
+                "Missing integer line number",
+                parameters.dump(),
+            ))?;
+
+        p.show_file(file.to_owned(), line as _);
+        Ok(json::JsonValue::String(format!(
+            "Showing file {}:{}",
+            file, line
+        )))
     }
 
     fn get_instance_info(

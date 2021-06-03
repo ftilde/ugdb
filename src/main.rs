@@ -266,8 +266,8 @@ impl Context {
             .unwrap();
     }
 
-    fn show_file(&mut self, file: String) {
-        self.event_sink.send(Event::ShowFile(file)).unwrap();
+    fn show_file(&mut self, file: String, line: usize) {
+        self.event_sink.send(Event::ShowFile(file, line)).unwrap();
     }
 }
 
@@ -352,7 +352,7 @@ pub enum Event {
     OutOfBandRecord(OutOfBandRecord),
     Log(String),
     ChangeLayout(String),
-    ShowFile(String),
+    ShowFile(String, usize),
     GdbShutdown,
     Ipc(IPCRequest),
 }
@@ -573,8 +573,8 @@ fn run() -> i32 {
                     Event::Log(msg) => {
                         tui.console.write_to_gdb_log(msg);
                     }
-                    Event::ShowFile(file) => {
-                        tui.src_view.show_file(file, &mut context);
+                    Event::ShowFile(file, line) => {
+                        tui.src_view.show_file(file, line, &mut context);
                     }
                     Event::ChangeLayout(layout) => {
                         match layout::parse(layout) {

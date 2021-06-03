@@ -114,7 +114,7 @@ impl CommandState {
                 CommandState::Idle
             }
             "!show" => {
-                p.show_file(args_str.to_owned());
+                p.show_file(args_str.to_owned(), 0);
 
                 CommandState::Idle
             }

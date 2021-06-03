@@ -2,7 +2,6 @@ use gdb::{response::*, Address, BreakPoint, BreakpointOperationError, SrcPositio
 use gdbmi::commands::{BreakPointLocation, BreakPointNumber, DisassembleMode, MiCommand};
 use gdbmi::output::{JsonValue, Object, ResultClass};
 use gdbmi::ExecuteError;
-use json::number::Number;
 use log::warn;
 use std::collections::HashSet;
 use std::fs;
@@ -1051,10 +1050,10 @@ impl<'a> CodeWindow<'a> {
         Ok((at, end_address))
     }
 
-    pub fn show_file(&mut self, file: String, p: &mut ::Context) {
+    pub fn show_file(&mut self, file: String, line: usize, p: &mut ::Context) {
         let mut object = Object::new();
         object.insert("fullname", JsonValue::String(file));
-        object.insert("line", JsonValue::Number(Number::from(0)));
+        object.insert("line", JsonValue::String(line.to_string()));
         self.show_frame(&object, p);
     }
 

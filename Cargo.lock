@@ -845,7 +845,9 @@ dependencies = [
 
 [[package]]
 name = "unsegen"
-version = "0.2.5"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc1594eb06a72bf2d8fe479e822e252eae1dae53e05c3a7197b29a5bb61ad17f"
 dependencies = [
  "ndarray",
  "nix",
@@ -858,7 +860,9 @@ dependencies = [
 
 [[package]]
 name = "unsegen_jsonviewer"
-version = "0.2.0"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e27979ccb0f990e34297a3b81db598ad8f8305ceed5b18679e5dff6f200a0442"
 dependencies = [
  "json",
  "unsegen",
@@ -866,7 +870,9 @@ dependencies = [
 
 [[package]]
 name = "unsegen_pager"
-version = "0.2.0"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3732362f2fc1e1784e7c2d651fa1ba41f81e347d8198d818463a549a9e4a9fb9"
 dependencies = [
  "syntect",
  "unsegen",
@@ -874,9 +880,9 @@ dependencies = [
 
 [[package]]
 name = "unsegen_signals"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "827bd08ba1f13ef53306929df5cd6f94b7ad079437977c057ce122216bfd301c"
+checksum = "5f0c6e5f5b5ae7793f2eb8e707298366b5ff474eda92b1df251bb2f74f2a97bd"
 dependencies = [
  "libc",
  "unsegen",
@@ -884,7 +890,9 @@ dependencies = [
 
 [[package]]
 name = "unsegen_terminal"
-version = "0.2.2"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9cdde0db267e990c4ce28938f69b0f4606c536e96f0649928fde3a0b6caa8119"
 dependencies = [
  "libc",
  "log",

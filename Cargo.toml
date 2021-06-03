@@ -29,14 +29,14 @@ unix_socket = "0.5"
 unicode-segmentation = "1.2"
 parse_int = "0.5"
 
-unsegen = "0.2"
-unsegen_signals = "0.2"
-#unsegen_terminal = "0.2"
-unsegen_terminal = { path = "../unsegen_terminal" }
-#unsegen_jsonviewer = "0.2"
-unsegen_jsonviewer = { path="../unsegen_jsonviewer" }
-#unsegen_pager = "0.2"
-unsegen_pager = {path="../unsegen_pager"}
+unsegen = "0.3"
+unsegen_signals = "0.3"
+unsegen_terminal = "0.3"
+#unsegen_terminal = { path = "../unsegen_terminal" }
+unsegen_jsonviewer = "0.3"
+#unsegen_jsonviewer = { path="../unsegen_jsonviewer" }
+unsegen_pager = "0.3"
+#unsegen_pager = { path="../unsegen_pager"}
 
 # gdbmi
 nom = "2.1"
@@ -46,6 +46,6 @@ toml = "0.4"
 
 
 # Use one of these for development of new features of unsegen
-[patch.crates-io]
+#[patch.crates-io]
 #unsegen = { git = 'https://github.com/ftilde/unsegen' }
-unsegen = { path = "../unsegen" }
+#unsegen = { path = "../unsegen" }

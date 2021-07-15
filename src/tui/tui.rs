@@ -23,7 +23,7 @@ const WELCOME_MSG: &str = concat!(
 | |_| | (_| | (_| | |_) |
  \__,_|\__, |\__,_|_.__/ 
        |___/             
-version             "#,
+version            "#,
     env!("CRATE_VERSION"),
     r#"
 revision         "#,

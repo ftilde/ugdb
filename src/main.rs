@@ -273,7 +273,7 @@ impl Context {
             .unwrap();
     }
 
-    fn show_file(&mut self, file: String, line: usize) {
+    fn show_file(&mut self, file: String, line: unsegen::base::LineNumber) {
         self.event_sink.send(Event::ShowFile(file, line)).unwrap();
     }
 }
@@ -359,7 +359,7 @@ pub enum Event {
     OutOfBandRecord(OutOfBandRecord),
     Log(String),
     ChangeLayout(String),
-    ShowFile(String, usize),
+    ShowFile(String, unsegen::base::LineNumber),
     GdbShutdown,
     Ipc(IPCRequest),
 }

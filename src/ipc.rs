@@ -163,7 +163,13 @@ impl IPCRequest {
                 parameters.dump(),
             ))?;
 
-        p.show_file(file.to_owned(), line as _);
+        if line < 1 {
+            return Err(IPCError::new(
+                "Invalid integer line number, must be > 0",
+                parameters.dump(),
+            ));
+        }
+        p.show_file(file.to_owned(), unsegen::base::LineNumber::new(line as _));
         Ok(json::JsonValue::String(format!(
             "Showing file {}:{}",
             file, line

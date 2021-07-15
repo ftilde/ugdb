@@ -115,7 +115,7 @@ impl CommandState {
                 CommandState::Idle
             }
             "!show" => {
-                p.show_file(args_str.to_owned(), 0);
+                p.show_file(args_str.to_owned(), unsegen::base::LineNumber::new(1));
 
                 CommandState::Idle
             }

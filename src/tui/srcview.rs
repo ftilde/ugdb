@@ -1051,7 +1051,7 @@ impl<'a> CodeWindow<'a> {
         Ok((at, end_address))
     }
 
-    pub fn show_file(&mut self, file: String, line: usize, p: &mut ::Context) {
+    pub fn show_file(&mut self, file: String, line: LineNumber, p: &mut ::Context) {
         let mut object = Object::new();
         object.insert("fullname", JsonValue::String(file));
         object.insert("line", JsonValue::String(line.to_string()));

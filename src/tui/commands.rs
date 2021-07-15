@@ -136,6 +136,14 @@ impl CommandState {
                     CommandState::Idle
                 }
             },
+            "shell" => {
+                // This command does not work, because gdb breaks the gdbmi protocol (because it
+                // likely just gives up stdout to the shell process until it terminates). This
+                // cannot work in the curren architecture and actually just freezes ugdb. As a
+                // workaround we just block this command.
+                p.log("The `shell` command is not supported in ugdb. Consider suspending the process with Ctrl-z instead.");
+                CommandState::Idle
+            }
             "q" => {
                 Self::ask_if_session_active(Command::from_mi(MiCommand::exit()), "Quit anyway?", p)
             }

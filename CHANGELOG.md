@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.11] - unreleased
+### Changed
+- Ignore leading whitespace in commands.
+### Fixed
+- Crash when using !show command.
+- Hang when using shell command (`shell` is disallowed now).
+
 ## [0.1.10] - 2020-06-03
 ### Changed
 - Reduce dependencies and thus compile time.

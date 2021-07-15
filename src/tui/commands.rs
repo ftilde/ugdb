@@ -96,6 +96,7 @@ impl CommandState {
     }
 
     fn dispatch_command(line: &str, p: &mut ::Context) -> Self {
+        let line = line.trim();
         let cmd_end = line.find(' ').unwrap_or(line.len());
         let cmd = &line[..cmd_end];
         let args_begin = (cmd_end + 1).min(line.len());

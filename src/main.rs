@@ -2,6 +2,7 @@ extern crate backtrace;
 extern crate flexi_logger;
 extern crate log;
 extern crate nix;
+extern crate serial as serial_port;
 extern crate structopt;
 extern crate termion;
 extern crate time;
@@ -32,6 +33,7 @@ mod gdb_expression_parsing;
 mod gdbmi;
 mod ipc;
 mod layout;
+mod serial;
 mod tui;
 
 use ipc::IPCRequest;
@@ -159,6 +161,46 @@ struct Options {
         help = "Path to program to debug (with arguments).",
         parse(from_os_str)
     )]
+    #[structopt(
+        long = "serial_terminal_input",
+        help = "Serial device to use as an input to the ugdb terminal window",
+        parse(from_os_str)
+    )]
+    serial_terminal_input: Option<PathBuf>,
+    #[structopt(
+        long = "serial_baud_rate",
+        help = "Define baud rate to use (only when --terminal_input is used)",
+        default_value = "9600"
+    )]
+    serial_baud_rate: usize,
+    #[structopt(
+        long = "serial_data_bits",
+        help = "Define how many data bits to use (only when --terminal_input is used)",
+        default_value = "8",
+        parse(try_from_str = "serial::parse_data_bits")
+    )]
+    serial_data_bits: serial_port::CharSize,
+    #[structopt(
+        long = "serial_parity_bit",
+        help = "Define the kind of parity bit to use (only when --terminal_input is used)",
+        default_value = "none",
+        parse(try_from_str = "serial::parse_parity_bit")
+    )]
+    serial_parity_bit: serial_port::Parity,
+    #[structopt(
+        long = "serial_stop_bits",
+        help = "Define how many stop bits to use (only when --terminal_input is used)",
+        default_value = "1",
+        parse(try_from_str = "serial::parse_stop_bits")
+    )]
+    serial_stop_bits: serial_port::StopBits,
+    #[structopt(
+        long = "serial_flow_control_bits",
+        help = "Define the flow control mechanism to use (only when --terminal_input is used)",
+        default_value = "none",
+        parse(try_from_str = "serial::parse_flow_control")
+    )]
+    serial_flow_control: serial_port::FlowControl,
     program: Vec<OsString>,
     // Not sure how to mimic gdbs cmdline behavior for the positional arguments...
     //#[structopt(help="Attach to process with given id.")]
@@ -432,10 +474,30 @@ fn run() -> i32 {
     // Setup ipc
     let _ipc = ipc::IPC::setup(event_sink.clone()).expect("Setup ipc");
 
+    // Copy serial options for serial thread
+    let serial_options = serial::SerialOptions {
+        device: options.serial_terminal_input.to_owned(),
+        baud_rate: options.serial_baud_rate,
+        data_bits: options.serial_data_bits,
+        parity_bit: options.serial_parity_bit,
+        stop_bits: options.serial_stop_bits,
+        flow_control: options.serial_flow_control,
+    };
+
     // Start gdb and setup output event piping
     let gdb_path = options.gdb_path.to_string_lossy().to_string();
+
     let mut gdb_builder = options.create_gdb_builder();
-    gdb_builder = gdb_builder.tty(tui_terminal.slave_name().into());
+    if serial_options.device.is_some() {
+        let terminal_sink = event_sink.clone();
+        let slave_name = tui_terminal.slave_name().to_owned();
+        ::std::thread::spawn(move || {
+            serial::output_to_pty(serial_options, &slave_name, terminal_sink);
+        });
+    } else {
+        gdb_builder = gdb_builder.tty(tui_terminal.slave_name().into());
+    }
+
     let gdb = GDB::new(
         match gdb_builder.try_spawn(MpscOobRecordSink(event_sink.clone())) {
             Ok(gdb) => gdb,

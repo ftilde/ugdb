@@ -1,5 +1,5 @@
+use crate::tui::{Tui, TuiContainerType};
 use std::str::CharIndices;
-use tui::{Tui, TuiContainerType};
 use unsegen::container::{HSplit, Layout, Leaf, VSplit};
 
 #[derive(Debug, PartialEq)]

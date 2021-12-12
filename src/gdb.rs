@@ -1,13 +1,17 @@
 // This module encapsulates some functionality of gdb. Depending on how general this turns out, we
 // may want to move it to a separate crate or merge it with gdbmi-rs
-use gdbmi;
-use gdbmi::commands::{BreakPointLocation, BreakPointNumber, MiCommand};
-use gdbmi::output::{BreakPointEvent, JsonValue, Object, ResultClass};
-use gdbmi::ExecuteError;
-use std::collections::{HashMap, HashSet};
-use std::fmt;
-use std::ops::{Add, Sub};
-use std::path::PathBuf;
+use crate::gdbmi::{
+    self,
+    commands::{BreakPointLocation, BreakPointNumber, MiCommand},
+    output::{BreakPointEvent, JsonValue, Object, ResultClass},
+    ExecuteError,
+};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt,
+    ops::{Add, Sub},
+    path::PathBuf,
+};
 use unsegen::base::LineNumber;
 
 #[derive(Debug, Clone)]
@@ -93,19 +97,19 @@ impl BreakPoint {
 
 pub struct BreakPointSet {
     map: HashMap<BreakPointNumber, BreakPoint>,
-    pub last_change: ::std::time::Instant,
+    pub last_change: std::time::Instant,
 }
 
 impl BreakPointSet {
     pub fn new() -> Self {
         BreakPointSet {
             map: HashMap::new(),
-            last_change: ::std::time::Instant::now(),
+            last_change: std::time::Instant::now(),
         }
     }
 
     fn notify_change(&mut self) {
-        self.last_change = ::std::time::Instant::now();
+        self.last_change = std::time::Instant::now();
     }
 
     pub fn update_breakpoint(&mut self, new_bp: BreakPoint) {
@@ -123,7 +127,7 @@ impl BreakPointSet {
     }
 }
 
-impl ::std::ops::Deref for BreakPointSet {
+impl std::ops::Deref for BreakPointSet {
     type Target = HashMap<BreakPointNumber, BreakPoint>;
 
     fn deref(&self) -> &Self::Target {

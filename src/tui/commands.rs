@@ -1,19 +1,22 @@
-use gdbmi::commands::MiCommand;
-use gdbmi::output::{ResultClass, ResultRecord};
-use gdbmi::ExecuteError;
+use crate::gdbmi::{
+    commands::MiCommand,
+    output::{ResultClass, ResultRecord},
+    ExecuteError,
+};
+use crate::Context;
 
 use log::error;
 
 pub struct Command {
-    cmd: Box<dyn FnMut(&mut ::Context) -> Result<(), ExecuteError>>,
+    cmd: Box<dyn FnMut(&mut Context) -> Result<(), ExecuteError>>,
 }
 
 impl Command {
-    fn new(cmd: Box<dyn FnMut(&mut ::Context) -> Result<(), ExecuteError>>) -> Command {
+    fn new(cmd: Box<dyn FnMut(&mut Context) -> Result<(), ExecuteError>>) -> Command {
         Command { cmd: cmd }
     }
     fn from_mi_with_msg(cmd: MiCommand, success_msg: &'static str) -> Command {
-        Command::new(Box::new(move |p: &mut ::Context| {
+        Command::new(Box::new(move |p: &mut Context| {
             let res = p.gdb.mi.execute(cmd.clone()).map(|_| ());
             if res.is_ok() {
                 p.log(success_msg);
@@ -22,7 +25,7 @@ impl Command {
         }))
     }
     fn from_mi(cmd: MiCommand) -> Command {
-        Command::new(Box::new(move |p: &mut ::Context| {
+        Command::new(Box::new(move |p: &mut Context| {
             p.gdb.mi.execute(cmd.clone()).map(|_| ())
         }))
     }
@@ -34,16 +37,16 @@ pub enum CommandState {
 }
 
 impl CommandState {
-    pub fn handle_input_line(&mut self, line: &str, p: &mut ::Context) {
+    pub fn handle_input_line(&mut self, line: &str, p: &mut Context) {
         let mut tmp_state = CommandState::Idle;
-        ::std::mem::swap(&mut tmp_state, self);
+        std::mem::swap(&mut tmp_state, self);
         *self = match tmp_state {
             CommandState::Idle => Self::dispatch_command(line, p),
             CommandState::WaitingForConfirmation(cmd) => Self::execute_if_confirmed(line, cmd, p),
         }
     }
 
-    fn execute_if_confirmed(line: &str, cmd: Command, p: &mut ::Context) -> Self {
+    fn execute_if_confirmed(line: &str, cmd: Command, p: &mut Context) -> Self {
         match line {
             "y" | "Y" | "yes" => {
                 Self::try_execute(cmd, p);
@@ -57,14 +60,14 @@ impl CommandState {
         }
     }
 
-    fn print_execute_error(e: ExecuteError, p: &mut ::Context) {
+    fn print_execute_error(e: ExecuteError, p: &mut Context) {
         match e {
             ExecuteError::Quit => p.log("quit"),
             ExecuteError::Busy => p.log("GDB is running!"),
         }
     }
 
-    fn try_execute(mut cmd: Command, p: &mut ::Context) {
+    fn try_execute(mut cmd: Command, p: &mut Context) {
         match (cmd.cmd)(p) {
             Ok(_) => {}
             Err(e) => Self::print_execute_error(e, p),
@@ -74,7 +77,7 @@ impl CommandState {
     fn ask_if_session_active(
         cmd: Command,
         confirmation_question: &'static str,
-        p: &mut ::Context,
+        p: &mut Context,
     ) -> Self {
         match p.gdb.mi.is_session_active() {
             Ok(true) => {
@@ -95,7 +98,7 @@ impl CommandState {
         }
     }
 
-    fn dispatch_command(line: &str, p: &mut ::Context) -> Self {
+    fn dispatch_command(line: &str, p: &mut Context) -> Self {
         let line = line.trim();
         let cmd_end = line.find(' ').unwrap_or(line.len());
         let cmd = &line[..cmd_end];

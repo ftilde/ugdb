@@ -127,7 +127,7 @@ impl GDBBuilder {
         self.opt_tty = Some(tty);
         self
     }
-    pub fn try_spawn<S>(self, oob_sink: S) -> Result<GDB, ::std::io::Error>
+    pub fn try_spawn<S>(self, oob_sink: S) -> Result<GDB, std::io::Error>
     where
         S: OutOfBandRecordSink + 'static,
     {
@@ -249,7 +249,7 @@ impl GDBBuilder {
 }
 
 impl GDB {
-    pub fn interrupt_execution(&self) -> Result<(), ::nix::Error> {
+    pub fn interrupt_execution(&self) -> Result<(), nix::Error> {
         use nix::sys::signal;
         use nix::unistd::Pid;
         signal::kill(Pid::from_raw(self.process.id() as i32), signal::SIGINT)

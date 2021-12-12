@@ -1,15 +1,18 @@
 use crate::gdb_expression_parsing::Format;
-use gdbmi::commands::MiCommand;
-use gdbmi::output::ResultClass;
-use gdbmi::ExecuteError;
-use unsegen::base::{Color, GraphemeCluster, StyleModifier};
-use unsegen::container::Container;
-use unsegen::input::{EditBehavior, Input, Key, NavigateBehavior, ScrollBehavior};
-use unsegen::widget::builtin::{Column, LineEdit, Table, TableRow};
-use unsegen::widget::{SeparatingStyle, Widget};
+use crate::gdbmi::{commands::MiCommand, output::ResultClass, ExecuteError};
+use crate::Context;
+use unsegen::{
+    base::{Color, GraphemeCluster, StyleModifier},
+    container::Container,
+    input::{EditBehavior, Input, Key, NavigateBehavior, ScrollBehavior},
+    widget::{
+        builtin::{Column, LineEdit, Table, TableRow},
+        SeparatingStyle, Widget,
+    },
+};
 use unsegen_jsonviewer::JsonViewer;
 
-use completion::{Completer, CompletionState, IdentifierCompleter};
+use crate::completion::{Completer, CompletionState, IdentifierCompleter};
 
 pub struct ExpressionRow {
     expression: LineEdit,
@@ -41,7 +44,7 @@ impl ExpressionRow {
     fn is_empty(&self) -> bool {
         self.expression.get().is_empty()
     }
-    fn update_result(&mut self, p: &mut ::Context) {
+    fn update_result(&mut self, p: &mut Context) {
         let expr = self.expression.get().to_owned();
         if expr.is_empty() {
             self.result.update(" ");
@@ -80,7 +83,7 @@ impl ExpressionRow {
     }
 }
 impl TableRow for ExpressionRow {
-    type BehaviorContext = ::Context;
+    type BehaviorContext = Context;
     const COLUMNS: &'static [Column<ExpressionRow>] = &[
         Column {
             access: |r| Box::new(r.expression.as_widget()),
@@ -240,15 +243,15 @@ impl ExpressionTable {
         rows.push(ExpressionRow::new());
     }
 
-    pub fn update_results(&mut self, p: &mut ::Context) {
+    pub fn update_results(&mut self, p: &mut Context) {
         for row in self.table.rows_mut().iter_mut() {
             row.update_result(p);
         }
     }
 }
 
-impl Container<::Context> for ExpressionTable {
-    fn input(&mut self, input: Input, p: &mut ::Context) -> Option<Input> {
+impl Container<Context> for ExpressionTable {
+    fn input(&mut self, input: Input, p: &mut Context) -> Option<Input> {
         let res = input
             .chain(
                 NavigateBehavior::new(&mut self.table) //TODO: Fix this properly in lineedit

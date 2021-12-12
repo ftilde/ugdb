@@ -1,20 +1,25 @@
-use gdb::{response::*, Address, BreakPoint, BreakpointOperationError, SrcPosition};
-use gdbmi::commands::{BreakPointLocation, BreakPointNumber, DisassembleMode, MiCommand};
-use gdbmi::output::{JsonValue, Object, ResultClass};
-use gdbmi::ExecuteError;
+use crate::gdb::{response::*, Address, BreakPoint, BreakpointOperationError, SrcPosition};
+use crate::gdbmi::{
+    commands::{BreakPointLocation, BreakPointNumber, DisassembleMode, MiCommand},
+    output::{JsonValue, Object, ResultClass},
+    ExecuteError,
+};
+use crate::Context;
 use log::warn;
-use std::collections::HashSet;
-use std::fs;
-use std::io;
-use std::ops::Range;
-use std::path::{Path, PathBuf};
-use unsegen::base::basic_types::*;
-use unsegen::base::{Color, Cursor, GraphemeCluster, StyleModifier, Window};
-use unsegen::container::Container;
-use unsegen::input::{Input, Key, ScrollBehavior};
-use unsegen::widget::{
-    text_width, ColDemand, Demand, Demand2D, HLayout, RenderingHints, RowDemand, VLayout, Widget,
-    WidgetExt,
+use std::{
+    collections::HashSet,
+    fs, io,
+    ops::Range,
+    path::{Path, PathBuf},
+};
+use unsegen::{
+    base::{basic_types::*, Color, Cursor, GraphemeCluster, StyleModifier, Window},
+    container::Container,
+    input::{Input, Key, ScrollBehavior},
+    widget::{
+        text_width, ColDemand, Demand, Demand2D, HLayout, RenderingHints, RowDemand, VLayout,
+        Widget, WidgetExt,
+    },
 };
 use unsegen_pager::{
     LineDecorator, Pager, PagerContent, PagerError, PagerLine, SyntectHighlighter,
@@ -186,7 +191,7 @@ pub struct AssemblyView<'a> {
     last_stop_position: Option<Address>,
 }
 
-#[derive(Debug, From)]
+#[derive(Debug, derive_more::From)]
 enum GotoError {
     NoLastStopPosition,
     MismatchedPagerContent,
@@ -233,7 +238,7 @@ impl<'a> AssemblyView<'a> {
         }
     }
 
-    fn update_decoration(&mut self, p: &mut ::Context) {
+    fn update_decoration(&mut self, p: &mut Context) {
         if let Some(ref mut content) = self.pager.content_mut() {
             let first_line_address = content.view_line(LineIndex::new(0)).map(|l| l.address);
             if let Some(min_address) = first_line_address {
@@ -254,7 +259,7 @@ impl<'a> AssemblyView<'a> {
         }
     }
 
-    fn show_lines(&mut self, lines: Vec<AssemblyLine>, p: &mut ::Context) {
+    fn show_lines(&mut self, lines: Vec<AssemblyLine>, p: &mut Context) {
         if lines.is_empty() {
             return; //Nothing to show
         }
@@ -314,7 +319,7 @@ impl<'a> AssemblyView<'a> {
         &mut self,
         file: P,
         line: L,
-        p: &mut ::Context,
+        p: &mut Context,
     ) -> Result<(), DisassembleError> {
         let line_u: usize = line.into().into();
         let disass_results = p
@@ -337,7 +342,7 @@ impl<'a> AssemblyView<'a> {
         &mut self,
         address_start: Address,
         address_end: Address,
-        p: &mut ::Context,
+        p: &mut Context,
     ) -> Result<(), DisassembleError> {
         let line_objs = disassemble_address(address_start, address_end, p)?;
 
@@ -356,7 +361,7 @@ impl<'a> AssemblyView<'a> {
         Ok(())
     }
 
-    fn toggle_breakpoint(&self, p: &mut ::Context) {
+    fn toggle_breakpoint(&self, p: &mut Context) {
         if let Some(line) = self.pager.current_line() {
             let active_bps: Vec<BreakPointNumber> = p
                 .gdb
@@ -400,7 +405,7 @@ impl<'a> AssemblyView<'a> {
             }
         }
     }
-    fn event(&mut self, event: Input, p: &mut ::Context) -> Option<Input> {
+    fn event(&mut self, event: Input, p: &mut Context) -> Option<Input> {
         event
             .chain(
                 ScrollBehavior::new(&mut self.pager)
@@ -498,7 +503,7 @@ impl LineDecorator for SourceDecorator {
 #[derive(Clone)]
 struct FileInfo {
     path: PathBuf,
-    modified: ::std::time::SystemTime,
+    modified: std::time::SystemTime,
 }
 
 pub struct SourceView<'a> {
@@ -566,7 +571,7 @@ impl<'a> SourceView<'a> {
         })
     }
 
-    fn update_decoration(&mut self, p: &mut ::Context) {
+    fn update_decoration(&mut self, p: &mut Context) {
         if let Some((ref file_path, ref mut content)) = current_file_and_content_mut!(self) {
             // This sucks: we basically want to call get_last_line_number_for, but can't because we
             // borrowed content mutably...
@@ -600,11 +605,7 @@ impl<'a> SourceView<'a> {
         }
     }
 
-    fn show<'b, P: AsRef<Path>>(
-        &mut self,
-        path: P,
-        p: &mut ::Context,
-    ) -> Result<(), PagerShowError> {
+    fn show<'b, P: AsRef<Path>>(&mut self, path: P, p: &mut Context) -> Result<(), PagerShowError> {
         if self.need_to_load_file(path.as_ref()) {
             let path_ref = path.as_ref();
             self.load(path_ref, p.gdb.breakpoints.values())
@@ -622,7 +623,7 @@ impl<'a> SourceView<'a> {
         Ok(())
     }
 
-    fn reload(&mut self, p: &mut ::Context) -> Result<(), PagerShowError> {
+    fn reload(&mut self, p: &mut Context) -> Result<(), PagerShowError> {
         if let Some(i) = self.file_info.clone() {
             self.show(i.path, p)?;
         }
@@ -677,7 +678,7 @@ impl<'a> SourceView<'a> {
         }
     }
 
-    fn toggle_breakpoint(&self, p: &mut ::Context) {
+    fn toggle_breakpoint(&self, p: &mut Context) {
         let line = self.current_line_number();
         if let Some(path) = self.current_file() {
             let active_bps: Vec<BreakPointNumber> = p
@@ -711,7 +712,7 @@ impl<'a> SourceView<'a> {
         }
     }
 
-    fn event(&mut self, event: Input, p: &mut ::Context) -> Option<Input> {
+    fn event(&mut self, event: Input, p: &mut Context) -> Option<Input> {
         event
             .chain(
                 ScrollBehavior::new(&mut self.pager)
@@ -829,7 +830,7 @@ impl<'a> Widget for &'a StackInfo {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, From)]
+#[derive(Clone, Debug, PartialEq, derive_more::From)]
 enum DisassembleError {
     GDB(GDBResponseError),
     Other(String),
@@ -843,7 +844,7 @@ impl From<ExecuteError> for DisassembleError {
 fn disassemble_address(
     address_start: Address,
     address_end: Address,
-    p: &mut ::Context,
+    p: &mut Context,
 ) -> Result<Vec<JsonValue>, DisassembleError> {
     let mut disass_results = match p.gdb.mi.execute(MiCommand::data_disassemble_address(
         address_start.0,
@@ -888,7 +889,7 @@ pub struct CodeWindow<'a> {
     preferred_mode: DisplayMode,
     src_state: SrcContentState,
     asm_state: AsmContentState,
-    last_bp_update: ::std::time::Instant,
+    last_bp_update: std::time::Instant,
     stack_info: StackInfo,
 }
 
@@ -900,7 +901,7 @@ impl<'a> CodeWindow<'a> {
             preferred_mode: DisplayMode::Message(welcome_msg.to_owned()),
             src_state: SrcContentState::Unavailable,
             asm_state: AsmContentState::Unavailable,
-            last_bp_update: ::std::time::Instant::now(),
+            last_bp_update: std::time::Instant::now(),
             stack_info: Default::default(),
         }
     }
@@ -921,7 +922,7 @@ impl<'a> CodeWindow<'a> {
         }
     }
 
-    fn try_load_source_content(&mut self, p: &mut ::Context) -> Result<(), PagerShowError> {
+    fn try_load_source_content(&mut self, p: &mut Context) -> Result<(), PagerShowError> {
         match self.src_state.clone() {
             SrcContentState::NotYetLoaded(path) => {
                 let ret = self.src_view.show(path, p);
@@ -941,7 +942,7 @@ impl<'a> CodeWindow<'a> {
         }
     }
 
-    fn try_load_asm_content(&mut self, p: &mut ::Context) -> Result<(), DisassembleError> {
+    fn try_load_asm_content(&mut self, p: &mut Context) -> Result<(), DisassembleError> {
         match self.asm_state.clone() {
             AsmContentState::NotYetLoadedFile(path, line) => {
                 let ret = self.asm_view.show_file(path, line, p);
@@ -965,13 +966,13 @@ impl<'a> CodeWindow<'a> {
         }
     }
 
-    fn try_load_active_content(&mut self, p: &mut ::Context) {
-        let try_load_src = |s: &mut Self, p: &mut ::Context| {
+    fn try_load_active_content(&mut self, p: &mut Context) {
+        let try_load_src = |s: &mut Self, p: &mut Context| {
             if let Err(e) = s.try_load_source_content(p) {
                 warn!("Failed to load file: {:?}", e);
             }
         };
-        let try_load_asm = |s: &mut Self, p: &mut ::Context| match s.try_load_asm_content(p) {
+        let try_load_asm = |s: &mut Self, p: &mut Context| match s.try_load_asm_content(p) {
             Err(DisassembleError::GDB(GDBResponseError::Execution(ExecuteError::Busy))) => {
                 p.log("Cannot disassemble: Gdb is busy.");
             }
@@ -999,7 +1000,7 @@ impl<'a> CodeWindow<'a> {
         }
     }
 
-    fn find_function_range(at: Address, p: &mut ::Context) -> Result<(Address, Address), ()> {
+    fn find_function_range(at: Address, p: &mut Context) -> Result<(Address, Address), ()> {
         let first_lines = disassemble_address(at, at + 16, p).map_err(|_| ())?;
         let current = first_lines.first().ok_or(())?;
         let asm_debug_location = AssemblyDebugLocation::try_from_value(current).ok_or(())?;
@@ -1036,7 +1037,7 @@ impl<'a> CodeWindow<'a> {
     fn find_valid_address_range(
         at: Address,
         approx_byte_size: usize,
-        p: &mut ::Context,
+        p: &mut Context,
     ) -> Result<(Address, Address), DisassembleError> {
         let block_lines = disassemble_address(at, at + approx_byte_size, p)?;
 
@@ -1051,14 +1052,14 @@ impl<'a> CodeWindow<'a> {
         Ok((at, end_address))
     }
 
-    pub fn show_file(&mut self, file: String, line: LineNumber, p: &mut ::Context) {
+    pub fn show_file(&mut self, file: String, line: LineNumber, p: &mut Context) {
         let mut object = Object::new();
         object.insert("fullname", JsonValue::String(file));
         object.insert("line", JsonValue::String(line.to_string()));
         self.show_frame(&object, p);
     }
 
-    pub fn show_frame(&mut self, frame: &Object, p: &mut ::Context) {
+    pub fn show_frame(&mut self, frame: &Object, p: &mut Context) {
         // Always try to switch away from (relatively unhelpful) message to srcview:
         if let DisplayMode::Message(_) = self.preferred_mode {
             self.preferred_mode = DisplayMode::Source;
@@ -1136,7 +1137,7 @@ impl<'a> CodeWindow<'a> {
         self.src_view.update_decoration(p);
     }
 
-    fn toggle_mode(&mut self, p: &mut ::Context) {
+    fn toggle_mode(&mut self, p: &mut Context) {
         let mut sync_asm_to_src = false;
         let prev_mode = self.preferred_mode.clone();
         self.preferred_mode = match prev_mode {
@@ -1174,11 +1175,7 @@ impl<'a> CodeWindow<'a> {
         }
     }
 
-    fn try_switch_stackframe(
-        &mut self,
-        p: &mut ::Context,
-        up: bool,
-    ) -> Result<(), GDBResponseError> {
+    fn try_switch_stackframe(&mut self, p: &mut Context, up: bool) -> Result<(), GDBResponseError> {
         let level = p.gdb.get_stack_level()?;
 
         let new_level = if up {
@@ -1214,7 +1211,7 @@ impl<'a> CodeWindow<'a> {
         }
         Ok(())
     }
-    fn switch_stackframe(&mut self, p: &mut ::Context, up: bool) {
+    fn switch_stackframe(&mut self, p: &mut Context, up: bool) {
         match self.try_switch_stackframe(p, up) {
             Ok(_) => {}
             Err(e) => {
@@ -1223,7 +1220,7 @@ impl<'a> CodeWindow<'a> {
         }
     }
 
-    pub fn update_after_event(&mut self, p: &mut ::Context) {
+    pub fn update_after_event(&mut self, p: &mut Context) {
         if p.gdb.breakpoints.last_change > self.last_bp_update {
             self.asm_view.update_decoration(p);
             self.src_view.update_decoration(p);
@@ -1232,8 +1229,8 @@ impl<'a> CodeWindow<'a> {
     }
 }
 
-impl<'a> Container<::Context> for CodeWindow<'a> {
-    fn input(&mut self, input: Input, p: &mut ::Context) -> Option<Input> {
+impl<'a> Container<Context> for CodeWindow<'a> {
+    fn input(&mut self, input: Input, p: &mut Context) -> Option<Input> {
         input
             .chain((Key::Char('d'), || self.toggle_mode(p)))
             .chain((Key::PageUp, || self.switch_stackframe(p, true)))

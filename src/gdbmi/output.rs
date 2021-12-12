@@ -1,6 +1,9 @@
 use super::Token;
 pub use json::object::Object;
 pub use json::JsonValue;
+use nom::{
+    alt, call, do_parse, error_position, is_not, many0, map, named, opt, separated_list, tag, value,
+};
 
 use log::{error, info};
 
@@ -82,12 +85,12 @@ enum Output {
     SomethingElse(String), /* Debug */
 }
 
+use crate::OutOfBandRecordSink;
 use nom::IResult;
 use std::io::{BufRead, BufReader, Read};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
 use std::sync::Arc;
-use OutOfBandRecordSink;
 
 pub fn process_output<T: Read, S: OutOfBandRecordSink>(
     output: T,

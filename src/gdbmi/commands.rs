@@ -35,7 +35,7 @@ pub struct BreakPointNumber {
     pub minor: Option<usize>,
 }
 
-impl ::std::str::FromStr for BreakPointNumber {
+impl std::str::FromStr for BreakPointNumber {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if let Some(dot_pos) = s.find(".") {
@@ -104,7 +104,7 @@ impl MiCommand {
             write!(sink, " ")?;
             sink.write_all(parameter.as_bytes())?;
         }
-        write!(sink, "\n")?;
+        writeln!(sink)?;
         Ok(())
     }
     pub fn interpreter_exec<S1: Into<OsString>, S2: Into<OsString>>(

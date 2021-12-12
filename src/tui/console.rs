@@ -27,10 +27,10 @@ pub struct Console {
     completion_state: Option<CompletionState>,
 }
 
-static STOPPED_PROMPT: &'static str = "(gdb) ";
-static RUNNING_PROMPT: &'static str = "(↻↻↻) ";
-static SCROLL_PROMPT: &'static str = "(↑↓) ";
-static SEARCH_PROMPT: &'static str = "(🔍) ";
+static STOPPED_PROMPT: &str = "(gdb) ";
+static RUNNING_PROMPT: &str = "(↻↻↻) ";
+static SCROLL_PROMPT: &str = "(↑↓) ";
+static SEARCH_PROMPT: &str = "(🔍) ";
 
 impl Console {
     pub fn new() -> Self {
@@ -66,11 +66,9 @@ impl Console {
                 self.last_gdb_state = GDBState::Running;
                 self.prompt_line.set_edit_prompt(RUNNING_PROMPT.to_owned());
             }
-        } else {
-            if self.last_gdb_state != GDBState::Stopped {
-                self.last_gdb_state = GDBState::Stopped;
-                self.prompt_line.set_edit_prompt(STOPPED_PROMPT.to_owned());
-            }
+        } else if self.last_gdb_state != GDBState::Stopped {
+            self.last_gdb_state = GDBState::Stopped;
+            self.prompt_line.set_edit_prompt(STOPPED_PROMPT.to_owned());
         }
     }
 }

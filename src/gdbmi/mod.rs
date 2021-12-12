@@ -12,6 +12,7 @@ use std::thread;
 
 type Token = u64;
 
+#[allow(clippy::upper_case_acronyms)]
 pub struct GDB {
     pub process: Child,
     stdin: ChildStdin,
@@ -180,7 +181,7 @@ impl GDBBuilder {
             gdb_args.push("--args".into());
             gdb_args.push(self.opt_program.unwrap().into());
             for arg in self.opt_args {
-                gdb_args.push(arg.into());
+                gdb_args.push(arg);
             }
         } else if let Some(program) = self.opt_program {
             gdb_args.push(program.into());

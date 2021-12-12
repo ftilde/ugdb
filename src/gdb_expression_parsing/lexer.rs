@@ -51,7 +51,7 @@ impl<'input> Lexer<'input> {
 impl<'input> Iterator for Lexer<'input> {
     type Item = Result<TokenWithLocation, LexicalError>;
     fn next(&mut self) -> Option<Self::Item> {
-        while let Some((i, c)) = self.chars.next() {
+        for (i, c) in self.chars.by_ref() {
             let (output, new_state) = match self.state {
                 LexerState::Free => match c {
                     '"' => (None, LexerState::InString(i)),
@@ -123,9 +123,7 @@ impl<'input> Iterator for Lexer<'input> {
                     '\\' => (None, LexerState::InStringEscapedChar(begin)),
                     _ => (None, LexerState::InString(begin)),
                 },
-                LexerState::InStringEscapedChar(begin) => match c {
-                    _ => (None, LexerState::InString(begin)),
-                },
+                LexerState::InStringEscapedChar(begin) => (None, LexerState::InString(begin)),
                 LexerState::InText(begin, end) => match c {
                     '"' => (Some((begin, Token::Text, end)), LexerState::InString(i)),
                     '{' => (

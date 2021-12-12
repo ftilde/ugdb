@@ -65,7 +65,7 @@ impl<'a> Tui<'a> {
                     event,
                     JsonValue::Object(results.clone()).pretty(2)
                 );
-                p.gdb.handle_breakpoint_event(event, &results);
+                p.gdb.handle_breakpoint_event(event, results);
             }
             (kind, class) => {
                 info!(
@@ -117,10 +117,10 @@ impl<'t> ContainerProvider for Tui<'t> {
     type Index = TuiContainerType;
     fn get<'a, 'b: 'a>(&'b self, index: &'a Self::Index) -> &'b dyn Container<Self::Context> {
         match index {
-            &TuiContainerType::SrcView => &self.src_view,
-            &TuiContainerType::Console => &self.console,
-            &TuiContainerType::ExpressionTable => &self.expression_table,
-            &TuiContainerType::Terminal => &self.process_pty,
+            TuiContainerType::SrcView => &self.src_view,
+            TuiContainerType::Console => &self.console,
+            TuiContainerType::ExpressionTable => &self.expression_table,
+            TuiContainerType::Terminal => &self.process_pty,
         }
     }
     fn get_mut<'a, 'b: 'a>(
@@ -128,10 +128,10 @@ impl<'t> ContainerProvider for Tui<'t> {
         index: &'a Self::Index,
     ) -> &'b mut dyn Container<Self::Context> {
         match index {
-            &TuiContainerType::SrcView => &mut self.src_view,
-            &TuiContainerType::Console => &mut self.console,
-            &TuiContainerType::ExpressionTable => &mut self.expression_table,
-            &TuiContainerType::Terminal => &mut self.process_pty,
+            TuiContainerType::SrcView => &mut self.src_view,
+            TuiContainerType::Console => &mut self.console,
+            TuiContainerType::ExpressionTable => &mut self.expression_table,
+            TuiContainerType::Terminal => &mut self.process_pty,
         }
     }
     const DEFAULT_CONTAINER: TuiContainerType = TuiContainerType::Console;

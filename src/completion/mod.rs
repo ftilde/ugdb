@@ -85,7 +85,7 @@ fn parse_command_names(gdb_output: &str) -> Vec<String> {
         .filter_map(|l| {
             let end = l.find(" -- ")?;
             let before_info = &l[..end];
-            Some(before_info.split(","))
+            Some(before_info.split(','))
         })
         .flatten()
         .map(|l| l.trim().to_owned())
@@ -120,7 +120,7 @@ impl VarObject {
         let name = if let Some(name) = o["name"].as_str() {
             name.to_string()
         } else {
-            return Err(format!("Missing field 'name'"));
+            return Err("Missing field 'name'".into());
         };
         let expr = o["exp"].as_str().map(|s| s.to_owned());
         let typ = o["type"].as_str().map(|s| s.to_owned());
@@ -155,10 +155,10 @@ impl VarObject {
             o => return Err(format!("Unexpected result class: {:?}", o)),
         }
 
-        Ok(res.results["children"]
+        res.results["children"]
             .members()
-            .map(|c| VarObject::from_val(c))
-            .collect::<Result<Vec<_>, String>>()?)
+            .map(VarObject::from_val)
+            .collect::<Result<Vec<_>, String>>()
     }
 
     fn collect_children_exprs(
@@ -178,10 +178,8 @@ impl VarObject {
             {
                 // This is the case for pseudo children (like public, ...)
                 child.collect_children_exprs(p, output)?;
-            } else {
-                if let Some(expr) = child.expr {
-                    output.push(expr);
-                }
+            } else if let Some(expr) = child.expr {
+                output.push(expr);
             }
         }
         Ok(())
@@ -204,7 +202,7 @@ impl VarObject {
 }
 
 fn get_children(p: &mut Context, expr: &str) -> Result<Vec<String>, String> {
-    let root = VarObject::create(p, &expr)?;
+    let root = VarObject::create(p, expr)?;
 
     let mut children = Vec::new();
 
@@ -346,7 +344,7 @@ fn tokenize_expression(s: &str) -> Result<Vec<ExpressionToken>, TokenizeError> {
             '"' => {
                 let mut escaped = false;
                 let start = i;
-                while let Some((i, c)) = chars.next() {
+                for (i, c) in chars.by_ref() {
                     match (c, escaped) {
                         ('"', false) => {
                             output.push(ExpressionToken {
@@ -495,7 +493,7 @@ impl CompletableExpression {
     }
 }
 
-fn find_candidates<'a, S: AsRef<str>>(prefix: &str, candidates: &'a [S]) -> Vec<String> {
+fn find_candidates<S: AsRef<str>>(prefix: &str, candidates: &[S]) -> Vec<String> {
     candidates
         .iter()
         .filter_map(|candidate| {

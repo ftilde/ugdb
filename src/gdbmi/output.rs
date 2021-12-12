@@ -224,7 +224,7 @@ fn to_list(v: Vec<(String, JsonValue)>) -> Vec<JsonValue> {
 named!(
     value<JsonValue>,
     alt!(
-        map!(string, |s| JsonValue::String(s))
+        map!(string, JsonValue::String)
             | do_parse!(
                 tag!("{")
                     >> results: separated_list!(tag!(","), result)
@@ -359,8 +359,8 @@ named!(
             >> results: many0!(do_parse!(tag!(",") >> r: result >> (r)))
             >> (OutOfBandRecord::AsyncRecord {
                 token: t,
-                kind: kind,
-                class: class,
+                kind,
+                class,
                 results: to_map(results),
             })
     )
@@ -378,12 +378,7 @@ named!(
 named!(
     stream_record<OutOfBandRecord>,
     do_parse!(
-        kind: stream_kind
-            >> msg: string
-            >> (OutOfBandRecord::StreamRecord {
-                kind: kind,
-                data: msg
-            })
+        kind: stream_kind >> msg: string >> (OutOfBandRecord::StreamRecord { kind, data: msg })
     )
 );
 

@@ -21,11 +21,8 @@ pub struct SrcPosition {
 }
 
 impl SrcPosition {
-    pub fn new(file: PathBuf, line: LineNumber) -> Self {
-        SrcPosition {
-            file: file,
-            line: line,
-        }
+    pub const fn new(file: PathBuf, line: LineNumber) -> Self {
+        SrcPosition { file, line }
     }
 }
 
@@ -34,7 +31,7 @@ pub struct Address(pub usize);
 impl Address {
     pub fn parse(string: &str) -> Result<Self, (::std::num::ParseIntError, String)> {
         usize::from_str_radix(&string[2..], 16)
-            .map(|u| Address(u))
+            .map(Address)
             .map_err(|e| (e, string.to_owned()))
     }
 }
@@ -87,10 +84,10 @@ impl BreakPoint {
             }
         };
         BreakPoint {
-            number: number,
-            address: address,
-            enabled: enabled,
-            src_pos: src_pos,
+            number,
+            address,
+            enabled,
+            src_pos,
         }
     }
 }
@@ -98,6 +95,12 @@ impl BreakPoint {
 pub struct BreakPointSet {
     map: HashMap<BreakPointNumber, BreakPoint>,
     pub last_change: std::time::Instant,
+}
+
+impl Default for BreakPointSet {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl BreakPointSet {
@@ -135,6 +138,7 @@ impl std::ops::Deref for BreakPointSet {
     }
 }
 
+#[allow(clippy::upper_case_acronyms)]
 pub struct GDB {
     pub mi: gdbmi::GDB,
     pub breakpoints: BreakPointSet,
@@ -148,7 +152,7 @@ pub enum BreakpointOperationError {
 impl GDB {
     pub fn new(mi: gdbmi::GDB) -> Self {
         GDB {
-            mi: mi,
+            mi,
             breakpoints: BreakPointSet::new(),
         }
     }
@@ -180,7 +184,7 @@ impl GDB {
                     .get("msg")
                     .and_then(|msg_obj| msg_obj.as_str())
                     .map(|s| s.to_owned())
-                    .unwrap_or(bp_result.results.dump()),
+                    .unwrap_or_else(|| bp_result.results.dump()),
             )),
             _ => {
                 panic!("Unexpected resultclass: {:?}", bp_result.class);
@@ -237,16 +241,16 @@ impl GDB {
         match bp_type {
             BreakPointEvent::Created | BreakPointEvent::Modified => {
                 match &info["bkpt"] {
-                    JsonValue::Object(ref bkpt) => {
-                        let bp = BreakPoint::from_json(&bkpt);
+                    JsonValue::Object(bkpt) => {
+                        let bp = BreakPoint::from_json(bkpt);
                         self.breakpoints.update_breakpoint(bp);
 
                         // If there are multiple locations (recent versions of) gdb return the
                         // sub-breakpoints in the array "locations".
-                        if let Some(JsonValue::Array(ref bkpts)) = bkpt.get("locations") {
+                        if let Some(JsonValue::Array(bkpts)) = bkpt.get("locations") {
                             for bkpt in bkpts {
-                                if let JsonValue::Object(ref bkpt) = bkpt {
-                                    let bp = BreakPoint::from_json(&bkpt);
+                                if let JsonValue::Object(bkpt) = bkpt {
+                                    let bp = BreakPoint::from_json(bkpt);
                                     self.breakpoints.update_breakpoint(bp);
                                 } else {
                                     panic!("Malformed breakpoint list");
@@ -254,14 +258,14 @@ impl GDB {
                             }
                         }
                     }
-                    JsonValue::Array(ref bkpts) => {
+                    JsonValue::Array(bkpts) => {
                         // In previous versions, gdb returned multiple sub-breakpoints as a series
                         // of objects under the "bkpt" key (thus breaking the spec). This appears
                         // to be fixed now, but we keep the current case (for now) for users of old
                         // gdb versions.
                         for bkpt in bkpts {
-                            if let JsonValue::Object(ref bkpt) = bkpt {
-                                let bp = BreakPoint::from_json(&bkpt);
+                            if let JsonValue::Object(bkpt) = bkpt {
+                                let bp = BreakPoint::from_json(bkpt);
                                 self.breakpoints.update_breakpoint(bp);
                             } else {
                                 panic!("Malformed breakpoint list");
@@ -334,18 +338,18 @@ pub mod response {
     }
 
     pub fn get_str<'a>(obj: &'a JsonValue, key: &'static str) -> Result<&'a str, GDBResponseError> {
-        Ok(obj[key]
+        obj[key]
             .as_str()
-            .ok_or_else(|| GDBResponseError::MissingField(key, obj.clone()))?)
+            .ok_or_else(|| GDBResponseError::MissingField(key, obj.clone()))
     }
 
     pub fn get_str_obj<'a>(
         obj: &'a Object,
         key: &'static str,
     ) -> Result<&'a str, GDBResponseError> {
-        Ok(obj[key]
+        obj[key]
             .as_str()
-            .ok_or_else(|| GDBResponseError::MissingField(key, JsonValue::Object(obj.clone())))?)
+            .ok_or_else(|| GDBResponseError::MissingField(key, JsonValue::Object(obj.clone())))
     }
 
     pub fn get_addr(obj: &JsonValue, key: &'static str) -> Result<Address, GDBResponseError> {
@@ -360,15 +364,13 @@ pub mod response {
 
     pub fn get_u64(obj: &JsonValue, key: &'static str) -> Result<u64, GDBResponseError> {
         let s = get_str(obj, key)?;
-        Ok(s.parse::<u64>().map_err(|e| {
-            GDBResponseError::Other(format!("Malformed frame description: {:?}", e))
-        })?)
+        s.parse::<u64>()
+            .map_err(|e| GDBResponseError::Other(format!("Malformed frame description: {:?}", e)))
     }
 
     pub fn get_u64_obj(obj: &Object, key: &'static str) -> Result<u64, GDBResponseError> {
         let s = get_str_obj(obj, key)?;
-        Ok(s.parse::<u64>().map_err(|e| {
-            GDBResponseError::Other(format!("Malformed frame description: {:?}", e))
-        })?)
+        s.parse::<u64>()
+            .map_err(|e| GDBResponseError::Other(format!("Malformed frame description: {:?}", e)))
     }
 }

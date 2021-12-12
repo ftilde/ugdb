@@ -129,22 +129,19 @@ enum Struct<'s> {
 fn parse_structure<'s>(tokens: &mut Tokens, string: &'s str) -> Result<Struct<'s>, ()> {
     let mut kv = Vec::new();
     let mut single = Vec::new();
-    let multiline = if let &[(_, TokenS2::Newline, _), ..] = tokens.tokens {
+    let multiline = if let [(_, TokenS2::Newline, _), ..] = tokens.tokens {
         tokens.consume(1);
         true
     } else {
         false
     };
-    match tokens.tokens {
-        &[(_, TokenS2::RBrace, _), ..] => {
-            tokens.consume(1);
-            return Ok(Struct::Array(Vec::new()));
-        }
-        _ => {}
-    };
+    if let [(_, TokenS2::RBrace, _), ..] = tokens.tokens {
+        tokens.consume(1);
+        return Ok(Struct::Array(Vec::new()));
+    }
     loop {
-        let key = match tokens.tokens {
-            &[(b, TokenS2::Text, e), (_, TokenS2::Equals, _), ..] => {
+        let key = match *tokens.tokens {
+            [(b, TokenS2::Text, e), (_, TokenS2::Equals, _), ..] => {
                 let res = Some((b, e));
                 tokens.consume(2);
                 res

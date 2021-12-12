@@ -57,17 +57,17 @@ struct AssemblyLine {
 }
 
 impl AssemblyLine {
-    fn new(
+    const fn new(
         content: String,
         address: Address,
         src_position: Option<SrcPosition>,
         debug_location: Option<AssemblyDebugLocation>,
     ) -> Self {
         AssemblyLine {
-            content: content,
-            address: address,
-            src_position: src_position,
-            debug_location: debug_location,
+            content,
+            address,
+            src_position,
+            debug_location,
         }
     }
 }
@@ -110,7 +110,7 @@ impl AssemblyDecorator {
             None
         };
         AssemblyDecorator {
-            stop_position: stop_position,
+            stop_position,
             breakpoint_addresses: addresses,
         }
     }
@@ -125,7 +125,7 @@ impl LineDecorator for AssemblyDecorator {
         let max_space = lines
             .last()
             .map(|(_, l)| text_width(format!(" 0x{:x} ", l.address.0).as_str()))
-            .unwrap_or(Width::new(0).unwrap());
+            .unwrap_or_else(|| Width::new(0).unwrap());
         Demand::exact(max_space)
     }
     fn decorate(
@@ -159,8 +159,7 @@ impl LineDecorator for AssemblyDecorator {
             line.debug_location
                 .iter()
                 .map(|l| l.offset)
-                .filter(|&offset| offset != 0)
-                .next(),
+                .find(|&offset| offset != 0),
         ) {
             let formatted_offset = format!("<+{}>", offset);
             write!(
@@ -201,7 +200,7 @@ enum GotoError {
 impl<'a> AssemblyView<'a> {
     pub fn new(highlighting_theme: &'a Theme) -> Self {
         AssemblyView {
-            highlighting_theme: highlighting_theme,
+            highlighting_theme,
             syntax_set: SyntaxSet::load_defaults_nonewlines(),
             pager: Pager::new(),
             last_stop_position: None,
@@ -270,7 +269,7 @@ impl<'a> AssemblyView<'a> {
         let syntax = self
             .syntax_set
             .find_syntax_by_extension("s")
-            .unwrap_or(self.syntax_set.find_syntax_plain_text());
+            .unwrap_or_else(|| self.syntax_set.find_syntax_plain_text());
         self.pager.load(
             PagerContent::from_lines(lines)
                 .with_highlighter(&SyntectHighlighter::new(syntax, self.highlighting_theme))
@@ -283,16 +282,16 @@ impl<'a> AssemblyView<'a> {
     }
 
     fn get_instructions(disass_results: &Object) -> Result<Vec<AssemblyLine>, GDBResponseError> {
-        if let &JsonValue::Array(ref line_objs) = &disass_results["asm_insns"] {
+        if let JsonValue::Array(line_objs) = &disass_results["asm_insns"] {
             let mut lines = Vec::<AssemblyLine>::new();
             for line_obj in line_objs {
                 let line = LineNumber::new(
-                    get_str(&line_obj, "line")?
+                    get_str(line_obj, "line")?
                         .parse::<usize>()
-                        .map_err(|_| GDBResponseError::Other(format!("Malformed line")))?,
+                        .map_err(|_| GDBResponseError::Other("Malformed line".into()))?,
                 );
 
-                let file = get_str(&line_obj, "fullname")?;
+                let file = get_str(line_obj, "fullname")?;
                 let src_pos = Some(SrcPosition::new(PathBuf::from(file), line));
                 for tuple in line_obj["line_asm_insn"].members() {
                     let instruction = get_str(tuple, "inst")?;
@@ -444,7 +443,7 @@ impl SourceDecorator {
             })
             .collect();
         SourceDecorator {
-            stop_position: stop_position,
+            stop_position,
             breakpoint_lines: addresses,
         }
     }
@@ -459,7 +458,7 @@ impl LineDecorator for SourceDecorator {
         let max_space = lines
             .last()
             .map(|(i, _)| text_width(format!(" {} ", i).as_str()))
-            .unwrap_or(Width::new(0).unwrap());
+            .unwrap_or_else(|| Width::new(0).unwrap());
         Demand::exact(max_space)
     }
     fn decorate(
@@ -528,7 +527,7 @@ macro_rules! current_file_and_content_mut {
 impl<'a> SourceView<'a> {
     pub fn new(highlighting_theme: &'a Theme) -> Self {
         SourceView {
-            highlighting_theme: highlighting_theme,
+            highlighting_theme,
             syntax_set: SyntaxSet::load_defaults_nonewlines(),
             pager: Pager::new(),
             file_info: None,
@@ -546,7 +545,7 @@ impl<'a> SourceView<'a> {
     fn go_to_last_stop_position(&mut self) -> Result<(), GotoError> {
         let line = if let Some(ref file_info) = self.file_info {
             if let Some(ref src_pos) = self.last_stop_position {
-                if &src_pos.file == &file_info.path {
+                if src_pos.file == file_info.path {
                     src_pos.line
                 } else {
                     return Err(GotoError::MismatchedPagerContent);
@@ -572,11 +571,11 @@ impl<'a> SourceView<'a> {
     }
 
     fn update_decoration(&mut self, p: &mut Context) {
-        if let Some((ref file_path, ref mut content)) = current_file_and_content_mut!(self) {
+        if let Some((file_path, content)) = current_file_and_content_mut!(self) {
             // This sucks: we basically want to call get_last_line_number_for, but can't because we
             // borrowed content mutably...
             let last_line_number = self.last_stop_position.clone().and_then(|last_src_pos| {
-                if last_src_pos.file == **file_path {
+                if last_src_pos.file == *file_path {
                     Some(last_src_pos.line)
                 } else {
                     None
@@ -605,7 +604,7 @@ impl<'a> SourceView<'a> {
         }
     }
 
-    fn show<'b, P: AsRef<Path>>(&mut self, path: P, p: &mut Context) -> Result<(), PagerShowError> {
+    fn show<P: AsRef<Path>>(&mut self, path: P, p: &mut Context) -> Result<(), PagerShowError> {
         if self.need_to_load_file(path.as_ref()) {
             let path_ref = path.as_ref();
             self.load(path_ref, p.gdb.breakpoints.values())
@@ -648,7 +647,7 @@ impl<'a> SourceView<'a> {
             .syntax_set
             .find_syntax_for_file(path.as_ref())
             .expect("file IS openable, see pager content")
-            .unwrap_or(self.syntax_set.find_syntax_plain_text());
+            .unwrap_or_else(|| self.syntax_set.find_syntax_plain_text());
         let last_line_number = self.get_last_line_number_for(path.as_ref());
         self.pager.load(
             pager_content
@@ -704,10 +703,8 @@ impl<'a> SourceView<'a> {
                 {
                     p.log("Cannot insert breakpoint: Gdb is busy.");
                 }
-            } else {
-                if p.gdb.delete_breakpoints(active_bps.into_iter()).is_err() {
-                    p.log("Cannot remove breakpoint: Gdb is busy.");
-                }
+            } else if p.gdb.delete_breakpoints(active_bps.into_iter()).is_err() {
+                p.log("Cannot remove breakpoint: Gdb is busy.");
             }
         }
     }
@@ -811,9 +808,8 @@ impl<'a> Widget for &'a StackInfo {
 
         if let Some(f) = &self.file_path {
             let path_str = f.to_string_lossy();
-            let remaining_space = (width.raw_value() as usize)
-                .checked_sub(cursor.get_col().raw_value() as _)
-                .unwrap_or(0);
+            let remaining_space =
+                (width.raw_value() as usize).saturating_sub(cursor.get_col().raw_value() as _);
             if remaining_space >= text_width(path_str.as_ref()).raw_value() as _ {
                 let _ = write!(cursor, "{}", path_str);
             } else {
@@ -831,6 +827,7 @@ impl<'a> Widget for &'a StackInfo {
 }
 
 #[derive(Clone, Debug, PartialEq, derive_more::From)]
+#[allow(clippy::upper_case_acronyms)]
 enum DisassembleError {
     GDB(GDBResponseError),
     Other(String),
@@ -876,10 +873,10 @@ fn disassemble_address(
 
         Ok(line_objs.into_iter().map(|(_, o)| o).collect::<Vec<_>>())
     } else {
-        Err(GDBResponseError::MissingField(
-            "asm_insns",
-            JsonValue::Object(disass_results.clone()),
-        ))?
+        Err(
+            GDBResponseError::MissingField("asm_insns", JsonValue::Object(disass_results.clone()))
+                .into(),
+        )
     }
 }
 
@@ -1070,7 +1067,7 @@ impl<'a> CodeWindow<'a> {
 
         self.stack_info.stack_level = p.gdb.get_stack_level().ok();
         self.stack_info.stack_depth = p.gdb.get_stack_depth().ok();
-        self.stack_info.file_path = frame["fullname"].as_str().map(|s| PathBuf::from(s));
+        self.stack_info.file_path = frame["fullname"].as_str().map(PathBuf::from);
         self.stack_info.function = frame["func"].as_str().map(|s| s.to_owned());
 
         if let Some(path) = frame["fullname"].as_str() {
@@ -1159,17 +1156,15 @@ impl<'a> CodeWindow<'a> {
                     .asm_view
                     .go_to_first_applicable_line(path, self.src_view.current_line_number())
                     .is_err()
-                {
-                    if self
+                    && self
                         .asm_view
                         .show_file(path, self.src_view.current_line_number(), p)
                         .is_ok()
-                    {
-                        // The current line may not have associated assembly!
-                        let _ = self
-                            .asm_view
-                            .go_to_first_applicable_line(path, self.src_view.current_line_number());
-                    }
+                {
+                    // The current line may not have associated assembly!
+                    let _ = self
+                        .asm_view
+                        .go_to_first_applicable_line(path, self.src_view.current_line_number());
                 }
             }
         }
@@ -1180,9 +1175,9 @@ impl<'a> CodeWindow<'a> {
 
         let new_level = if up {
             let depth = p.gdb.get_stack_depth()?;
-            (level + 1).min(depth.checked_sub(1).unwrap_or(0))
+            (level + 1).min(depth.saturating_sub(1))
         } else {
-            level.checked_sub(1).unwrap_or(0)
+            level.saturating_sub(1)
         };
 
         if level != new_level {
@@ -1242,9 +1237,9 @@ impl<'a> Container<Context> for CodeWindow<'a> {
                         .asm_view
                         .pager
                         .current_line()
-                        .and_then(|ref line| line.src_position.clone())
+                        .and_then(|line| line.src_position.clone())
                     {
-                        self.src_state = SrcContentState::NotYetLoaded(src_pos.file.to_path_buf());
+                        self.src_state = SrcContentState::NotYetLoaded(src_pos.file);
                         self.try_load_active_content(p);
                         let _ = self.src_view.go_to_line(src_pos.line);
                     }

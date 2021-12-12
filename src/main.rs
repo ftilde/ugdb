@@ -342,7 +342,7 @@ fn run() -> i32 {
     signals_to_wait.add(Signal::SIGWINCH);
     signals_to_wait.add(Signal::SIGTSTP);
     signals_to_wait.add(Signal::SIGTERM);
-    let mut signals_to_block = signals_to_wait.clone();
+    let mut signals_to_block = signals_to_wait;
     signals_to_block.add(Signal::SIGCONT);
 
     // We block the signals for the current (and so far only thread). This mask will be inherited

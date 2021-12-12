@@ -13,7 +13,7 @@ pub struct Command {
 
 impl Command {
     fn new(cmd: Box<dyn FnMut(&mut Context) -> Result<(), ExecuteError>>) -> Command {
-        Command { cmd: cmd }
+        Command { cmd }
     }
     fn from_mi_with_msg(cmd: MiCommand, success_msg: &'static str) -> Command {
         Command::new(Box::new(move |p: &mut Context| {

@@ -72,14 +72,12 @@ impl ExpressionRow {
                     }
                     other => panic!("unexpected result class: {:?}", other),
                 },
-                Err(ExecuteError::Busy) => {
-                    return;
-                }
+                Err(ExecuteError::Busy) => {}
                 Err(ExecuteError::Quit) => {
                     panic!("GDB quit!");
                 }
             }
-        };
+        }
     }
 }
 impl TableRow for ExpressionRow {
@@ -166,7 +164,7 @@ impl TableRow for ExpressionRow {
                     )
                     .finish();
 
-                if r.expression.get() != &prev_content || format_changed {
+                if r.expression.get() != prev_content || format_changed {
                     r.update_result(p);
                 }
                 res
@@ -210,7 +208,7 @@ impl ExpressionTable {
     pub fn new() -> Self {
         let mut table = Table::new();
         table.rows_mut().push(ExpressionRow::new()); //Invariant: always at least one line
-        ExpressionTable { table: table }
+        ExpressionTable { table }
     }
     pub fn add_entry(&mut self, entry: String) {
         {

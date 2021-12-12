@@ -38,13 +38,13 @@ pub struct BreakPointNumber {
 impl std::str::FromStr for BreakPointNumber {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if let Some(dot_pos) = s.find(".") {
+        if let Some(dot_pos) = s.find('.') {
             let major = s[..dot_pos].parse::<usize>().map_err(|e| e.to_string())?;
             let minor = s[dot_pos + 1..]
                 .parse::<usize>()
                 .map_err(|e| e.to_string())?;
             Ok(BreakPointNumber {
-                major: major,
+                major,
                 minor: Some(minor),
             })
         } else {
@@ -119,7 +119,7 @@ impl MiCommand {
     }
 
     pub fn cli_exec(command: &str) -> MiCommand {
-        Self::interpreter_exec("console".to_owned(), escape_command(&command))
+        Self::interpreter_exec("console".to_owned(), escape_command(command))
     }
 
     pub fn data_disassemble_file<P: AsRef<Path>>(
@@ -217,7 +217,7 @@ impl MiCommand {
         options.dedup();
         MiCommand {
             operation: "break-delete",
-            options: options,
+            options,
             parameters: Vec::new(),
         }
     }
@@ -377,12 +377,11 @@ impl MiCommand {
             operation: "var-create",
             options: vec![],
             parameters: vec![
-                name.map(|v| v.into()).unwrap_or(OsString::from("\"-\"")),
-                OsString::from(
-                    frame_addr
-                        .map(|s| s.to_string())
-                        .unwrap_or("\"*\"".to_string()),
-                ),
+                name.unwrap_or_else(|| "\"-\"".into()),
+                frame_addr
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| "\"*\"".to_string())
+                    .into(),
                 escape_command(expression).into(),
             ],
         }

@@ -7,7 +7,7 @@ repository = "https://github.com/ftilde/ugdb"
 readme = "README.md"
 license = "MIT"
 keywords = ["tui", "gdb"]
-edition = "2021"
+edition = "2018"
 
 [[bin]]
 doc = false

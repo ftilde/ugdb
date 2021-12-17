@@ -270,9 +270,10 @@ impl<'a> AssemblyView<'a> {
             .syntax_set
             .find_syntax_by_extension("s")
             .unwrap_or_else(|| self.syntax_set.find_syntax_plain_text());
+        let highlighter = SyntectHighlighter::new(syntax, self.highlighting_theme);
         self.pager.load(
             PagerContent::from_lines(lines)
-                .with_highlighter(&SyntectHighlighter::new(syntax, self.highlighting_theme))
+                .with_highlighter(&highlighter)
                 .with_decorator(AssemblyDecorator::new(
                     min_address..max_address,
                     self.last_stop_position,
@@ -649,15 +650,11 @@ impl<'a> SourceView<'a> {
             .expect("file IS openable, see pager content")
             .unwrap_or_else(|| self.syntax_set.find_syntax_plain_text());
         let last_line_number = self.get_last_line_number_for(path.as_ref());
-        self.pager.load(
-            pager_content
-                .with_highlighter(&SyntectHighlighter::new(syntax, self.highlighting_theme))
-                .with_decorator(SourceDecorator::new(
-                    path.as_ref(),
-                    last_line_number,
-                    breakpoints,
-                )),
-        );
+        let highlighter = SyntectHighlighter::new(syntax, self.highlighting_theme);
+        self.pager
+            .load(pager_content.with_highlighter(&highlighter).with_decorator(
+                SourceDecorator::new(path.as_ref(), last_line_number, breakpoints),
+            ));
         self.file_info = Some(FileInfo {
             path: path.as_ref().to_owned(),
             modified: fs::metadata(path)?.modified()?,

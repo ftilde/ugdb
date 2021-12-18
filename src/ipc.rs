@@ -258,7 +258,9 @@ fn start_connection(mut connection: UnixStream, request_sink: std::sync::mpsc::S
         .spawn(move || {
             connection.set_nonblocking(false).expect("set blocking");
 
-            // If you don't play nicely, we don't want to talk:
+            // Try to respond to requests as long as they are well formed. If the other side is
+            // (for example) specifying an incorrect message length, we just terminate the
+            // connection.
             while let Ok(request) = try_read_ipc_request(&mut connection) {
                 request_sink.send(Event::Ipc(request)).unwrap();
             }

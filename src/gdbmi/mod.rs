@@ -12,6 +12,7 @@ use std::thread;
 
 type Token = u64;
 
+#[allow(clippy::upper_case_acronyms)]
 pub struct GDB {
     pub process: Child,
     stdin: ChildStdin,
@@ -127,7 +128,7 @@ impl GDBBuilder {
         self.opt_tty = Some(tty);
         self
     }
-    pub fn try_spawn<S>(self, oob_sink: S) -> Result<GDB, ::std::io::Error>
+    pub fn try_spawn<S>(self, oob_sink: S) -> Result<GDB, std::io::Error>
     where
         S: OutOfBandRecordSink + 'static,
     {
@@ -180,7 +181,7 @@ impl GDBBuilder {
             gdb_args.push("--args".into());
             gdb_args.push(self.opt_program.unwrap().into());
             for arg in self.opt_args {
-                gdb_args.push(arg.into());
+                gdb_args.push(arg);
             }
         } else if let Some(program) = self.opt_program {
             gdb_args.push(program.into());
@@ -249,7 +250,7 @@ impl GDBBuilder {
 }
 
 impl GDB {
-    pub fn interrupt_execution(&self) -> Result<(), ::nix::Error> {
+    pub fn interrupt_execution(&self) -> Result<(), nix::Error> {
         use nix::sys::signal;
         use nix::unistd::Pid;
         signal::kill(Pid::from_raw(self.process.id() as i32), signal::SIGINT)

@@ -1,6 +1,9 @@
 use super::Token;
 pub use json::object::Object;
 pub use json::JsonValue;
+use nom::{
+    alt, call, do_parse, error_position, is_not, many0, map, named, opt, separated_list, tag, value,
+};
 
 use log::{error, info};
 
@@ -82,12 +85,12 @@ enum Output {
     SomethingElse(String), /* Debug */
 }
 
+use crate::OutOfBandRecordSink;
 use nom::IResult;
 use std::io::{BufRead, BufReader, Read};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
 use std::sync::Arc;
-use OutOfBandRecordSink;
 
 pub fn process_output<T: Read, S: OutOfBandRecordSink>(
     output: T,
@@ -221,7 +224,7 @@ fn to_list(v: Vec<(String, JsonValue)>) -> Vec<JsonValue> {
 named!(
     value<JsonValue>,
     alt!(
-        map!(string, |s| JsonValue::String(s))
+        map!(string, JsonValue::String)
             | do_parse!(
                 tag!("{")
                     >> results: separated_list!(tag!(","), result)
@@ -356,8 +359,8 @@ named!(
             >> results: many0!(do_parse!(tag!(",") >> r: result >> (r)))
             >> (OutOfBandRecord::AsyncRecord {
                 token: t,
-                kind: kind,
-                class: class,
+                kind,
+                class,
                 results: to_map(results),
             })
     )
@@ -375,12 +378,7 @@ named!(
 named!(
     stream_record<OutOfBandRecord>,
     do_parse!(
-        kind: stream_kind
-            >> msg: string
-            >> (OutOfBandRecord::StreamRecord {
-                kind: kind,
-                data: msg
-            })
+        kind: stream_kind >> msg: string >> (OutOfBandRecord::StreamRecord { kind, data: msg })
     )
 );
 

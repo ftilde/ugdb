@@ -1,12 +1,17 @@
-use tui::commands::CommandState;
+use crate::tui::commands::CommandState;
+use crate::Context;
 
-use unsegen::base::GraphemeCluster;
-use unsegen::container::Container;
-use unsegen::input::{EditBehavior, Input, Key, ScrollBehavior};
-use unsegen::widget::builtin::{LogViewer, PromptLine};
-use unsegen::widget::{VLayout, Widget};
+use unsegen::{
+    base::GraphemeCluster,
+    container::Container,
+    input::{EditBehavior, Input, Key, ScrollBehavior},
+    widget::{
+        builtin::{LogViewer, PromptLine},
+        VLayout, Widget,
+    },
+};
 
-use completion::{CmdlineCompleter, Completer, CompletionState};
+use crate::completion::{CmdlineCompleter, Completer, CompletionState};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum GDBState {
@@ -22,10 +27,10 @@ pub struct Console {
     completion_state: Option<CompletionState>,
 }
 
-static STOPPED_PROMPT: &'static str = "(gdb) ";
-static RUNNING_PROMPT: &'static str = "(↻↻↻) ";
-static SCROLL_PROMPT: &'static str = "(↑↓) ";
-static SEARCH_PROMPT: &'static str = "(🔍) ";
+static STOPPED_PROMPT: &str = "(gdb) ";
+static RUNNING_PROMPT: &str = "(↻↻↻) ";
+static SCROLL_PROMPT: &str = "(↑↓) ";
+static SEARCH_PROMPT: &str = "(🔍) ";
 
 impl Console {
     pub fn new() -> Self {
@@ -46,7 +51,7 @@ impl Console {
         write!(self.gdb_log, "{}", msg.as_ref()).expect("Write Message");
     }
 
-    fn handle_newline(&mut self, p: &mut ::Context) {
+    fn handle_newline(&mut self, p: &mut Context) {
         let line = if self.prompt_line.active_line().is_empty() {
             self.prompt_line.previous_line(1).unwrap_or("").to_owned()
         } else {
@@ -55,23 +60,21 @@ impl Console {
         self.write_to_gdb_log(format!("{}{}\n", STOPPED_PROMPT, line));
         self.command_state.handle_input_line(&line, p);
     }
-    pub fn update_after_event(&mut self, p: &mut ::Context) {
+    pub fn update_after_event(&mut self, p: &mut Context) {
         if p.gdb.mi.is_running() {
             if self.last_gdb_state != GDBState::Running {
                 self.last_gdb_state = GDBState::Running;
                 self.prompt_line.set_edit_prompt(RUNNING_PROMPT.to_owned());
             }
-        } else {
-            if self.last_gdb_state != GDBState::Stopped {
-                self.last_gdb_state = GDBState::Stopped;
-                self.prompt_line.set_edit_prompt(STOPPED_PROMPT.to_owned());
-            }
+        } else if self.last_gdb_state != GDBState::Stopped {
+            self.last_gdb_state = GDBState::Stopped;
+            self.prompt_line.set_edit_prompt(STOPPED_PROMPT.to_owned());
         }
     }
 }
 
-impl Container<::Context> for Console {
-    fn input(&mut self, input: Input, p: &mut ::Context) -> Option<Input> {
+impl Container<Context> for Console {
+    fn input(&mut self, input: Input, p: &mut Context) -> Option<Input> {
         let set_completion = |completion_state: &Option<CompletionState>,
                               prompt_line: &mut PromptLine| {
             let completion = completion_state.as_ref().unwrap();

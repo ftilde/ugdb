@@ -1,11 +1,12 @@
+use json::object;
 use unix_socket::{UnixListener, UnixStream};
 
-use json;
-
-use gdb::BreakpointOperationError;
-use gdbmi::commands::{BreakPointLocation, MiCommand};
-use gdbmi::ExecuteError;
-use std::ffi::OsString;
+use crate::gdb::BreakpointOperationError;
+use crate::gdbmi::{
+    commands::{BreakPointLocation, MiCommand},
+    ExecuteError,
+};
+use crate::{Context, Event};
 use std::fs;
 use std::io::Read;
 use std::io::Write;
@@ -19,7 +20,7 @@ struct IPCError {
 impl IPCError {
     fn new<S: Into<String>>(reason: &'static str, details: S) -> Self {
         IPCError {
-            reason: reason,
+            reason,
             details: details.into(),
         }
     }
@@ -39,7 +40,7 @@ pub struct IPCRequest {
 }
 
 impl IPCRequest {
-    pub fn respond(mut self, p: &mut ::Context) {
+    pub fn respond(mut self, p: &mut Context) {
         let reply = match Self::handle(p, self.raw_request) {
             Ok(reply_success) => reply_success,
             Err(reply_fail) => reply_fail.into_json(),
@@ -49,8 +50,8 @@ impl IPCRequest {
         let _ = write_ipc_response(&mut self.response_channel, reply.dump().as_bytes());
     }
 
-    fn handle(p: &mut ::Context, raw_request: Vec<u8>) -> Result<json::JsonValue, IPCError> {
-        let str_request = ::std::str::from_utf8(raw_request.as_slice())
+    fn handle(p: &mut Context, raw_request: Vec<u8>) -> Result<json::JsonValue, IPCError> {
+        let str_request = std::str::from_utf8(raw_request.as_slice())
             .map_err(|_| IPCError::new("Malformed utf8.", ""))?;
         let json_request =
             json::parse(str_request).map_err(|_| IPCError::new("Malformed json.", str_request))?;
@@ -60,7 +61,7 @@ impl IPCRequest {
                 let function_name = obj
                     .get("function")
                     .and_then(|o| o.as_str())
-                    .ok_or(IPCError::new("Missing function name", json_request.dump()))?;
+                    .ok_or_else(|| IPCError::new("Missing function name", json_request.dump()))?;
 
                 let parameters = &obj["parameters"];
 
@@ -81,12 +82,11 @@ impl IPCRequest {
         })
     }
 
+    #[allow(clippy::type_complexity)]
     fn dispatch(
         function_name: &str,
-    ) -> Result<
-        fn(p: &mut ::Context, &json::JsonValue) -> Result<json::JsonValue, IPCError>,
-        IPCError,
-    > {
+    ) -> Result<fn(p: &mut Context, &json::JsonValue) -> Result<json::JsonValue, IPCError>, IPCError>
+    {
         match function_name {
             "set_breakpoint" => Ok(Self::set_breakpoint),
             "show_file" => Ok(Self::show_file),
@@ -96,10 +96,10 @@ impl IPCRequest {
     }
 
     fn set_breakpoint(
-        p: &mut ::Context,
+        p: &mut Context,
         parameters: &json::JsonValue,
     ) -> Result<json::JsonValue, IPCError> {
-        let parameters_obj = if let &json::JsonValue::Object(ref parameters_obj) = parameters {
+        let parameters_obj = if let json::JsonValue::Object(parameters_obj) = parameters {
             parameters_obj
         } else {
             return Err(IPCError::new(
@@ -110,14 +110,11 @@ impl IPCRequest {
         let file = parameters_obj
             .get("file")
             .and_then(|o| o.as_str())
-            .ok_or(IPCError::new("Missing file name", parameters.dump()))?;
+            .ok_or_else(|| IPCError::new("Missing file name", parameters.dump()))?;
         let line = parameters_obj
             .get("line")
             .and_then(|o| o.as_u32())
-            .ok_or(IPCError::new(
-                "Missing integer line number",
-                parameters.dump(),
-            ))?;
+            .ok_or_else(|| IPCError::new("Missing integer line number", parameters.dump()))?;
         match p
             .gdb
             .insert_breakpoint(BreakPointLocation::Line(Path::new(file), line as usize))
@@ -140,10 +137,10 @@ impl IPCRequest {
     }
 
     fn show_file(
-        p: &mut ::Context,
+        p: &mut Context,
         parameters: &json::JsonValue,
     ) -> Result<json::JsonValue, IPCError> {
-        let parameters_obj = if let &json::JsonValue::Object(ref parameters_obj) = parameters {
+        let parameters_obj = if let json::JsonValue::Object(parameters_obj) = parameters {
             parameters_obj
         } else {
             return Err(IPCError::new(
@@ -154,14 +151,11 @@ impl IPCRequest {
         let file = parameters_obj
             .get("file")
             .and_then(|o| o.as_str())
-            .ok_or(IPCError::new("Missing file name", parameters.dump()))?;
+            .ok_or_else(|| IPCError::new("Missing file name", parameters.dump()))?;
         let line = parameters_obj
             .get("line")
             .and_then(|o| o.as_u32())
-            .ok_or(IPCError::new(
-                "Missing integer line number",
-                parameters.dump(),
-            ))?;
+            .ok_or_else(|| IPCError::new("Missing integer line number", parameters.dump()))?;
 
         if line < 1 {
             return Err(IPCError::new(
@@ -177,7 +171,7 @@ impl IPCRequest {
     }
 
     fn get_instance_info(
-        p: &mut ::Context,
+        p: &mut Context,
         _: &json::JsonValue,
     ) -> Result<json::JsonValue, IPCError> {
         let result = p
@@ -201,17 +195,18 @@ impl IPCRequest {
     }
 }
 
-const FALLBACK_RUNTIME_DIR: &'static str = "/tmp/";
-const RUNTIME_SUBDIR: &'static str = "ugdb";
+const FALLBACK_RUNTIME_DIR: &str = "/tmp/";
+const RUNTIME_SUBDIR: &str = "ugdb";
 const SOCKET_IDENTIFIER_LENGTH: usize = 64;
-const IPC_MSG_IDENTIFIER: &'static [u8] = b"ugdb-ipc";
+const IPC_MSG_IDENTIFIER: &[u8] = b"ugdb-ipc";
 const HEADER_LENGTH: usize = 12;
 
+#[allow(clippy::upper_case_acronyms)]
 pub struct IPC {
     socket_path: PathBuf,
 }
 
-fn write_ipc_header<W: Write>(w: &mut W, msg_len: u32) -> ::std::io::Result<()> {
+fn write_ipc_header<W: Write>(w: &mut W, msg_len: u32) -> std::io::Result<()> {
     let msg_len = msg_len.to_le();
     let msg_len_buf = [
         msg_len as u8,
@@ -224,7 +219,7 @@ fn write_ipc_header<W: Write>(w: &mut W, msg_len: u32) -> ::std::io::Result<()> 
     Ok(())
 }
 
-fn write_ipc_response<W: Write>(w: &mut W, msg: &[u8]) -> ::std::io::Result<()> {
+fn write_ipc_response<W: Write>(w: &mut W, msg: &[u8]) -> std::io::Result<()> {
     write_ipc_header(w, msg.len() as u32)?;
     w.write_all(msg)?;
     Ok(())
@@ -257,35 +252,28 @@ fn try_read_ipc_request(connection: &mut UnixStream) -> Result<IPCRequest, ()> {
     })
 }
 
-fn start_connection(mut connection: UnixStream, request_sink: std::sync::mpsc::Sender<::Event>) {
+fn start_connection(mut connection: UnixStream, request_sink: std::sync::mpsc::Sender<Event>) {
     let _ = thread::Builder::new()
         .name("IPC Connection".to_owned())
         .spawn(move || {
             connection.set_nonblocking(false).expect("set blocking");
 
-            loop {
-                match try_read_ipc_request(&mut connection) {
-                    Ok(request) => {
-                        request_sink.send(::Event::Ipc(request)).unwrap();
-                    }
-                    Err(_) => {
-                        // If you don't play nicely, we don't want to talk:
-                        break;
-                    }
-                }
+            // If you don't play nicely, we don't want to talk:
+            while let Ok(request) = try_read_ipc_request(&mut connection) {
+                request_sink.send(Event::Ipc(request)).unwrap();
             }
         });
 }
 
 impl IPC {
-    pub fn setup(request_sink: std::sync::mpsc::Sender<::Event>) -> ::std::io::Result<Self> {
+    pub fn setup(request_sink: std::sync::mpsc::Sender<Event>) -> std::io::Result<Self> {
         let runtime_dir =
-            ::std::env::var_os("XDG_RUNTIME_DIR").unwrap_or(OsString::from(FALLBACK_RUNTIME_DIR));
+            std::env::var_os("XDG_RUNTIME_DIR").unwrap_or_else(|| FALLBACK_RUNTIME_DIR.into());
         let ugdb_dir = Path::join(runtime_dir.as_ref(), RUNTIME_SUBDIR);
         let _ = fs::create_dir(&ugdb_dir); //Ignore error if dir exists, we check if we can access it soon.
 
         use rand::Rng;
-        let socket_name = ::rand::thread_rng()
+        let socket_name = rand::thread_rng()
             .gen_ascii_chars()
             .take(SOCKET_IDENTIFIER_LENGTH)
             .collect::<String>();
@@ -296,20 +284,16 @@ impl IPC {
         let _ = thread::Builder::new()
             .name("IPC Connection Listener".to_owned())
             .spawn(move || {
-                for connection in listener.incoming() {
-                    if let Ok(connection) = connection {
-                        start_connection(connection, request_sink.clone());
-                    }
+                for connection in listener.incoming().flatten() {
+                    start_connection(connection, request_sink.clone());
                 }
             });
 
-        Ok(IPC {
-            socket_path: socket_path,
-        })
+        Ok(IPC { socket_path })
     }
 }
 
-impl ::std::ops::Drop for IPC {
+impl Drop for IPC {
     fn drop(&mut self) {
         // We at least try to remove the socket. If it fails we cannot really do about it here.
         let _ = fs::remove_file(&self.socket_path);

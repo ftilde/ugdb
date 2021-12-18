@@ -1,5 +1,5 @@
+use crate::tui::{Tui, TuiContainerType};
 use std::str::CharIndices;
-use tui::{Tui, TuiContainerType};
 use unsegen::container::{HSplit, Layout, Leaf, VSplit};
 
 #[derive(Debug, PartialEq)]
@@ -65,8 +65,8 @@ enum SplitType {
 }
 struct Input<'a>(std::iter::Peekable<CharIndices<'a>>);
 
-const NODE_START_CHARS: &'static [char] = &['c', 't', 's', 'e', '('];
-const CLOSING_BRACKET_CHARS: &'static [char] = &[')'];
+const NODE_START_CHARS: &[char] = &['c', 't', 's', 'e', '('];
+const CLOSING_BRACKET_CHARS: &[char] = &[')'];
 
 impl<'a> Input<'a> {
     fn new(s: &'a str) -> Result<Self, LayoutParseErrorKind> {
@@ -88,7 +88,7 @@ impl<'a> Input<'a> {
     }
 }
 
-fn try_parse_weight<'a>(i: &mut Input<'a>) -> f64 {
+fn try_parse_weight(i: &mut Input) -> f64 {
     if !i.current().map(|v| v.is_digit(10)).unwrap_or(false) {
         return 1.0;
     }
@@ -204,7 +204,7 @@ pub fn parse<'a>(s: String) -> Result<Box<dyn Layout<Tui<'a>> + 'a>, LayoutParse
     if !s.contains('c') {
         return Err(LayoutParseError {
             kind: LayoutParseErrorKind::NoConsole,
-            layout: s.to_owned(),
+            layout: s,
         });
     }
     let mut i = Input::new(&s).map_err(|kind| LayoutParseError {

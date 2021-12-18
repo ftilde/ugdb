@@ -1,6 +1,9 @@
+use crate::Context;
 use unsegen_pager::Theme;
 
-use gdbmi::output::{AsyncClass, AsyncKind, JsonValue, Object, OutOfBandRecord, ThreadEvent};
+use crate::gdbmi::output::{
+    AsyncClass, AsyncKind, JsonValue, Object, OutOfBandRecord, ThreadEvent,
+};
 
 use super::console::Console;
 use super::expression_table::ExpressionTable;
@@ -45,7 +48,7 @@ impl<'a> Tui<'a> {
         kind: AsyncKind,
         class: AsyncClass,
         results: &Object,
-        p: &mut ::Context,
+        p: &mut Context,
     ) {
         match (kind, class) {
             (AsyncKind::Exec, AsyncClass::Stopped)
@@ -62,7 +65,7 @@ impl<'a> Tui<'a> {
                     event,
                     JsonValue::Object(results.clone()).pretty(2)
                 );
-                p.gdb.handle_breakpoint_event(event, &results);
+                p.gdb.handle_breakpoint_event(event, results);
             }
             (kind, class) => {
                 info!(
@@ -75,7 +78,7 @@ impl<'a> Tui<'a> {
         }
     }
 
-    pub fn add_out_of_band_record(&mut self, record: OutOfBandRecord, p: &mut ::Context) {
+    pub fn add_out_of_band_record(&mut self, record: OutOfBandRecord, p: &mut Context) {
         match record {
             OutOfBandRecord::StreamRecord { kind: _, data } => {
                 self.console.write_to_gdb_log(data);
@@ -95,7 +98,7 @@ impl<'a> Tui<'a> {
         self.process_pty.add_byte_input(input);
     }
 
-    pub fn update_after_event(&mut self, p: &mut ::Context) {
+    pub fn update_after_event(&mut self, p: &mut Context) {
         self.src_view.update_after_event(p);
         self.console.update_after_event(p);
     }
@@ -110,14 +113,14 @@ pub enum TuiContainerType {
 }
 
 impl<'t> ContainerProvider for Tui<'t> {
-    type Context = ::Context;
+    type Context = Context;
     type Index = TuiContainerType;
     fn get<'a, 'b: 'a>(&'b self, index: &'a Self::Index) -> &'b dyn Container<Self::Context> {
         match index {
-            &TuiContainerType::SrcView => &self.src_view,
-            &TuiContainerType::Console => &self.console,
-            &TuiContainerType::ExpressionTable => &self.expression_table,
-            &TuiContainerType::Terminal => &self.process_pty,
+            TuiContainerType::SrcView => &self.src_view,
+            TuiContainerType::Console => &self.console,
+            TuiContainerType::ExpressionTable => &self.expression_table,
+            TuiContainerType::Terminal => &self.process_pty,
         }
     }
     fn get_mut<'a, 'b: 'a>(
@@ -125,10 +128,10 @@ impl<'t> ContainerProvider for Tui<'t> {
         index: &'a Self::Index,
     ) -> &'b mut dyn Container<Self::Context> {
         match index {
-            &TuiContainerType::SrcView => &mut self.src_view,
-            &TuiContainerType::Console => &mut self.console,
-            &TuiContainerType::ExpressionTable => &mut self.expression_table,
-            &TuiContainerType::Terminal => &mut self.process_pty,
+            TuiContainerType::SrcView => &mut self.src_view,
+            TuiContainerType::Console => &mut self.console,
+            TuiContainerType::ExpressionTable => &mut self.expression_table,
+            TuiContainerType::Terminal => &mut self.process_pty,
         }
     }
     const DEFAULT_CONTAINER: TuiContainerType = TuiContainerType::Console;

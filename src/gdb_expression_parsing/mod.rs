@@ -2,11 +2,11 @@ mod ast;
 mod lexer;
 mod parser;
 
-const ANON_KEY: &'static str = "*anon*";
+const ANON_KEY: &str = "*anon*";
 
 pub type ParseError = parser::Error;
 
-pub fn parse_gdb_value<'s>(result_string: &'s str) -> Result<Node, ParseError> {
+pub fn parse_gdb_value(result_string: &str) -> Result<Node, ParseError> {
     let lexer = lexer::Lexer::new(result_string);
     parser::parse(lexer, result_string)
 }

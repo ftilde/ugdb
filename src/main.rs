@@ -1,31 +1,3 @@
-extern crate backtrace;
-extern crate flexi_logger;
-extern crate log;
-extern crate nix;
-extern crate structopt;
-extern crate termion;
-extern crate time;
-#[macro_use]
-extern crate derive_more;
-extern crate parse_int;
-extern crate unicode_segmentation;
-
-// For ipc
-#[macro_use]
-extern crate json;
-extern crate rand;
-extern crate unix_socket;
-extern crate unsegen;
-
-extern crate unsegen_jsonviewer;
-extern crate unsegen_pager;
-extern crate unsegen_signals;
-extern crate unsegen_terminal;
-
-// gdbmi
-#[macro_use]
-extern crate nom;
-
 mod completion;
 mod gdb;
 mod gdb_expression_parsing;
@@ -234,7 +206,7 @@ impl Drop for MpscOobRecordSink {
 
 struct MpscSlaveInputSink(Sender<Event>);
 
-impl ::unsegen_terminal::SlaveInputSink for MpscSlaveInputSink {
+impl unsegen_terminal::SlaveInputSink for MpscSlaveInputSink {
     fn receive_bytes_from_pty(&mut self, data: Box<[u8]>) {
         self.0.send(Event::Pty(data)).unwrap();
     }
@@ -250,7 +222,7 @@ impl MessageSink {
     }
     pub fn drain_messages(&mut self) -> Vec<String> {
         let mut alt_buffer = Vec::new();
-        ::std::mem::swap(&mut self.messages, &mut alt_buffer);
+        std::mem::swap(&mut self.messages, &mut alt_buffer);
         alt_buffer
     }
 }
@@ -370,7 +342,7 @@ fn run() -> i32 {
     signals_to_wait.add(Signal::SIGWINCH);
     signals_to_wait.add(Signal::SIGTSTP);
     signals_to_wait.add(Signal::SIGTERM);
-    let mut signals_to_block = signals_to_wait.clone();
+    let mut signals_to_block = signals_to_wait;
     signals_to_block.add(Signal::SIGCONT);
 
     // We block the signals for the current (and so far only thread). This mask will be inherited
@@ -380,7 +352,7 @@ fn run() -> i32 {
     let (event_sink, event_source) = std::sync::mpsc::channel();
 
     let signal_sink = event_sink.clone();
-    ::std::thread::spawn(move || loop {
+    std::thread::spawn(move || loop {
         if let Ok(signal) = signals_to_wait.wait() {
             signal_sink.send(Event::Signal(signal)).unwrap();
         }
@@ -398,7 +370,7 @@ fn run() -> i32 {
     let initial_expression_table_entries = options.initial_expression_table_entries.clone();
     let layout = options.layout.clone();
 
-    ::std::panic::set_hook(Box::new(move |info| {
+    std::panic::set_hook(Box::new(move |info| {
         // Switch back to main screen
         println!("{}{}", termion::screen::ToMainScreen, termion::cursor::Show);
         // Restore old terminal behavior (will be restored later automatically, but we want to be
@@ -426,7 +398,7 @@ fn run() -> i32 {
     }
 
     // Create terminal and setup slave input piping
-    let tui_terminal = ::unsegen_terminal::Terminal::new(MpscSlaveInputSink(event_sink.clone()))
+    let tui_terminal = unsegen_terminal::Terminal::new(MpscSlaveInputSink(event_sink.clone()))
         .expect("Create PTY");
 
     // Setup ipc
@@ -480,8 +452,8 @@ fn run() -> i32 {
         // mode to avoid race condition where the first 'set of input' is buffered
         /* let keyboard_input = */
         let keyboard_sink = event_sink.clone();
-        ::std::thread::spawn(move || {
-            let stdin = ::std::io::stdin();
+        std::thread::spawn(move || {
+            let stdin = std::io::stdin();
             let stdin = stdin.lock();
             for e in Input::read_all(stdin) {
                 keyboard_sink.send(Event::Input(e.expect("event"))).unwrap();
@@ -528,8 +500,8 @@ fn run() -> i32 {
                         break 'displayloop;
                     }
                     Event::Input(input) => {
-                        let sig_behavior = ::unsegen_signals::SignalBehavior::new()
-                            .on_default::<::unsegen_signals::SIGTSTP>();
+                        let sig_behavior = unsegen_signals::SignalBehavior::new()
+                            .on_default::<unsegen_signals::SIGTSTP>();
                         let input = input.chain(sig_behavior);
                         match input_mode {
                             InputMode::ContainerSelect => input

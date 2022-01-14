@@ -3,9 +3,12 @@
 ## [0.1.11] - unreleased
 ### Changed
 - Ignore leading whitespace in commands.
+### Added
+- Support for some more ansi escape codes in terminal.
 ### Fixed
 - Crash when using !show command.
 - Hang when using shell command (`shell` is disallowed now).
+- Fix crash due to bug in unsegen_terminal
 
 ## [0.1.10] - 2020-06-03
 ### Changed

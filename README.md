@@ -37,7 +37,7 @@ cargo install ugdb
 The command line interface is aimed to be *mostly* compatible with gdb:
 ```
 $ ugdb --help
-ugdb 0.1.10
+ugdb 0.1.11
 ftilde <ftilde@REDACTED>
 An alternative TUI for gdb
 

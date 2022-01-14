@@ -783,7 +783,7 @@ dependencies = [
 
 [[package]]
 name = "ugdb"
-version = "0.1.10"
+version = "0.1.11"
 dependencies = [
  "backtrace",
  "derive_more",

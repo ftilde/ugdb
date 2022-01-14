@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.1.11] - unreleased
+## [0.1.11] - 2022-01-14
 ### Changed
 - Ignore leading whitespace in commands.
 ### Added

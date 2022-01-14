@@ -1,6 +1,6 @@
 [package]
 name = "ugdb"
-version = "0.1.10"
+version = "0.1.11"
 authors = ["ftilde <ftilde@tamepointer.de>"]
 description = "An alternative TUI for gdb"
 repository = "https://github.com/ftilde/ugdb"

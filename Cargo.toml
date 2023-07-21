@@ -18,7 +18,7 @@ debug = 1
 
 [dependencies]
 structopt = "0.2.1"
-time = "0.1"
+time = "0.2"
 backtrace = "0.3"
 termion = "1.5"
 nix = "0.17"

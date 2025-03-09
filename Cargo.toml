@@ -33,9 +33,9 @@ unix_socket = "0.5"
 unicode-segmentation = "1.2"
 parse_int = "0.5"
 
-unsegen = "0.3"
+unsegen = "0.3.1"
 unsegen_signals = "0.3"
-unsegen_terminal = "0.3.1"
+unsegen_terminal = "0.3.2"
 #unsegen_terminal = { path = "../unsegen_terminal" }
 unsegen_jsonviewer = "0.3"
 #unsegen_jsonviewer = { path="../unsegen_jsonviewer" }

@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.12] - 2025-03-09
+### Changed
+- Add line debug info in release mode
+### Fixed
+- Crash on backspace after non-ASCII character in terminal (via unsegen-terminal)
+
 ## [0.1.11] - 2022-01-14
 ### Changed
 - Ignore leading whitespace in commands.

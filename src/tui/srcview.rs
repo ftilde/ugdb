@@ -6,6 +6,7 @@ use crate::gdbmi::{
 };
 use crate::Context;
 use log::warn;
+use std::fmt::Display;
 use std::{
     collections::HashSet,
     fs, io,
@@ -29,6 +30,21 @@ use unsegen_pager::{SyntaxSet, Theme};
 #[derive(Debug)]
 pub enum PagerShowError {
     CouldNotOpenFile(PathBuf, io::Error),
+}
+
+impl Display for PagerShowError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PagerShowError::CouldNotOpenFile(path_buf, error) => {
+                write!(
+                    f,
+                    "Could not open file {}: {}",
+                    path_buf.to_string_lossy(),
+                    error
+                )
+            }
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -194,6 +210,7 @@ pub struct AssemblyView<'a> {
 enum GotoError {
     NoLastStopPosition,
     MismatchedPagerContent,
+    #[allow(dead_code)] //We use the debug impl
     PagerError(PagerError),
 }
 
@@ -963,7 +980,7 @@ impl<'a> CodeWindow<'a> {
     fn try_load_active_content(&mut self, p: &mut Context) {
         let try_load_src = |s: &mut Self, p: &mut Context| {
             if let Err(e) = s.try_load_source_content(p) {
-                warn!("Failed to load file: {:?}", e);
+                warn!("Failed to load file: {}", e);
             }
         };
         let try_load_asm = |s: &mut Self, p: &mut Context| match s.try_load_asm_content(p) {
@@ -1125,8 +1142,13 @@ impl<'a> CodeWindow<'a> {
         }
 
         self.try_load_active_content(p);
-        let _ = self.asm_view.go_to_last_stop_position();
-        let _ = self.src_view.go_to_last_stop_position();
+        fn log_go_to_err(result: Result<(), GotoError>) {
+            if let Err(e) = result {
+                log::debug!("Failed to go to last stop position: {:?}", e);
+            }
+        }
+        log_go_to_err(self.asm_view.go_to_last_stop_position());
+        log_go_to_err(self.src_view.go_to_last_stop_position());
         self.asm_view.update_decoration(p);
         self.src_view.update_decoration(p);
     }
